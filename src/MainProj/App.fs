@@ -58,7 +58,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             let b = DSharpPlus.Entities.DiscordEmbedBuilder()
             b.Description <- content e.Author.Username whom.Username
 
-            b.Color <- DSharpPlus.Entities.Optional.FromNoValue()
+            b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
             if not (Array.isEmpty gifs) then
                 b.ImageUrl <- gifs.[r.Next(0, gifs.Length)]
 
@@ -114,7 +114,18 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         "Себя нельзя буллить! Хотя..."
                         "Мне нельзя буллить! :scream_cat: "
             | CommandParser.Unknown ->
-                awaiti (client.SendMessageAsync (e.Channel, "Неизвестная команда"))
+                let b = DSharpPlus.Entities.DiscordEmbedBuilder()
+                b.Description <-
+                    [
+                        "Неизвестная команда. Доступные команды:"
+                        "`.take @user` — взять кого-то на ручки"
+                        "`.fairytail @user` — почитать кому-то сказку"
+                        "`.catail @user` — помахать кому-то хвостом"
+                        "`.bully @user` — забуллить кого-то <:Demon_Kingsmile:877678191693692969>"
+                    ] |> String.concat "\n"
+
+                b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
+                awaiti (client.SendMessageAsync (e.Channel, b.Build()))
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 
