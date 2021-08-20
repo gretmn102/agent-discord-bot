@@ -10,15 +10,30 @@ let puserMention : _ Parser =
 let puserMentionTarget (userId:UserId) : _ Parser =
     skipString "<@" >>. optional (skipChar '!') >>. skipString (string userId) >>. skipChar '>'
 
+type Act =
+    | Take
+    | Fairytail
+    | Catail
+    | Bully
+
 type Cmd =
-    | Take of UserId option
+    | Act of Act * UserId option
     | Unknown
     | Pass
 
 let prefix = pchar '.'
 
 let pcommand =
-    pstring "take" >>. spaces >>. opt puserMention |>> Take
+    let cmd =
+        choice [
+            skipString "take" >>% Take
+            skipString "fairytail" >>% Fairytail
+            skipString "catail" >>% Catail
+            skipString "bully" >>. optional (skipString "ing") >>% Bully
+        ]
+    choice [
+        cmd .>> spaces .>>. opt puserMention |>> Act
+    ]
 
 let start botId str =
     let p =

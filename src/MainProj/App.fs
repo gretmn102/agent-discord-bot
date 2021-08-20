@@ -24,43 +24,95 @@ let gifUrls =
         "https://c.tenor.com/ydSMRf34XvEAAAAC/spin-carry.gif"
     |]
 
+let fairytailGifs =
+    [|
+        "https://c.tenor.com/Lj5SFh_tVzkAAAAC/books-read.gif"
+        "https://c.tenor.com/Vucu5O0U4FAAAAAC/cat-kitten.gif"
+        "https://c.tenor.com/415n58OZ9CYAAAAd/cat-reads-reading.gif"
+        "https://c.tenor.com/SajtOuJknfYAAAAd/cute-cat.gif"
+        "https://c.tenor.com/415n58OZ9CYAAAAd/cat-reads-reading.gif"
+        "https://c.tenor.com/dtAQHKf2_OsAAAAC/pusheen-witch.gif"
+        "https://c.tenor.com/2hatW6KUSS8AAAAC/reading-read.gif"
+        "https://c.tenor.com/Yw68weAL6c0AAAAC/knigi-kniga.gif"
+    |]
+
+let catailGifs =
+    [|
+        "https://c.tenor.com/8yvB03LKh6cAAAAd/wow-cat.gif"
+        "https://c.tenor.com/_SHZ8ZyLYL8AAAAC/flirty-flirt.gif"
+        "https://c.tenor.com/bNSOiEO_0loAAAAd/cat-tail.gif"
+        "https://c.tenor.com/TnXmJgMoU5IAAAAC/cat-tail.gif"
+    |]
+
+
 let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateEventArgs) =
     let authorId = e.Author.Id
     let botId = client.CurrentUser.Id
 
-    let send whomId =
-        let whom =
-            client.GetUserAsync whomId
-            |> fun x -> x.GetAwaiter().GetResult()
-        let content =
-            sprintf "**%s** носит на ручках **%s**" e.Author.Username whom.Username
+    let cmdBuilder whomId (gifs: string []) content (whomAuthorPhrase:string) (whomBotPhrase:string) =
+        let send whomId =
+            let whom =
+                client.GetUserAsync whomId
+                |> fun x -> x.GetAwaiter().GetResult()
 
-        let b = DSharpPlus.Entities.DiscordEmbedBuilder()
-        b.ImageUrl <- gifUrls.[r.Next(0, gifUrls.Length)]
-        b.Description <- content
+            let b = DSharpPlus.Entities.DiscordEmbedBuilder()
+            b.Description <- content e.Author.Username whom.Username
 
-        awaiti (client.SendMessageAsync (e.Channel, b.Build()))
+            b.Color <- DSharpPlus.Entities.Optional.FromNoValue()
+            if not (Array.isEmpty gifs) then
+                b.ImageUrl <- gifs.[r.Next(0, gifs.Length)]
+
+            awaiti (client.SendMessageAsync (e.Channel, b.Build()))
+        match whomId with
+        | Some whomId ->
+            if whomId = authorId then
+                awaiti (client.SendMessageAsync (e.Channel, whomAuthorPhrase))
+            elif whomId = botId then
+                awaiti (client.SendMessageAsync (e.Channel, whomBotPhrase))
+            else
+                send whomId
+        | None ->
+            match e.Message.ReferencedMessage with
+            | null ->
+                awaiti (client.SendMessageAsync (e.Channel, "Нужно указать пользователя"))
+            | referencedMessage ->
+                send referencedMessage.Author.Id
 
     if authorId <> botId then
         match CommandParser.start botId e.Message.Content with
         | Right res ->
             match res with
             | CommandParser.Pass -> ()
-            | CommandParser.Take whomId ->
-                match whomId with
-                | Some whomId ->
-                    if whomId = authorId then
-                        awaiti (client.SendMessageAsync (e.Channel, "Самого себя нельзя на руках носить :eyes:"))
-                    elif whomId = botId then
-                        awaiti (client.SendMessageAsync (e.Channel, "Меня не нужно носить! :scream_cat: "))
-                    else
-                        send whomId
-                | None ->
-                    match e.Message.ReferencedMessage with
-                    | null ->
-                        awaiti (client.SendMessageAsync (e.Channel, "Нужно указать пользователя"))
-                    | referencedMessage ->
-                        send referencedMessage.Author.Id
+            | CommandParser.Act(act, whomId) ->
+                match act with
+                | CommandParser.Take ->
+                    cmdBuilder
+                        whomId
+                        gifUrls
+                        (sprintf "**%s** носит на ручках **%s**")
+                        "Самого себя нельзя на руках носить :eyes:"
+                        "Меня не нужно носить! :scream_cat: "
+                | CommandParser.Fairytail ->
+                    cmdBuilder
+                        whomId
+                        fairytailGifs
+                        (sprintf "**%s** читает сказку **%s**")
+                        "Нельзя себе сказку читать :eyes:"
+                        "Мне не нужно сказки читать! :scream_cat: "
+                | CommandParser.Catail ->
+                    cmdBuilder
+                        whomId
+                        catailGifs
+                        (fun who whom -> sprintf "**%s**, **%s** машет тебе хвостом" whom who)
+                        "Нельзя себе хвостом махать, хотя..."
+                        "Мне не нужно хвостом махать! :scream_cat: "
+                | CommandParser.Bully ->
+                    cmdBuilder
+                        whomId
+                        [||]
+                        (sprintf "**%s** буллит **%s** <:Demon_Kingsmile:877678191693692969>")
+                        "Себя нельзя буллить! Хотя..."
+                        "Мне нельзя буллить! :scream_cat: "
             | CommandParser.Unknown ->
                 awaiti (client.SendMessageAsync (e.Channel, "Неизвестная команда"))
         | Left x ->
