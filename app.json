@@ -1,0 +1,7 @@
+{
+    "buildpacks": [
+        {
+            "url": "https://github.com/gretmn102/SAFE-buildpack"
+        }
+    ]
+}

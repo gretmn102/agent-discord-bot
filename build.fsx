@@ -24,10 +24,16 @@ let f projName =
         |> List.ofSeq
         |> failwithf "'%s' expected exactly one but:\n%A" pattern
     )
+
 let testProjName = "Tests"
 let testProjPath = sprintf "Tests\\%s.fsproj" testProjName
+
 let mainProjName = "MainProj"
 let mainProjPath = f mainProjName
+let mainProjDir =
+    Fake.IO.Path.getDirectory mainProjPath
+
+let deployDir = Path.getFullName "./deploy"
 // --------------------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------------------
@@ -42,9 +48,10 @@ let removeSQLiteInteropDll projPath =
     let path = Fake.IO.Path.combine dir localpath
     Fake.IO.File.delete path
 
+Target.create "Clean" (fun _ -> Shell.cleanDir deployDir)
+
 Target.create "BuildMain" (fun _ ->
-    mainProjPath
-    |> Fake.IO.Path.getDirectory
+    mainProjDir
     |> DotNet.build (fun x ->
         { x with Configuration = buildConf }
     )
@@ -70,8 +77,7 @@ let dotnet cmd workingDir =
     if result.ExitCode <> 0 then failwithf "'dotnet %s' failed in %s" cmd workingDir
 
 Target.create "RunMain" (fun _ ->
-    mainProjPath
-    |> Fake.IO.Path.getDirectory
+    mainProjDir
     |> dotnet "run -c Release"
 )
 
@@ -81,9 +87,18 @@ Target.create "RunTests" (fun _ ->
     |> dotnet "run -c Release"
 )
 
+let deploy () =
+    let runtimeOption = if Environment.isUnix then "--runtime linux-x64" else ""
+    dotnet (sprintf "publish -c Release -o \"%s\" %s" deployDir runtimeOption) mainProjDir
+
+Target.create "Deploy" (fun _ -> deploy())
+
 // --------------------------------------------------------------------------------------
 // Build order
 // --------------------------------------------------------------------------------------
 open Fake.Core.TargetOperators
 
-Target.runOrDefault "BuildMain"
+"Clean"
+  ==> "Deploy"
+
+Target.runOrDefault "Deploy"

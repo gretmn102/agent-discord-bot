@@ -393,3 +393,4 @@ paket-files/
 /Output/
 /.ionide/
 /.fake/
+/deploy/

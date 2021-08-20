@@ -15,8 +15,5 @@
   <ItemGroup>
     <Compile Include="Tests.fs" />
   </ItemGroup>
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp3.1' ">
-    <Reference Include="..\paket-files\github.com\gretmn102\FsharpMyExtension\FsharpMyExtension\FsharpMyExtension\bin\Release\netstandard2.0\FsharpMyExtension.dll" />
-  </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>
