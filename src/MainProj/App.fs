@@ -12,35 +12,6 @@ let awaiti (t:Task<_>) =
 
 let botEventId = new EventId(42, "Bot-Event")
 
-type UserId = uint64
-
-module Parser =
-    open FParsec
-
-    type 'a Parser = Parser<'a, unit>
-    let puserMention : _ Parser =
-        skipString "<@" >>. optional (skipChar '!') >>. puint64 .>> skipChar '>'
-    let puserMentionTarget (userId:UserId) : _ Parser =
-        skipString "<@" >>. optional (skipChar '!') >>. skipString (string userId) >>. skipChar '>'
-
-    type Cmd =
-        | Take of UserId option
-        | Unknown
-        | Pass
-
-    let prefix = pchar '.'
-
-    let pcommand =
-        pstring "take" >>. spaces >>. opt puserMention |>> Take
-
-    let start botId str =
-        let p =
-            (puserMentionTarget botId >>. spaces >>. (optional prefix >>. pcommand <|>% Unknown))
-            <|> (prefix >>. pcommand <|>% Pass)
-        match run p str with
-        | Success(x, _, _) -> Right x
-        | Failure(x, _, _) -> Left x
-
 let r = System.Random()
 let gifUrls =
     [|
@@ -71,11 +42,11 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
         awaiti (client.SendMessageAsync (e.Channel, b.Build()))
 
     if authorId <> botId then
-        match Parser.start botId e.Message.Content with
+        match CommandParser.start botId e.Message.Content with
         | Right res ->
             match res with
-            | Parser.Pass -> ()
-            | Parser.Take whomId ->
+            | CommandParser.Pass -> ()
+            | CommandParser.Take whomId ->
                 match whomId with
                 | Some whomId ->
                     if whomId = authorId then
@@ -90,7 +61,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         awaiti (client.SendMessageAsync (e.Channel, "Нужно указать пользователя"))
                     | referencedMessage ->
                         send referencedMessage.Author.Id
-            | Parser.Unknown ->
+            | CommandParser.Unknown ->
                 awaiti (client.SendMessageAsync (e.Channel, "Неизвестная команда"))
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
