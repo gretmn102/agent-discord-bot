@@ -30,6 +30,8 @@ let commandParserTests =
                     ""
                 ] |> String.concat "\r\n"
             Assert.Equal("msg6", Left act, start botId (sprintf "<@%d> .unknown" botId))
+            Assert.Equal("not mention bot", Right Pass, start botId "<@1234567> .unknown")
+            Assert.Equal("not mention bang bot", Right Pass, start botId "<@!1234567> .unknown")
         )
     ]
 

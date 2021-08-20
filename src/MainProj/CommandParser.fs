@@ -22,7 +22,7 @@ let pcommand =
 
 let start botId str =
     let p =
-        (puserMentionTarget botId >>. spaces >>. (optional prefix >>. pcommand <|>% Unknown))
+        (attempt (puserMentionTarget botId) >>. spaces >>. (optional prefix >>. pcommand <|>% Unknown))
         <|> ((prefix >>? pcommand) <|>% Pass)
     match run p str with
     | Success(x, _, _) -> Right x
