@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Optimize>true</Optimize>
+    <Tailcalls>true</Tailcalls>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="App.fs" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp3.1' ">
+    <Reference Include="..\..\paket-files\github.com\gretmn102\FsharpMyExtension\FsharpMyExtension\FsharpMyExtension\bin\Release\netstandard2.0\FsharpMyExtension.dll" />
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

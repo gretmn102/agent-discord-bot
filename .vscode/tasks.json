@@ -1,0 +1,46 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "RunMain",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "fake",
+                "build",
+                "-t",
+                "RunMain"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "build",
+                "src/MainProj"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "RunTests",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "fake",
+                "build",
+                "-t",
+                "RunTests"
+            ],
+            "group": "test",
+            "problemMatcher": []
+        }
+    ]
+}
