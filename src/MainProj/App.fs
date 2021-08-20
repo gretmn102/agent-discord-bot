@@ -42,6 +42,7 @@ let catailGifs =
         "https://c.tenor.com/_SHZ8ZyLYL8AAAAC/flirty-flirt.gif"
         "https://c.tenor.com/bNSOiEO_0loAAAAd/cat-tail.gif"
         "https://c.tenor.com/TnXmJgMoU5IAAAAC/cat-tail.gif"
+        "https://c.tenor.com/kWJaRBz4jzYAAAAC/elephant-omg.gif"
     |]
 
 
