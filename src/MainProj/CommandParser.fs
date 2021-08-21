@@ -15,6 +15,8 @@ type Act =
     | Fairytail
     | Catail
     | Bully
+    | Admire
+    | Battery
 
 type Cmd =
     | Act of Act * UserId option
@@ -30,6 +32,8 @@ let pcommand =
             skipString "fairytail" >>% Fairytail
             skipString "catail" >>% Catail
             skipString "bully" >>. optional (skipString "ing") >>% Bully
+            skipString "admire" >>% Admire
+            skipString "battery" >>% Battery
         ]
     choice [
         cmd .>> spaces .>>. opt puserMention |>> Act

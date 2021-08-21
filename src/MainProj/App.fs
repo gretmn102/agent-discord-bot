@@ -45,6 +45,16 @@ let catailGifs =
         "https://c.tenor.com/kWJaRBz4jzYAAAAC/elephant-omg.gif"
     |]
 
+let admireGifs =
+    [|
+        "https://risovach.ru/upload/2012/11/lyubov-4219820_orig_.jpeg"
+        "https://i.imgur.com/ArtzYH0.jpg"
+    |]
+
+let batteryGifs =
+    [|
+        "https://c.tenor.com/X45Rd5nfc7oAAAAM/energize-energized.gif"
+    |]
 
 let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateEventArgs) =
     let authorId = e.Author.Id
@@ -114,6 +124,20 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         (sprintf "**%s** буллит **%s** <:Demon_Kingsmile:877678191693692969>")
                         "Себя нельзя буллить! Хотя..."
                         "Мне нельзя буллить! :scream_cat: "
+                | CommandParser.Admire ->
+                    cmdBuilder
+                        whomId
+                        admireGifs
+                        (sprintf "**%s** любуется **%s**")
+                        "Нельзя любоваться собой :eyes:"
+                        "Нельзя мною любоваться :scream_cat: "
+                | CommandParser.Battery ->
+                    cmdBuilder
+                        whomId
+                        batteryGifs
+                        (sprintf "**%s** поет \"Батарейку\" **%s**")
+                        "Самому нельзя петь \"Батерей\"!"
+                        "Мне нельзя петь \"Батарейку\". Я этого не вынесу :scream_cat: "
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -123,6 +147,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         "`.fairytail @user` — почитать кому-то сказку"
                         "`.catail @user` — помахать кому-то хвостом"
                         "`.bully @user` — забуллить кого-то <:Demon_Kingsmile:877678191693692969>"
+                        "`.admire @user` — любоваться"
+                        "`.battery` — спеть \"Батарейку\""
                     ] |> String.concat "\n"
 
                 b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
