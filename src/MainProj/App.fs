@@ -4,11 +4,7 @@ open FsharpMyExtension.Either
 open Microsoft.Extensions.Logging
 
 open System.Threading.Tasks
-
-let await (t:Task<_>) =
-    t.GetAwaiter() |> fun x -> x.GetResult()
-let awaiti (t:Task<_>) =
-    await t |> ignore
+open Types
 
 let botEventId = new EventId(42, "Bot-Event")
 
@@ -138,6 +134,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         (sprintf "**%s** поет \"Батарейку\" **%s**")
                         "Самому нельзя петь \"Батерей\"!"
                         "Мне нельзя петь \"Батарейку\". Я этого не вынесу :scream_cat: "
+            | CommandParser.SomeCyoa ->
+                Cyoa.start client e
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -187,6 +185,12 @@ let main argv =
 
         client.add_ClientErrored(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             client.Logger.LogError(botEventId, e.Exception, "Exception occured", [||])
+
+            Task.CompletedTask
+        ))
+        client.add_ComponentInteractionCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            client.Logger.LogInformation(botEventId, "Component created", [||])
+            Cyoa.resp client e
 
             Task.CompletedTask
         ))

@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
+    <Compile Include="Cyoa.fs" />
     <Compile Include="CommandParser.fs" />
     <Compile Include="App.fs" />
   </ItemGroup>

@@ -20,6 +20,7 @@ type Act =
 
 type Cmd =
     | Act of Act * UserId option
+    | SomeCyoa
     | Unknown
     | Pass
 
@@ -37,6 +38,7 @@ let pcommand =
         ]
     choice [
         cmd .>> spaces .>>. opt puserMention |>> Act
+        stringReturn "cyoa" SomeCyoa
     ]
 
 let start botId str =

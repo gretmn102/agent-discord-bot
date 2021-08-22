@@ -26,7 +26,8 @@ let commandParserTests =
                     "Error in Ln: 1 Col: 7"
                     sprintf "<@%d> .unknown" botId
                     "      ^"
-                    "Expecting: 'admire', 'battery', 'bully', 'catail', 'fairytail' or 'take'"
+                    "Expecting: 'admire', 'battery', 'bully', 'catail', 'cyoa', 'fairytail' or"
+                    "'take'"
                     ""
                 ] |> String.concat "\r\n"
             Assert.Equal("msg6", Left act, start botId (sprintf "<@%d> .unknown" botId))
