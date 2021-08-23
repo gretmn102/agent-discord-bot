@@ -135,7 +135,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         "Самому нельзя петь \"Батерей\"!"
                         "Мне нельзя петь \"Батарейку\". Я этого не вынесу :scream_cat: "
             | CommandParser.SomeCyoa ->
-                Cyoa.start client e
+                AppsHub.start AppsHub.Hub.CyoaType client e
+            | CommandParser.SomeQuiz ->
+                AppsHub.start AppsHub.Hub.QuizType client e
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -157,7 +159,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
 [<EntryPoint>]
 let main argv =
     match System.Environment.GetEnvironmentVariable "DiscordCommandBotToken" with
-    | null -> printfn "DiscordCommandBotToken not setup"
+    | null ->
+        printfn "DiscordCommandBotToken not setup"
+        1
     | token ->
         let config = DSharpPlus.DiscordConfiguration()
 
@@ -190,7 +194,7 @@ let main argv =
         ))
         client.add_ComponentInteractionCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             client.Logger.LogInformation(botEventId, "Component created", [||])
-            Cyoa.resp client e
+            AppsHub.resp client e
 
             Task.CompletedTask
         ))
@@ -199,4 +203,4 @@ let main argv =
 
         (Task.Delay -1).GetAwaiter().GetResult()
 
-    0
+        0

@@ -6,8 +6,16 @@
     <Tailcalls>true</Tailcalls>
   </PropertyGroup>
   <ItemGroup>
+    <ContentWithTargetPath Include="Quiz.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Quiz.json</TargetPath>
+    </ContentWithTargetPath>
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="Types.fs" />
+    <Compile Include="Quiz.fs" />
     <Compile Include="Cyoa.fs" />
+    <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />
     <Compile Include="App.fs" />
   </ItemGroup>
