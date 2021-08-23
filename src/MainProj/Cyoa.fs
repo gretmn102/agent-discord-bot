@@ -58,6 +58,7 @@ module Core =
 
     type T<'LabelName, 'Addon, 'Arg> =
         | Print of DSharpPlus.Entities.DiscordEmbed * (unit -> T<'LabelName, 'Addon, 'Arg>)
+        | PrintEnd of DSharpPlus.Entities.DiscordEmbed
         | Choices of DSharpPlus.Entities.DiscordEmbed * string list * (int -> T<'LabelName, 'Addon, 'Arg>)
         | End
         | AddonAct of 'Addon * ('Arg -> T<'LabelName, 'Addon, 'Arg>)
@@ -91,9 +92,11 @@ module Core =
                             [ ListZ.ofList xs ] }
                 |> NextState
             | Say x ->
-                Print(x, fun () ->
-                    next id stack
-                )
+                match next id stack with
+                | End ->
+                    PrintEnd x
+                | nextStmt ->
+                    Print(x, fun () -> nextStmt)
             | Menu(caption, xs) ->
                 let labels = xs |> List.map fst
                 Choices(caption, labels, fun i ->
@@ -165,6 +168,7 @@ module Implementation =
                 nextState (f ())
             | Core.NextState x ->
                 failwith "nextNextState"
+            | Core.PrintEnd _
             | Core.End
             | Core.Choices _
             | Core.AddonAct _ ->
@@ -177,6 +181,7 @@ module Implementation =
                 nextState (f ())
             | Core.NextState x ->
                 failwith "choiceNextState"
+            | Core.PrintEnd _
             | Core.End
             | Core.AddonAct _ -> state
         | NextState ->
@@ -214,6 +219,10 @@ module Implementation =
             b.Embed <- embed
 
             b.AddComponents nextButton |> ignore
+            b
+        | Core.PrintEnd embed ->
+            let b = DSharpPlus.Entities.DiscordMessageBuilder()
+            b.Embed <- embed
             b
         | Core.End ->
             let b = DSharpPlus.Entities.DiscordMessageBuilder()

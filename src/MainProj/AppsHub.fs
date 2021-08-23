@@ -50,7 +50,8 @@ module Hub =
 
                                         let state =
                                             match cyoaState.Game with
-                                            | Cyoa.Core.End ->
+                                            | Cyoa.Core.End
+                                            | Cyoa.Core.PrintEnd _ ->
                                                 Map.remove path state
                                             | _ ->
                                                 Map.add path (userId, CyoaState cyoaState) state
