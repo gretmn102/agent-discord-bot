@@ -136,6 +136,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         "Мне нельзя петь \"Батарейку\". Я этого не вынесу :scream_cat: "
             | CommandParser.SomeCyoa ->
                 AppsHub.start AppsHub.Hub.CyoaType client e
+            | CommandParser.SomeGirlsQuiz ->
+                AppsHub.start AppsHub.Hub.SomeGirlsQuizType client e
             | CommandParser.SomeQuiz ->
                 AppsHub.start AppsHub.Hub.QuizType client e
             | CommandParser.Unknown ->

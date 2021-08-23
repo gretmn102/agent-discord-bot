@@ -8,7 +8,7 @@ module Core =
     type Vars = Map<string, Var>
 
     type Stmt<'LabelName, 'Addon> =
-        | Say of DSharpPlus.Entities.DiscordEmbed
+        | Say of (Vars -> DSharpPlus.Entities.DiscordEmbed)
         | Jump of 'LabelName
         | Menu of DSharpPlus.Entities.DiscordEmbed * (string * Stmt<'LabelName, 'Addon> list) list
         | If of (Vars -> bool) * Stmt<'LabelName, 'Addon> list * Stmt<'LabelName, 'Addon> list
@@ -27,8 +27,7 @@ module Core =
 
         b.Build()
     let say (txt:string) =
-        say' txt
-        |> Say
+        Say (fun _ -> say' txt)
 
     let says (xs:string list) =
         let b = DSharpPlus.Entities.DiscordEmbedBuilder()
@@ -91,12 +90,12 @@ module Core =
                         | xs ->
                             [ ListZ.ofList xs ] }
                 |> NextState
-            | Say x ->
+            | Say f ->
                 match next id stack with
                 | End ->
-                    PrintEnd x
+                    PrintEnd (f state.Vars)
                 | nextStmt ->
-                    Print(x, fun () -> nextStmt)
+                    Print(f state.Vars, fun () -> nextStmt)
             | Menu(caption, xs) ->
                 let labels = xs |> List.map fst
                 Choices(caption, labels, fun i ->
@@ -293,6 +292,8 @@ module Scenario =
                 "https://i.imgur.com/uOPC36L.jpg"
             |]
         let getScreen i = img images.[i - 1]
+        let say x =
+            Say (fun _ -> x)
         [
             label Label1 [
                 menu (getScreen 1) [
@@ -310,10 +311,10 @@ module Scenario =
                         jump Label1
                     ]
                     choice "Исследовать местность" [
-                        Say (getScreen 4)
+                        say (getScreen 4)
                     ]
                     choice "Зайти во дворец" [
-                        Say (getScreen 5)
+                        say (getScreen 5)
                     ]
                 ]
             ]
@@ -333,15 +334,16 @@ module Scenario =
                         ]
                     ]
                     choice "Войти во Дворец Зла" [
-                        Say (getScreen 7)
+                        say (getScreen 7)
                     ]
                 ]
             ]
         ]
 
+    open Implementation
     open FsharpMyExtension.ListZipper
     let beginLoc = Label1
-    let start () =
+    let all =
         let scenario =
             scenario
             |> List.map (fun (labelName, body) -> labelName, (labelName, body))
@@ -358,22 +360,114 @@ module Scenario =
             Init = init
         |}
     let interp gameState =
-        let x = start ()
         gameState
         |> interp
             (fun next state isWin addon ->
                 failwith "addon not implemented"
             )
-            x.Scenario
+            all.Scenario
 
-open Implementation
+    let initState : State<LabelName,obj,obj> =
+        {
+            Game =
+                interp all.Init
+            GameState = all.Init
+            SavedGameState = all.Init
+        }
 
-let scenario = Scenario.start ()
-let initState : State<Scenario.LabelName,obj,obj> =
-    {
-        Game =
-            Scenario.interp scenario.Init
-        GameState = scenario.Init
-        SavedGameState = scenario.Init
-    }
+module Scenario2 =
+    open Core
 
+    type LabelName =
+        | Prelude
+        | StartQuiz
+        | Result
+
+    let counter = "counter"
+    let getCounter (x:Map<_,_>) =
+        match x.[counter] with
+        | Num x -> x
+        | _ -> failwith ""
+    let counterSet fn =
+        ChangeVars (fun vars ->
+            match Map.tryFind counter vars with
+            | Some (Num x) ->
+                Map.add counter (Num (fn x)) vars
+            | _ -> Map.add counter (Num (fn 0)) vars
+        )
+    let scenario : list<Label<LabelName,obj>> =
+        let questions, results = Quiz.loadQuiz()
+
+        [
+            label Prelude [
+                menu (say' "Какой-то тест для девушек, украденный с [этого видео на YouTube](https://www.youtube.com/watch?v=kuAKQ-qOqrU).") [
+                    choice "Поехали!" [
+                        jump StartQuiz
+                    ]
+                    choice "Да ну нафиг!" [
+                        say "Как хочешь ¯\\_(ツ)_/¯"
+                    ]
+                ]
+            ]
+
+            label StartQuiz [
+                for x in questions do
+                    menu (say' x.Description) [
+                        for description, score in x.Variants do
+                            choice description [
+                                counterSet ((+) score)
+                            ]
+                    ]
+                jump Result
+            ]
+
+            label Result [
+                Say (fun vars ->
+                    let score = getCounter vars
+                    let res =
+                        results
+                        |> List.tryFind (fun x ->
+                            let from, to' = x.Range
+                            from <= score && score <= to')
+                    match res with
+                    | Some x ->
+                        say' (sprintf "%d\n%s" score x.Description)
+                    | None -> failwith "Something wrong"
+                )
+            ]
+        ]
+
+    open Implementation
+    open FsharpMyExtension.ListZipper
+    let beginLoc = Prelude
+    let all =
+        let scenario =
+            scenario
+            |> List.map (fun (labelName, body) -> labelName, (labelName, body))
+            |> Map.ofList
+            : Scenario<_,_>
+        let init =
+            {
+                LabelState =
+                    [ ListZ.ofList (snd scenario.[beginLoc]) ]
+                Vars = Map.empty
+            }
+        {|
+            Scenario = scenario
+            Init = init
+        |}
+    let interp gameState =
+        gameState
+        |> interp
+            (fun next state isWin addon ->
+                failwith "addon not implemented"
+            )
+            all.Scenario
+
+    let initState : State<LabelName,obj,obj> =
+        {
+            Game =
+                interp all.Init
+            GameState = all.Init
+            SavedGameState = all.Init
+        }

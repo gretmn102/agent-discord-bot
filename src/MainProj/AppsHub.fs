@@ -8,22 +8,25 @@ open FsharpMyExtension.Either
 module Hub =
     type AppReq =
         | CyoaReq of Cyoa.Implementation.Msg
+        | SomeGirlsQuizReq of Cyoa.Implementation.Msg
         | QuizReq of Quiz.Msg
 
     type AppAnswer =
         | CyoaAnswer of DSharpPlus.Entities.DiscordMessageBuilder
+        | SomeGirlsQuizAnswer of DSharpPlus.Entities.DiscordMessageBuilder
         | QuizAnswer of DSharpPlus.Entities.DiscordMessageBuilder
-
     type Err =
         | HasNotStartedYet
         | ThisIsNotYourApp
 
     type AppType =
         | CyoaType
+        | SomeGirlsQuizType
         | QuizType
 
     type AppState =
         | CyoaState of Cyoa.Implementation.State<Cyoa.Scenario.LabelName,obj,obj>
+        | SomeGirlsQuizState of Cyoa.Implementation.State<Cyoa.Scenario2.LabelName,obj,obj>
         | QuizState of Quiz.State
     type State = Map<MessagePath, UserId * AppState>
 
@@ -45,7 +48,7 @@ module Hub =
                                 Right (CyoaType, fun req ->
                                     match req with
                                     | CyoaReq msg ->
-                                        let cyoaState = Cyoa.Implementation.update Cyoa.Scenario.interp Cyoa.scenario.Init msg cyoaState
+                                        let cyoaState = Cyoa.Implementation.update Cyoa.Scenario.interp Cyoa.Scenario.all.Init msg cyoaState
                                         let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
 
                                         let state =
@@ -58,6 +61,24 @@ module Hub =
 
                                         CyoaAnswer cyoaAnswer, state
                                     | x -> failwithf "expected CyoaReq but %A" x
+                                )
+                            | SomeGirlsQuizState cyoaState ->
+                                Right (SomeGirlsQuizType, fun req ->
+                                    match req with
+                                    | SomeGirlsQuizReq msg ->
+                                        let cyoaState = Cyoa.Implementation.update Cyoa.Scenario2.interp Cyoa.Scenario2.all.Init msg cyoaState
+                                        let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
+
+                                        let state =
+                                            match cyoaState.Game with
+                                            | Cyoa.Core.End
+                                            | Cyoa.Core.PrintEnd _ ->
+                                                Map.remove path state
+                                            | _ ->
+                                                Map.add path (userId, SomeGirlsQuizState cyoaState) state
+
+                                        SomeGirlsQuizAnswer cyoaAnswer, state
+                                    | x -> failwithf "expected SomeGirlsQuizReq but %A" x
                                 )
                             | QuizState quizState ->
                                 Right (QuizType, fun req ->
@@ -83,13 +104,21 @@ module Hub =
             Init = fun (userId, appType) ->
                 match appType with
                 | CyoaType ->
-                    let cyoaState = Cyoa.initState
+                    let cyoaState = Cyoa.Scenario.initState
                     let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
                     let f path =
                         let state = Map.add path (userId, CyoaState cyoaState) state
                         state
 
                     CyoaAnswer cyoaAnswer, f
+                | SomeGirlsQuizType ->
+                    let cyoaState = Cyoa.Scenario2.initState
+                    let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
+                    let f path =
+                        let state = Map.add path (userId, SomeGirlsQuizState cyoaState) state
+                        state
+
+                    SomeGirlsQuizAnswer cyoaAnswer, f
                 | QuizType ->
                     let quizState = Quiz.init (Quiz.loadQuiz ())
                     let quizAnswer = Quiz.view quizState
@@ -131,6 +160,21 @@ let m =
                                 | Hub.CyoaAnswer answer -> answer
                                 | x -> failwithf "expected CyoaAnswer but %A" x
                             Right answer, state
+                        | Hub.SomeGirlsQuizType ->
+                            let msg =
+                                match e.Id with
+                                | Cyoa.Implementation.NextButtonId ->
+                                    Cyoa.Implementation.Next
+                                | Cyoa.Implementation.SelectMenuId ->
+                                    Cyoa.Implementation.Choice (int e.Values.[0])
+                                | x ->
+                                    failwithf "expected Id = %s but %s" e.Id x
+                            let answer, state = f (Hub.SomeGirlsQuizReq msg)
+                            let answer =
+                                match answer with
+                                | Hub.SomeGirlsQuizAnswer answer -> answer
+                                | x -> failwithf "expected SomeGirlsQuizAnswer but %A" x
+                            Right answer, state
                         | Hub.QuizType ->
                             let msg =
                                 match e.Id with
@@ -156,6 +200,7 @@ let m =
             let answer =
                 match answer with
                 | Hub.CyoaAnswer answer
+                | Hub.SomeGirlsQuizAnswer answer
                 | Hub.QuizAnswer answer -> answer
             r.Reply answer
 

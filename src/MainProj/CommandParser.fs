@@ -21,6 +21,7 @@ type Act =
 type Cmd =
     | Act of Act * UserId option
     | SomeCyoa
+    | SomeGirlsQuiz
     | SomeQuiz
     | Unknown
     | Pass
@@ -39,6 +40,7 @@ let pcommand =
         ]
     choice [
         cmd .>> spaces .>>. opt puserMention |>> Act
+        stringReturn "someGirlsQuiz" SomeGirlsQuiz
         stringReturn "cyoa" SomeCyoa
         stringReturn "quiz" SomeQuiz
     ]
