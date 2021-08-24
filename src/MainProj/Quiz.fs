@@ -110,7 +110,7 @@ open FsharpMyExtension.Either
 open System.Threading.Tasks
 
 let loadQuiz () : QuizType =
-    let path = "quiz.json"
+    let path = "Quiz.json"
     if System.IO.File.Exists path then
         try
             let x:QuizType = Json.desf path
