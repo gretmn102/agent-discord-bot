@@ -12,6 +12,12 @@ type MessagePath =
         MessageId: MessageId
     }
 
+type ResultView =
+    {
+        View: DSharpPlus.Entities.DiscordMessageBuilder option
+        ResponseToUser: DSharpPlus.Entities.DiscordMessageBuilder option
+    }
+
 open System.Threading.Tasks
 
 let await (t:Task<_>) =

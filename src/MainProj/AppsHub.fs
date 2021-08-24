@@ -10,30 +10,41 @@ module Hub =
         | CyoaReq of Cyoa.Implementation.Msg
         | SomeGirlsQuizReq of Cyoa.Implementation.Msg
         | QuizReq of Quiz.Msg
+        | BallotBoxReq
 
     type AppAnswer =
         | CyoaAnswer of DSharpPlus.Entities.DiscordMessageBuilder
         | SomeGirlsQuizAnswer of DSharpPlus.Entities.DiscordMessageBuilder
         | QuizAnswer of DSharpPlus.Entities.DiscordMessageBuilder
+        | BallotBoxAnswer of Types.ResultView
     type Err =
         | HasNotStartedYet
         | ThisIsNotYourApp
+        | OtherErr of DSharpPlus.Entities.DiscordMessageBuilder
+
+    type InitApp =
+        | InitCyoa
+        | InitSomeGirlsQuiz
+        | InitQuiz
+        | InitBallotBox of description:string * choises:string list
 
     type AppType =
         | CyoaType
         | SomeGirlsQuizType
         | QuizType
+        | BallotBoxType
 
     type AppState =
         | CyoaState of Cyoa.Implementation.State<Cyoa.Scenario.LabelName,obj,obj>
         | SomeGirlsQuizState of Cyoa.Implementation.State<Cyoa.Scenario2.LabelName,obj,obj>
         | QuizState of Quiz.State
+        | BallotBoxState of BallotBox.State
     type State = Map<MessagePath, UserId * AppState>
 
     type Msg =
         {
-            Update : (MessagePath -> Either<Err, (UserId -> Either<Err, AppType * (AppReq -> AppAnswer * State)>)>)
-            Init : (UserId * AppType -> AppAnswer * (MessagePath -> State))
+            Update : (MessagePath -> Either<Err, (DSharpPlus.EventArgs.ComponentInteractionCreateEventArgs -> Either<Err, AppType * (AppReq -> AppAnswer * State)>)>)
+            Init : (UserId * InitApp -> AppAnswer * (MessagePath -> State))
         }
 
     let exec (state:State) =
@@ -41,10 +52,11 @@ module Hub =
             Update = fun path ->
                 match Map.tryFind path state with
                 | Some (ownerId, app) ->
-                    Right (fun userId ->
-                        if userId = ownerId then
-                            match app with
-                            | CyoaState cyoaState ->
+                    Right (fun e ->
+                        let userId = e.User.Id
+                        match app with
+                        | CyoaState cyoaState ->
+                            if userId = ownerId then
                                 Right (CyoaType, fun req ->
                                     match req with
                                     | CyoaReq msg ->
@@ -62,7 +74,10 @@ module Hub =
                                         CyoaAnswer cyoaAnswer, state
                                     | x -> failwithf "expected CyoaReq but %A" x
                                 )
-                            | SomeGirlsQuizState cyoaState ->
+                            else
+                                Left ThisIsNotYourApp
+                        | SomeGirlsQuizState cyoaState ->
+                            if userId = ownerId then
                                 Right (SomeGirlsQuizType, fun req ->
                                     match req with
                                     | SomeGirlsQuizReq msg ->
@@ -80,7 +95,10 @@ module Hub =
                                         SomeGirlsQuizAnswer cyoaAnswer, state
                                     | x -> failwithf "expected SomeGirlsQuizReq but %A" x
                                 )
-                            | QuizState quizState ->
+                            else
+                                Left ThisIsNotYourApp
+                        | QuizState quizState ->
+                            if userId = ownerId then
                                 Right (QuizType, fun req ->
                                     match req with
                                     | QuizReq msg ->
@@ -97,13 +115,23 @@ module Hub =
                                         QuizAnswer quizAnswer, state
                                     | x -> failwithf "expected QuizReq but %A" x
                                 )
-                        else
-                            Left ThisIsNotYourApp
+                            else
+                                Left ThisIsNotYourApp
+                        | BallotBoxState ballotBoxState ->
+                            Right (BallotBoxType, fun req -> // TODO: it is obvious that one level of abstraction is clearly superfluous
+                                let x, ballotBoxState = BallotBox.update2 e ballotBoxState
+                                let state =
+                                    if ballotBoxState.IsPublic then
+                                        Map.remove path state
+                                    else
+                                        Map.add path (userId, BallotBoxState ballotBoxState) state
+                                BallotBoxAnswer x, state
+                            )
                     )
                 | None -> Left HasNotStartedYet
             Init = fun (userId, appType) ->
                 match appType with
-                | CyoaType ->
+                | InitCyoa ->
                     let cyoaState = Cyoa.Scenario.initState
                     let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
                     let f path =
@@ -111,7 +139,7 @@ module Hub =
                         state
 
                     CyoaAnswer cyoaAnswer, f
-                | SomeGirlsQuizType ->
+                | InitSomeGirlsQuiz ->
                     let cyoaState = Cyoa.Scenario2.initState
                     let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
                     let f path =
@@ -119,7 +147,7 @@ module Hub =
                         state
 
                     SomeGirlsQuizAnswer cyoaAnswer, f
-                | QuizType ->
+                | InitQuiz ->
                     let quizState = Quiz.init (Quiz.loadQuiz ())
                     let quizAnswer = Quiz.view quizState
                     let f path =
@@ -127,22 +155,30 @@ module Hub =
                         state
 
                     QuizAnswer quizAnswer, f
+                | InitBallotBox(description, choices) ->
+                    let (answer, ballotBoxState) = BallotBox.init2 userId description choices
+                    let f path =
+                        let state = Map.add path (userId, BallotBoxState ballotBoxState) state
+                        state
+
+                    BallotBoxAnswer answer, f
+
         }
 
 type Req =
-    | Init of UserId * Hub.AppType * AsyncReplyChannel<DSharpPlus.Entities.DiscordMessageBuilder>
-    | SecondInit of UserId * Hub.AppType * MessagePath
-    | Update of MessagePath * UserId * DSharpPlus.EventArgs.ComponentInteractionCreateEventArgs * AsyncReplyChannel<Either<Hub.Err, DSharpPlus.Entities.DiscordMessageBuilder>>
+    | Init of UserId * Hub.InitApp * AsyncReplyChannel<DSharpPlus.Entities.DiscordMessageBuilder>
+    | SecondInit of UserId * Hub.InitApp * MessagePath
+    | Update of MessagePath * DSharpPlus.EventArgs.ComponentInteractionCreateEventArgs * AsyncReplyChannel<Either<Hub.Err, DSharpPlus.Entities.DiscordMessageBuilder>>
 
 let m =
     let exec (state:Hub.State) (msg:Req) =
         match msg with
-        | Update (messagePath, userId, e, r) ->
+        | Update (messagePath, e, r) ->
             let f = Hub.exec state
             let res, state =
                 match f.Update messagePath with
                 | Right f ->
-                    match f userId with
+                    match f e with
                     | Right (appType, f) ->
                         match appType with
                         | Hub.CyoaType ->
@@ -188,6 +224,20 @@ let m =
                                 | Hub.QuizAnswer answer -> answer
                                 | x -> failwithf "expected QuizAnswer but %A" x
                             Right answer, state
+                        | Hub.BallotBoxType ->
+                            let answer, state = f Hub.BallotBoxReq
+                            let answer =
+                                match answer with
+                                | Hub.BallotBoxAnswer answer -> answer
+                                | x -> failwithf "expected QuizAnswer but %A" x
+                            let answer =
+                                match answer.View with // TODO: View and ResponseToUser can contain values at the same time
+                                | Some x -> Right x
+                                | None ->
+                                    match answer.ResponseToUser with
+                                    | Some x -> Left (Hub.OtherErr x)
+                                    | None -> failwith "View and ResponseToUser are None"
+                            answer, state
 
                     | Left(err) -> Left err, state
                 | Left err ->
@@ -202,6 +252,13 @@ let m =
                 | Hub.CyoaAnswer answer
                 | Hub.SomeGirlsQuizAnswer answer
                 | Hub.QuizAnswer answer -> answer
+                | Hub.BallotBoxAnswer answer ->
+                    match answer.View with // TODO: View and ResponseToUser can contain values at the same time
+                    | Some answer -> answer
+                    | None ->
+                        match answer.ResponseToUser with
+                        | Some answer -> answer
+                        | None -> failwith "View and ResponseToUser are None"
             r.Reply answer
 
             state
@@ -251,7 +308,7 @@ let resp (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.ComponentInt
             MessageId = e.Message.Id
         }
 
-    match m.PostAndReply(fun r -> Update(msgPath, e.User.Id, e, r)) with
+    match m.PostAndReply(fun r -> Update(msgPath, e, r)) with
     | Right res ->
         let embed = DSharpPlus.Entities.DiscordEmbedBuilder(res.Embed)
         embed.WithAuthor(e.User.Username) |> ignore
@@ -279,7 +336,11 @@ let resp (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.ComponentInt
 
             e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, b)
             |> fun x -> x.GetAwaiter().GetResult()
-
+        | Hub.OtherErr msg ->
+            let b = DSharpPlus.Entities.DiscordInteractionResponseBuilder(msg)
+            b.IsEphemeral <- true
+            e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, b)
+            |> fun x -> x.GetAwaiter().GetResult()
 let start appType (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.MessageCreateEventArgs) =
     let res = m.PostAndReply(fun r -> Init(e.Author.Id, appType, r))
     let embed = DSharpPlus.Entities.DiscordEmbedBuilder(res.Embed)

@@ -25,8 +25,15 @@ type Cmd =
     | SomeQuiz
     | Unknown
     | Pass
+    | BallotBox of description:string * choices:string list
 
 let prefix = pchar '.'
+
+let pballotBox =
+    pstring "ballotBox"
+    >>. many1Satisfy ((=) ' ') >>. many1Satisfy ((<>) '\n') .>> spaces
+    .>>. many1 (many1Satisfy ((<>) '\n') .>> spaces)
+    |>> BallotBox
 
 let pcommand =
     let cmd =
@@ -43,6 +50,7 @@ let pcommand =
         stringReturn "someGirlsQuiz" SomeGirlsQuiz
         stringReturn "cyoa" SomeCyoa
         stringReturn "quiz" SomeQuiz
+        pballotBox
     ]
 
 let start botId str =

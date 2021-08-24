@@ -135,11 +135,13 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         "Самому нельзя петь \"Батерей\"!"
                         "Мне нельзя петь \"Батарейку\". Я этого не вынесу :scream_cat: "
             | CommandParser.SomeCyoa ->
-                AppsHub.start AppsHub.Hub.CyoaType client e
+                AppsHub.start AppsHub.Hub.InitCyoa client e
             | CommandParser.SomeGirlsQuiz ->
-                AppsHub.start AppsHub.Hub.SomeGirlsQuizType client e
+                AppsHub.start AppsHub.Hub.InitSomeGirlsQuiz client e
             | CommandParser.SomeQuiz ->
-                AppsHub.start AppsHub.Hub.QuizType client e
+                AppsHub.start AppsHub.Hub.InitQuiz client e
+            | CommandParser.BallotBox(description, choices) ->
+                AppsHub.start (AppsHub.Hub.InitBallotBox(description, choices)) client e
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
