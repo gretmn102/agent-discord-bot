@@ -251,7 +251,7 @@ let resp (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.ComponentInt
             MessageId = e.Message.Id
         }
 
-    match m.PostAndReply(fun r -> Update(msgPath, client.CurrentUser.Id, e, r)) with
+    match m.PostAndReply(fun r -> Update(msgPath, e.User.Id, e, r)) with
     | Right res ->
         let embed = DSharpPlus.Entities.DiscordEmbedBuilder(res.Embed)
         embed.WithAuthor(e.User.Username) |> ignore
@@ -281,7 +281,7 @@ let resp (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.ComponentInt
             |> fun x -> x.GetAwaiter().GetResult()
 
 let start appType (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.MessageCreateEventArgs) =
-    let res = m.PostAndReply(fun r -> Init(client.CurrentUser.Id, appType, r))
+    let res = m.PostAndReply(fun r -> Init(e.Author.Id, appType, r))
     let embed = DSharpPlus.Entities.DiscordEmbedBuilder(res.Embed)
     embed.WithAuthor(e.Author.Username) |> ignore
     // embed.WithFooter(e.User.Username) |> ignore
@@ -295,4 +295,4 @@ let start appType (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.Mes
             ChannelId = msg.Channel.Id
             MessageId = msg.Id
         }
-    m.Post(SecondInit(client.CurrentUser.Id, appType, msgPath))
+    m.Post(SecondInit(e.Author.Id, appType, msgPath))
