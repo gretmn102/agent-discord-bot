@@ -134,14 +134,10 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         (sprintf "**%s** поет \"Батарейку\" **%s**")
                         "Самому нельзя петь \"Батерей\"!"
                         "Мне нельзя петь \"Батарейку\". Я этого не вынесу :scream_cat: "
-            | CommandParser.SomeCyoa ->
-                AppsHub.start AppsHub.Hub.InitCyoa client e
-            | CommandParser.SomeGirlsQuiz ->
-                AppsHub.start AppsHub.Hub.InitSomeGirlsQuiz client e
+            | CommandParser.Cyoa x ->
+                AppsHub.start (AppsHub.Hub.InitCyoa x) client e
             | CommandParser.SomeQuiz ->
                 AppsHub.start AppsHub.Hub.InitQuiz client e
-            | CommandParser.SomeQuizWithMultiChoices ->
-                AppsHub.start AppsHub.Hub.InitQuizWithMultiChoices client e
             | CommandParser.BallotBox(description, choices) ->
                 AppsHub.start (AppsHub.Hub.InitBallotBox(description, choices)) client e
             | CommandParser.Unknown ->

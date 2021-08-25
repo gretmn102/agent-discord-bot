@@ -20,10 +20,8 @@ type Act =
 
 type Cmd =
     | Act of Act * UserId option
-    | SomeCyoa
-    | SomeGirlsQuiz
+    | Cyoa of AppsHub.Hub.CyoaT
     | SomeQuiz
-    | SomeQuizWithMultiChoices
     | Unknown
     | Pass
     | BallotBox of description:string * choices:string list
@@ -48,9 +46,9 @@ let pcommand =
         ]
     choice [
         cmd .>> spaces .>>. opt puserMention |>> Act
-        stringReturn "someGirlsQuiz" SomeGirlsQuiz
-        stringReturn "cyoa" SomeCyoa
-        stringReturn "quizWithMultiChoices" SomeQuizWithMultiChoices
+        stringReturn "someGirlsQuiz" (Cyoa AppsHub.Hub.SomeGirlsQuiz)
+        stringReturn "cyoa" (Cyoa AppsHub.Hub.SomeCyoa)
+        stringReturn "quizWithMultiChoices" (Cyoa AppsHub.Hub.QuizWithMultiChoices)
         stringReturn "quiz" SomeQuiz
         pballotBox
     ]
