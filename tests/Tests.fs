@@ -35,7 +35,8 @@ let commandParserTests =
                     sprintf "<@%d> .unknown" botId
                     "      ^"
                     "Expecting: 'admire', 'ballotBox', 'battery', 'bully', 'catail', 'cyoa',"
-                    "'fairytail', 'quiz', 'someGirlsQuiz' or 'take'"
+                    "'fairytail', 'quiz', 'quizPizza', 'quizWithMultiChoices', 'someGirlsQuiz' or"
+                    "'take'"
                     ""
                 ] |> String.concat "\r\n"
             Assert.Equal("msg6", Left act, start botId (sprintf "<@%d> .unknown" botId))

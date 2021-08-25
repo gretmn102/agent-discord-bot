@@ -49,6 +49,7 @@ let pcommand =
         stringReturn "someGirlsQuiz" (Cyoa AppsHub.Hub.SomeGirlsQuiz)
         stringReturn "cyoa" (Cyoa AppsHub.Hub.SomeCyoa)
         stringReturn "quizWithMultiChoices" (Cyoa AppsHub.Hub.QuizWithMultiChoices)
+        stringReturn "quizPizza" (Cyoa AppsHub.Hub.QuizPizza)
         stringReturn "quiz" SomeQuiz
         pballotBox
     ]

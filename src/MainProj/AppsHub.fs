@@ -24,6 +24,7 @@ module Hub =
         | SomeCyoa
         | SomeGirlsQuiz
         | QuizWithMultiChoices
+        | QuizPizza
 
     type InitApp =
         | InitCyoa of CyoaT
@@ -36,9 +37,9 @@ module Hub =
         | BallotBoxType
 
     type CyoaState =
-        | SomeCyoaState of Cyoa.Implementation.State<Cyoa.Scenario.LabelName,obj,obj>
-        | SomeGirlsQuizState of Cyoa.Implementation.State<Cyoa.Scenario2.LabelName,obj,obj>
-        | QuizWithMultiChoicesState of Cyoa.Implementation.State<Cyoa.QuizWithMultipleChoice.LabelName,obj,obj>
+        | SomeCyoaState of Cyoa.All<Cyoa.Scenario.LabelName,obj,obj>
+        | QuizState2 of Cyoa.All<Cyoa.Scenario2.LabelName,obj,obj>
+        | QuizWithMultiChoicesState of Cyoa.All<Cyoa.QuizWithMultipleChoice.LabelName,obj,obj>
 
     type AppState =
         | CyoaState of CyoaState
@@ -62,20 +63,24 @@ module Hub =
                         let userId = e.User.Id
                         match app with
                         | CyoaState cyoaState ->
-                            let quizf cyoaState interp init  cyoaStatef =
+                            let quizf (cyoaState:Cyoa.All<_,_,_>) cyoaStatef =
                                 if userId = ownerId then
                                     Right (CyoaType, fun req ->
                                         match req with
                                         | CyoaReq msg ->
-                                            let cyoaState = Cyoa.Implementation.update interp init msg cyoaState
-                                            let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
-
+                                            let cyoaState' = Cyoa.Implementation.update cyoaState.Interp cyoaState.Init msg cyoaState.IfState
+                                            let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState'
                                             let state =
-                                                match cyoaState.Game with
+                                                match cyoaState'.Game with
                                                 | Cyoa.Core.End
                                                 | Cyoa.Core.PrintEnd _ ->
                                                     Map.remove path state
                                                 | _ ->
+                                                    let cyoaState =
+                                                        { cyoaState with
+                                                            IfState = cyoaState'
+                                                        }
+
                                                     Map.add path (userId, CyoaState (cyoaStatef cyoaState)) state
 
                                             Answer cyoaAnswer, state
@@ -84,13 +89,14 @@ module Hub =
                                     )
                                 else
                                     Left ThisIsNotYourApp
+
                             match cyoaState with
                             | SomeCyoaState cyoaState ->
-                                quizf cyoaState Cyoa.Scenario.interp Cyoa.Scenario.all.Init SomeCyoaState
-                            | SomeGirlsQuizState cyoaState ->
-                                quizf cyoaState Cyoa.Scenario2.interp Cyoa.Scenario2.all.Init SomeGirlsQuizState
+                                quizf cyoaState SomeCyoaState
+                            | QuizState2 cyoaState ->
+                                quizf cyoaState QuizState2
                             | QuizWithMultiChoicesState cyoaState ->
-                                quizf cyoaState Cyoa.QuizWithMultipleChoice.interp Cyoa.QuizWithMultipleChoice.all.Init QuizWithMultiChoicesState
+                                quizf cyoaState QuizWithMultiChoicesState
                         | QuizState quizState ->
                             if userId = ownerId then
                                 Right (QuizType, fun req ->
@@ -126,22 +132,28 @@ module Hub =
             Init = fun (userId, appType) ->
                 match appType with
                 | InitCyoa x ->
-                    let cyoaf cyoaState cyoaStatef =
-                        let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
+                    let cyoaf (a:Cyoa.All<_,_,_>) cyoaStatef =
+                        let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") a.IfState
                         let f path =
-                            let state = Map.add path (userId, CyoaState (cyoaStatef cyoaState)) state
+                            let state = Map.add path (userId, CyoaState (cyoaStatef a)) state
                             state
 
                         Answer cyoaAnswer, f
                     match x with
                     | SomeCyoa ->
-                        cyoaf Cyoa.Scenario.initState SomeCyoaState
+                        let a = Cyoa.initState Cyoa.Scenario.beginLoc Cyoa.Scenario.scenario
+                        cyoaf a SomeCyoaState
                     | SomeGirlsQuiz ->
-                        cyoaf Cyoa.Scenario2.initState SomeGirlsQuizState
+                        let a = Cyoa.initState Cyoa.Scenario2.beginLoc Cyoa.Scenario2.someGirlsQuiz
+                        cyoaf a QuizState2
                     | QuizWithMultiChoices ->
-                        cyoaf Cyoa.QuizWithMultipleChoice.initState QuizWithMultiChoicesState
+                        let a = Cyoa.initState Cyoa.QuizWithMultipleChoice.beginLoc Cyoa.QuizWithMultipleChoice.scenario
+                        cyoaf a QuizWithMultiChoicesState
+                    | QuizPizza ->
+                        let a = Cyoa.initState Cyoa.Scenario2.beginLoc Cyoa.Scenario2.quizPizza
+                        cyoaf a QuizState2
                 | InitQuiz ->
-                    let quizState = Quiz.init (Quiz.loadQuiz ())
+                    let quizState = Quiz.init (Quiz.loadQuiz "Quiz.json")
                     let quizAnswer = Quiz.view quizState
                     let f path =
                         let state = Map.add path (userId, QuizState quizState) state

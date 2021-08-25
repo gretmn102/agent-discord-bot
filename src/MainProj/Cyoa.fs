@@ -345,40 +345,7 @@ module Scenario =
             ]
         ]
 
-    open Implementation
-    open FsharpMyExtension.ListZipper
     let beginLoc = Label1
-    let all =
-        let scenario =
-            scenario
-            |> List.map (fun (labelName, body) -> labelName, (labelName, body))
-            |> Map.ofList
-            : Scenario<_,_>
-        let init =
-            {
-                LabelState =
-                    [ ListZ.ofList (snd scenario.[beginLoc]) ]
-                Vars = Map.empty
-            }
-        {|
-            Scenario = scenario
-            Init = init
-        |}
-    let interp gameState =
-        gameState
-        |> interp
-            (fun next state isWin addon ->
-                failwith "addon not implemented"
-            )
-            all.Scenario
-
-    let initState : State<LabelName,obj,obj> =
-        {
-            Game =
-                interp all.Init
-            GameState = all.Init
-            SavedGameState = all.Init
-        }
 
 module Scenario2 =
     open Core
@@ -400,20 +367,11 @@ module Scenario2 =
                 Map.add counter (Num (fn x)) vars
             | _ -> Map.add counter (Num (fn 0)) vars
         )
-    let scenario : list<Label<LabelName,obj>> =
-        let questions, results = Quiz.loadQuiz()
 
+    let scenario prelude quizPath : list<Label<LabelName,obj>> =
+        let questions, results = Quiz.loadQuiz quizPath
         [
-            label Prelude [
-                menu (say' "Какой-то тест для девушек, украденный с [этого видео на YouTube](https://www.youtube.com/watch?v=kuAKQ-qOqrU).") [
-                    choice "Поехали!" [
-                        jump StartQuiz
-                    ]
-                    choice "Да ну нафиг!" [
-                        say "Как хочешь ¯\\_(ツ)_/¯"
-                    ]
-                ]
-            ]
+            prelude
 
             label StartQuiz [
                 for x in questions do
@@ -442,40 +400,36 @@ module Scenario2 =
             ]
         ]
 
-    open Implementation
-    open FsharpMyExtension.ListZipper
-    let beginLoc = Prelude
-    let all =
-        let scenario =
-            scenario
-            |> List.map (fun (labelName, body) -> labelName, (labelName, body))
-            |> Map.ofList
-            : Scenario<_,_>
-        let init =
-            {
-                LabelState =
-                    [ ListZ.ofList (snd scenario.[beginLoc]) ]
-                Vars = Map.empty
-            }
-        {|
-            Scenario = scenario
-            Init = init
-        |}
-    let interp gameState =
-        gameState
-        |> interp
-            (fun next state isWin addon ->
-                failwith "addon not implemented"
-            )
-            all.Scenario
+    let someGirlsQuiz =
+        let prelude =
+            label Prelude [
+                menu (say' "Какой-то тест для девушек, украденный с [этого видео на YouTube](https://www.youtube.com/watch?v=kuAKQ-qOqrU).") [
+                    choice "Поехали!" [
+                        jump StartQuiz
+                    ]
+                    choice "Да ну нафиг!" [
+                        say "Как хочешь ¯\\_(ツ)_/¯"
+                    ]
+                ]
+            ]
+        scenario prelude "Quiz.json"
 
-    let initState : State<LabelName,obj,obj> =
-        {
-            Game =
-                interp all.Init
-            GameState = all.Init
-            SavedGameState = all.Init
-        }
+    let quizPizza =
+        let prelude =
+            label Prelude [
+                menu (say' "Тест: Какая ты пицца?\nТест беспардонно взят с [этого сайта](https://kaktutzhit.by/test/dominos).") [
+                    choice "Поехали!" [
+                        jump StartQuiz
+                    ]
+                    choice "Да ну нафиг!" [
+                        say "Как хочешь ¯\\_(ツ)_/¯"
+                    ]
+                ]
+            ]
+
+        scenario prelude "QuizPizza.json"
+
+    let beginLoc = Prelude
 
 module QuizWithMultipleChoice =
     open Core
@@ -621,37 +575,48 @@ module QuizWithMultipleChoice =
             ]
         ]
 
-    open Implementation
-    open FsharpMyExtension.ListZipper
     let beginLoc = Prelude
-    let all =
-        let scenario =
-            scenario
-            |> List.map (fun (labelName, body) -> labelName, (labelName, body))
-            |> Map.ofList
-            : Scenario<_,_>
-        let init =
-            {
-                LabelState =
-                    [ ListZ.ofList (snd scenario.[beginLoc]) ]
-                Vars = Map.empty
-            }
-        {|
-            Scenario = scenario
-            Init = init
-        |}
+
+open Core
+open Implementation
+open FsharpMyExtension.ListZipper
+
+type All<'LabelName, 'Addon, 'Arg when 'LabelName : comparison> =
+    {
+        Init: State<'LabelName,'Addon>
+
+        IfState: State<'LabelName,'Addon,'Arg>
+        Interp: State<'LabelName,'Addon> -> T<'LabelName,'Addon,'Arg>
+    }
+
+let initState beginLoc scenario =
+    let scenario =
+        scenario
+        |> List.map (fun (labelName, body) -> labelName, (labelName, body))
+        |> Map.ofList
+        : Scenario<_,_>
+    let init =
+        {
+            LabelState =
+                [ ListZ.ofList (snd scenario.[beginLoc]) ]
+            Vars = Map.empty
+        }
+
     let interp gameState =
         gameState
         |> interp
             (fun next state isWin addon ->
                 failwith "addon not implemented"
             )
-            all.Scenario
+            scenario
+    {
+        Init = init
 
-    let initState : State<LabelName,obj,obj> =
-        {
-            Game =
-                interp all.Init
-            GameState = all.Init
-            SavedGameState = all.Init
-        }
+        Interp = interp
+        IfState =
+            {
+                Game = interp init
+                GameState = init
+                SavedGameState = init
+            }
+    }

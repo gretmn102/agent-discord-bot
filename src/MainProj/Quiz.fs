@@ -109,8 +109,7 @@ let view (st:State) =
 open FsharpMyExtension.Either
 open System.Threading.Tasks
 
-let loadQuiz () : QuizType =
-    let path = "Quiz.json"
+let loadQuiz path : QuizType =
     if System.IO.File.Exists path then
         try
             let x:QuizType = Json.desf path
