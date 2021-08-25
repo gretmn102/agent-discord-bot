@@ -3,7 +3,7 @@ open FsharpMyExtension
 
 type Cost = int
 type Question = { Description:string; Variants:(string * Cost) [] }
-type Result = { Range:int*int; Description:string }
+type Result = { Range:int*int; Description:string; ImgSrc: string option }
 
 type Question2 = { Description:string; Variants:string [] }
 

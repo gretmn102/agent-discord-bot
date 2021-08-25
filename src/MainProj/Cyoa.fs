@@ -394,7 +394,15 @@ module Scenario2 =
                             from <= score && score <= to')
                     match res with
                     | Some x ->
-                        say' (sprintf "%d\n%s" score x.Description)
+                        let b = DSharpPlus.Entities.DiscordEmbedBuilder()
+                        b.Description <- sprintf "%d очков\n\n%s" score x.Description
+                        b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
+                        match x.ImgSrc with
+                        | Some imgSrc ->
+                            b.WithImageUrl(imgSrc) |> ignore
+                        | None -> ()
+
+                        b.Build()
                     | None -> failwith "Something wrong"
                 )
             ]
@@ -417,7 +425,7 @@ module Scenario2 =
     let quizPizza =
         let prelude =
             label Prelude [
-                menu (say' "Тест: Какая ты пицца?\nТест беспардонно взят с [этого сайта](https://kaktutzhit.by/test/dominos).") [
+                menu (say' "Тест: Какая ты пицца?\n\nТест беспардонно взят с [этого сайта](https://kaktutzhit.by/test/dominos).") [
                     choice "Поехали!" [
                         jump StartQuiz
                     ]

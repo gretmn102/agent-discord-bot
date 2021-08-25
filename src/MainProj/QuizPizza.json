@@ -45,7 +45,7 @@
           "Item2": 1
         },
         {
-          "Item1": "Я брокколи. Вроде все знают, что со мной полезно дружить, но как доходит до практики, многие начинают нос воротить.",
+          "Item1": "Я брокколи. Полезен, но многими нелюбим.",
           "Item2": 1
         },
         {
@@ -293,77 +293,143 @@
         "Item1": 0,
         "Item2": 15
       },
-      "Description": "Для любителей классики и минимализма. Ждет своего мастера.\thttps://kaktutzhit.by/uploads/tests/17d97aff14b7e31c07c5ae3420b6dfad21b03bc8.jpg"
+      "Description": "Для любителей классики и минимализма. Ждет своего мастера.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/17d97aff14b7e31c07c5ae3420b6dfad21b03bc8.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 16,
         "Item2": 16
       },
-      "Description": "Самый известный острый вкус салями из Южной Италии обжигает так же, как и ваш взгляд.\thttps://kaktutzhit.by/uploads/tests/ab6959cd25458e588a1919a1f8c145fe2dd9e15a.jpg"
+      "Description": "Самый известный острый вкус салями из Южной Италии обжигает так же, как и ваш взгляд.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/ab6959cd25458e588a1919a1f8c145fe2dd9e15a.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 17,
         "Item2": 17
       },
-      "Description": "Также известная как «Гавайская». Пицца и вы настолько же легки и привлекательны, как и отпуск на острове.\thttps://kaktutzhit.by/uploads/tests/6f723aa8af7d1e0db2b95774918e4c40cecd4077.jpg"
+      "Description": "Также известная как «Гавайская». Пицца и вы настолько же легки и привлекательны, как и отпуск на острове.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/6f723aa8af7d1e0db2b95774918e4c40cecd4077.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 18,
         "Item2": 18
       },
-      "Description": "Перец халапеньо выигрывает любой спор, потому что с таким острым парнем никто не хочет связываться.\thttps://kaktutzhit.by/uploads/tests/2b12adee287e46fead782c2e24fb5d13609c022a.jpg"
+      "Description": "Перец халапеньо выигрывает любой спор, потому что с таким острым парнем никто не хочет связываться.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/2b12adee287e46fead782c2e24fb5d13609c022a.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 19,
         "Item2": 19
       },
-      "Description": "Один из самых знаменитых итальянских вкусов в виде самой любимой итальянской еды. Лучшее сочетание с вашим темпераментом.\thttps://kaktutzhit.by/uploads/tests/812f2294faa149088464bd468ef253ab405e8c86.jpg"
+      "Description": "Один из самых знаменитых итальянских вкусов в виде самой любимой итальянской еды. Лучшее сочетание с вашим темпераментом.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/812f2294faa149088464bd468ef253ab405e8c86.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 20,
         "Item2": 20
       },
-      "Description": "Для тех, кто не хочет сидеть в Борисполе и предпочитает сразу переходить к делу.\thttps://kaktutzhit.by/uploads/tests/70f3536f1fbff7d66db9d8eb5d57e28d4ad8baf7.jpg"
+      "Description": "Для тех, кто не хочет сидеть в Борисполе и предпочитает сразу переходить к делу.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/70f3536f1fbff7d66db9d8eb5d57e28d4ad8baf7.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 20,
         "Item2": 21
       },
-      "Description": "Приятно, когда можете себе позволить выбрать все, что пожелаете. Эта пицца словно создана для вас, чтобы производить такое же впечатление сытости и благополучия.\thttps://kaktutzhit.by/uploads/tests/d3bb773b3d3d24e1dd16c5575b4b68479e2419a0.jpg"
+      "Description": "Приятно, когда можете себе позволить выбрать все, что пожелаете. Эта пицца словно создана для вас, чтобы производить такое же впечатление сытости и благополучия.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/d3bb773b3d3d24e1dd16c5575b4b68479e2419a0.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 22,
         "Item2": 22
       },
-      "Description": "Это пицца знает ваш характер и умеет, как и вы, производить яркое впечатление.\thttps://kaktutzhit.by/uploads/tests/43421872d35eb3594222364442768a508a30fdda.jpg"
+      "Description": "Это пицца знает ваш характер и умеет, как и вы, производить яркое впечатление.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/43421872d35eb3594222364442768a508a30fdda.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 23,
         "Item2": 23
       },
-      "Description": "Ваша личность тоже сочетает столько разных граней, но важно одно – они идеально дополняют друг друга.\thttps://kaktutzhit.by/uploads/tests/0a64c4c4b40f0c7ab568251007248f7863eda0cb.jpg"
+      "Description": "Ваша личность тоже сочетает столько разных граней, но важно одно – они идеально дополняют друг друга.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/0a64c4c4b40f0c7ab568251007248f7863eda0cb.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 24,
         "Item2": 25
       },
-      "Description": "Говорят, что регулярное потребление Делюкс-пиццы повышает материальное благосостояние.\thttps://kaktutzhit.by/uploads/tests/a652a4d7574ebccbfa8feb01d5b39e54f39d56cb.jpg"
+      "Description": "Говорят, что регулярное потребление Делюкс-пиццы повышает материальное благосостояние.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/a652a4d7574ebccbfa8feb01d5b39e54f39d56cb.jpg"
+        ]
+      }
     },
     {
       "Range": {
         "Item1": 26,
         "Item2": 99
       },
-      "Description": "Шпинат сделал сильным и здоровым не только Папая, но и вас.\thttps://kaktutzhit.by/uploads/tests/fcd0f816be3174fbe48df5e2a4b6e5004f5777ef.jpg'"
+      "Description": "Шпинат сделал сильным и здоровым не только Папая, но и вас.",
+      "ImgSrc": {
+        "Case": "Some",
+        "Fields": [
+          "https://kaktutzhit.by/uploads/tests/fcd0f816be3174fbe48df5e2a4b6e5004f5777ef.jpg'"
+        ]
+      }
     }
   ]
 }
