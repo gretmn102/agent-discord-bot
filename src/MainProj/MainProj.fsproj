@@ -10,6 +10,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Quiz.json</TargetPath>
     </ContentWithTargetPath>
+    <ContentWithTargetPath Include="QuizPizza.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>QuizPizza.json</TargetPath>
+    </ContentWithTargetPath>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
