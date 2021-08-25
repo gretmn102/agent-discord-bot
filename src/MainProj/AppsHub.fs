@@ -9,6 +9,7 @@ module Hub =
     type AppReq =
         | CyoaReq of Cyoa.Implementation.Msg
         | SomeGirlsQuizReq of Cyoa.Implementation.Msg
+        | QuizWithMultiChoicesReq of Cyoa.Implementation.Msg
         | QuizReq of Quiz.Msg
         | BallotBoxReq
 
@@ -16,6 +17,7 @@ module Hub =
         | CyoaAnswer of DSharpPlus.Entities.DiscordMessageBuilder
         | SomeGirlsQuizAnswer of DSharpPlus.Entities.DiscordMessageBuilder
         | QuizAnswer of DSharpPlus.Entities.DiscordMessageBuilder
+        | QuizWithMultiChoicesAnswer of DSharpPlus.Entities.DiscordMessageBuilder
         | BallotBoxAnswer of Types.ResultView
     type Err =
         | HasNotStartedYet
@@ -26,17 +28,20 @@ module Hub =
         | InitCyoa
         | InitSomeGirlsQuiz
         | InitQuiz
+        | InitQuizWithMultiChoices
         | InitBallotBox of description:string * choises:string list
 
     type AppType =
         | CyoaType
         | SomeGirlsQuizType
+        | QuizWithMultiChoicesType
         | QuizType
         | BallotBoxType
 
     type AppState =
         | CyoaState of Cyoa.Implementation.State<Cyoa.Scenario.LabelName,obj,obj>
         | SomeGirlsQuizState of Cyoa.Implementation.State<Cyoa.Scenario2.LabelName,obj,obj>
+        | QuizWithMultiChoicesState of Cyoa.Implementation.State<Cyoa.QuizWithMultipleChoice.LabelName,obj,obj>
         | QuizState of Quiz.State
         | BallotBoxState of BallotBox.State
     type State = Map<MessagePath, UserId * AppState>
@@ -97,6 +102,27 @@ module Hub =
                                 )
                             else
                                 Left ThisIsNotYourApp
+                        | QuizWithMultiChoicesState cyoaState ->
+                            if userId = ownerId then
+                                Right (QuizWithMultiChoicesType, fun req ->
+                                    match req with
+                                    | QuizWithMultiChoicesReq msg ->
+                                        let cyoaState = Cyoa.Implementation.update Cyoa.QuizWithMultipleChoice.interp Cyoa.QuizWithMultipleChoice.all.Init msg cyoaState
+                                        let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
+
+                                        let state =
+                                            match cyoaState.Game with
+                                            | Cyoa.Core.End
+                                            | Cyoa.Core.PrintEnd _ ->
+                                                Map.remove path state
+                                            | _ ->
+                                                Map.add path (userId, QuizWithMultiChoicesState cyoaState) state
+
+                                        QuizWithMultiChoicesAnswer cyoaAnswer, state
+                                    | x -> failwithf "expected QuizWithMultiChoicesReq but %A" x
+                                )
+                            else
+                                Left ThisIsNotYourApp
                         | QuizState quizState ->
                             if userId = ownerId then
                                 Right (QuizType, fun req ->
@@ -147,6 +173,14 @@ module Hub =
                         state
 
                     SomeGirlsQuizAnswer cyoaAnswer, f
+                | InitQuizWithMultiChoices ->
+                    let cyoaState = Cyoa.QuizWithMultipleChoice.initState
+                    let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState
+                    let f path =
+                        let state = Map.add path (userId, QuizWithMultiChoicesState cyoaState) state
+                        state
+
+                    QuizWithMultiChoicesAnswer cyoaAnswer, f
                 | InitQuiz ->
                     let quizState = Quiz.init (Quiz.loadQuiz ())
                     let quizAnswer = Quiz.view quizState
@@ -211,6 +245,21 @@ let m =
                                 | Hub.SomeGirlsQuizAnswer answer -> answer
                                 | x -> failwithf "expected SomeGirlsQuizAnswer but %A" x
                             Right answer, state
+                        | Hub.QuizWithMultiChoicesType ->
+                            let msg =
+                                match e.Id with
+                                | Cyoa.Implementation.NextButtonId ->
+                                    Cyoa.Implementation.Next
+                                | Cyoa.Implementation.SelectMenuId ->
+                                    Cyoa.Implementation.Choice (int e.Values.[0])
+                                | x ->
+                                    failwithf "expected Id = %s but %s" e.Id x
+                            let answer, state = f (Hub.QuizWithMultiChoicesReq msg)
+                            let answer =
+                                match answer with
+                                | Hub.QuizWithMultiChoicesAnswer answer -> answer
+                                | x -> failwithf "expected QuizWithMultiChoicesAnswer but %A" x
+                            Right answer, state
                         | Hub.QuizType ->
                             let msg =
                                 match e.Id with
@@ -251,6 +300,7 @@ let m =
                 match answer with
                 | Hub.CyoaAnswer answer
                 | Hub.SomeGirlsQuizAnswer answer
+                | Hub.QuizWithMultiChoicesAnswer answer
                 | Hub.QuizAnswer answer -> answer
                 | Hub.BallotBoxAnswer answer ->
                     match answer.View with // TODO: View and ResponseToUser can contain values at the same time

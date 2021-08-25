@@ -23,6 +23,7 @@ type Cmd =
     | SomeCyoa
     | SomeGirlsQuiz
     | SomeQuiz
+    | SomeQuizWithMultiChoices
     | Unknown
     | Pass
     | BallotBox of description:string * choices:string list
@@ -49,6 +50,7 @@ let pcommand =
         cmd .>> spaces .>>. opt puserMention |>> Act
         stringReturn "someGirlsQuiz" SomeGirlsQuiz
         stringReturn "cyoa" SomeCyoa
+        stringReturn "quizWithMultiChoices" SomeQuizWithMultiChoices
         stringReturn "quiz" SomeQuiz
         pballotBox
     ]

@@ -140,6 +140,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 AppsHub.start AppsHub.Hub.InitSomeGirlsQuiz client e
             | CommandParser.SomeQuiz ->
                 AppsHub.start AppsHub.Hub.InitQuiz client e
+            | CommandParser.SomeQuizWithMultiChoices ->
+                AppsHub.start AppsHub.Hub.InitQuizWithMultiChoices client e
             | CommandParser.BallotBox(description, choices) ->
                 AppsHub.start (AppsHub.Hub.InitBallotBox(description, choices)) client e
             | CommandParser.Unknown ->

@@ -5,12 +5,13 @@ module Core =
         | String of string
         | Bool of bool
         | Num of int
+        | BoolArr of bool []
     type Vars = Map<string, Var>
 
     type Stmt<'LabelName, 'Addon> =
         | Say of (Vars -> DSharpPlus.Entities.DiscordEmbed)
         | Jump of 'LabelName
-        | Menu of DSharpPlus.Entities.DiscordEmbed * (string * Stmt<'LabelName, 'Addon> list) list
+        | Menu of (Vars -> DSharpPlus.Entities.DiscordEmbed * (string * Stmt<'LabelName, 'Addon> list) list)
         | If of (Vars -> bool) * Stmt<'LabelName, 'Addon> list * Stmt<'LabelName, 'Addon> list
         | ChangeVars of (Vars -> Vars)
         | Addon of 'Addon
@@ -40,7 +41,10 @@ module Core =
         Jump labelName
 
     let choice (caption:string) (body:Stmt<'LabelName, 'Addon> list) = caption, body
-    let menu caption xs = Menu(caption, xs)
+
+    let menu caption xs = Menu(fun _ -> caption, xs)
+    let menuV caption xs = Menu (fun vars -> caption vars, xs vars)
+
     let if' pred thenBody elseBody =
         If(pred, thenBody, elseBody)
     type Scenario<'LabelName, 'Addon> when 'LabelName : comparison =
@@ -96,7 +100,8 @@ module Core =
                     PrintEnd (f state.Vars)
                 | nextStmt ->
                     Print(f state.Vars, fun () -> nextStmt)
-            | Menu(caption, xs) ->
+            | Menu f ->
+                let caption, xs = f state.Vars
                 let labels = xs |> List.map fst
                 Choices(caption, labels, fun i ->
                     let _, body = xs.[i]
@@ -433,6 +438,185 @@ module Scenario2 =
                     | Some x ->
                         say' (sprintf "%d\n%s" score x.Description)
                     | None -> failwith "Something wrong"
+                )
+            ]
+        ]
+
+    open Implementation
+    open FsharpMyExtension.ListZipper
+    let beginLoc = Prelude
+    let all =
+        let scenario =
+            scenario
+            |> List.map (fun (labelName, body) -> labelName, (labelName, body))
+            |> Map.ofList
+            : Scenario<_,_>
+        let init =
+            {
+                LabelState =
+                    [ ListZ.ofList (snd scenario.[beginLoc]) ]
+                Vars = Map.empty
+            }
+        {|
+            Scenario = scenario
+            Init = init
+        |}
+    let interp gameState =
+        gameState
+        |> interp
+            (fun next state isWin addon ->
+                failwith "addon not implemented"
+            )
+            all.Scenario
+
+    let initState : State<LabelName,obj,obj> =
+        {
+            Game =
+                interp all.Init
+            GameState = all.Init
+            SavedGameState = all.Init
+        }
+
+module QuizWithMultipleChoice =
+    open Core
+
+    type LabelName =
+        | Prelude
+        | StartQuiz of int
+        | Loop of int
+        | Result
+
+    let counter = "counter"
+    let getCounter (x:Map<_,_>) =
+        match x.[counter] with
+        | Num x -> x
+        | _ -> failwith ""
+    let setCounter fn =
+        ChangeVars (fun vars ->
+            match Map.tryFind counter vars with
+            | Some (Num x) ->
+                Map.add counter (Num (fn x)) vars
+            | _ -> Map.add counter (Num (fn 0)) vars
+        )
+
+    let bools = "bools"
+    let getBools (x:Map<_,_>) =
+        match x.[bools] with
+        | BoolArr x -> x
+        | _ -> failwith ""
+    let setBools fn =
+        ChangeVars (fun vars ->
+            match Map.tryFind bools vars with
+            | Some (BoolArr xs) ->
+                Map.add bools (BoolArr (fn xs)) vars
+            | _ -> Map.add bools (BoolArr (fn [||])) vars
+        )
+    type T =
+        {
+            Choice: (int -> T)
+            Pass: int
+        }
+    type State =
+        { Choices: (int * bool) [] }
+    let rec f (st:State) =
+        {
+            Choice = fun i ->
+                { st with
+                    Choices =
+                        let xs = st.Choices
+                        let v, _ = xs.[i]
+                        xs.[i] <- v, true
+                        xs
+                }
+                |> f
+            Pass =
+                st.Choices |> Array.sumBy fst
+        }
+
+    let scenario : list<Label<LabelName,obj>> =
+        [
+            label Prelude [
+                menu (say' "Какая ты пицца сегодня?") [
+                    choice "Поехали!" [
+                        jump (StartQuiz 0)
+                    ]
+                    choice "Да ну нафиг!" [
+                        say "Как хочешь ¯\\_(ツ)_/¯"
+                    ]
+                ]
+            ]
+
+            let f questIndex (choices: _ []) next =
+                [
+                    label (StartQuiz questIndex) [
+                        setBools (fun _ -> Array.create choices.Length false)
+
+                        jump (Loop questIndex)
+                    ]
+                    label (Loop questIndex) [
+                        menuV
+                            (fun vars ->
+                                "Выберите несколько пунктов и нажмите \"Дальше\""
+                                |> say'
+                            )
+                            (fun vars ->
+                                [
+                                    let bools = getBools vars
+                                    for i, (description, score) in Array.indexed choices do
+                                        let f i =
+                                            if bools.[i] then
+                                                sprintf "● %s" description
+                                            else
+                                                sprintf "○ %s" description
+                                        choice (f i) [
+                                            setBools (fun xs ->
+                                                xs.[i] <- not xs.[i]
+                                                xs
+                                            )
+                                            jump (Loop questIndex)
+                                        ]
+                                    if Array.exists id bools then
+                                        choice "Дальше" [
+                                            setCounter (fun counter ->
+                                                bools
+                                                |> Array.fold
+                                                    (fun (i, counter) hasSelected ->
+                                                        let counter =
+                                                            if hasSelected then
+                                                                counter + snd choices.[i]
+                                                            else
+                                                                counter
+                                                        i + 1, counter
+                                                    )
+                                                    (0, counter)
+                                                |> snd
+                                            )
+                                            jump next
+                                        ]
+                                ]
+                            )
+                    ]
+                ]
+            let choices =
+                [|
+                    "Один", 1
+                    "Два", 2
+                    "Три", 3
+                |]
+            yield! f 0 choices (StartQuiz 1)
+            let choices =
+                [|
+                    "Один1", 1
+                    "Два2", 2
+                    "Три3", 3
+                    "Четыре4", 4
+                |]
+            yield! f 1 choices Result
+
+            label Result [
+                Say (fun vars ->
+                    let score = getCounter vars
+                    say' (sprintf "%d" score)
                 )
             ]
         ]
