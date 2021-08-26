@@ -10,6 +10,10 @@ let puserMention : _ Parser =
 let puserMentionTarget (userId:UserId) : _ Parser =
     skipString "<@" >>. optional (skipChar '!') >>. skipString (string userId) >>. skipChar '>'
 
+type ShipOption =
+    | Rand
+    | Target of int
+
 type Act =
     | Take
     | Fairytail
@@ -17,6 +21,7 @@ type Act =
     | Bully
     | Admire
     | Battery
+    | Ship of ShipOption
 
 type Cmd =
     | Act of Act * UserId option
@@ -34,6 +39,18 @@ let pballotBox =
     .>>. many1 (many1Satisfy ((<>) '\n') .>> spaces)
     |>> BallotBox
 
+let pship : _ Parser =
+    let ptarget =
+        pint32
+        >>= fun x ->
+           if 0 <= x && x <= 100 then
+               preturn x
+           else
+               fail "Значение должно быть от 0 до 100 включительно"
+
+    skipString "ship"
+    >>? ((ptarget |>> Target) <|> (skipStringCI "rand" >>% Rand))
+
 let pcommand =
     let cmd =
         choice [
@@ -43,6 +60,7 @@ let pcommand =
             skipString "bully" >>. optional (skipString "ing") >>% Bully
             skipString "admire" >>% Admire
             skipString "battery" >>% Battery
+            pship |>> Ship
         ]
     choice [
         cmd .>> spaces .>>. opt puserMention |>> Act

@@ -35,8 +35,8 @@ let commandParserTests =
                     sprintf "<@%d> .unknown" botId
                     "      ^"
                     "Expecting: 'admire', 'ballotBox', 'battery', 'bully', 'catail', 'cyoa',"
-                    "'fairytail', 'quiz', 'quizPizza', 'quizWithMultiChoices', 'someGirlsQuiz' or"
-                    "'take'"
+                    "'fairytail', 'quiz', 'quizPizza', 'quizWithMultiChoices', 'ship',"
+                    "'someGirlsQuiz' or 'take'"
                     ""
                 ] |> String.concat "\r\n"
             Assert.Equal("msg6", Left act, start botId (sprintf "<@%d> .unknown" botId))
@@ -44,6 +44,38 @@ let commandParserTests =
             Assert.Equal("not mention bang bot", Right Pass, start botId "<@!1234567> .unknown")
         )
     ]
+
+[<Tests>]
+let pshipTests =
+    testList "pshipTests" [
+        testCase "pshipTestsShipRand" (fun _ ->
+            Assert.Equal("", Right Rand, FParsec.runEither pship "shipRand")
+        )
+        testCase "pshipTestsShip0" (fun _ ->
+            Assert.Equal("", Right (Target 0), FParsec.runEither pship "ship0")
+        )
+        testCase "pshipTestsShip100" (fun _ ->
+            Assert.Equal("", Right (Target 100), FParsec.runEither pship "ship100")
+        )
+        testCase "pshipTestsErr" (fun _ ->
+            let exp =
+                [
+                    "Error in Ln: 1 Col: 1"
+                    "ship"
+                    "^"
+                    ""
+                    "The parser backtracked after:"
+                    "  Error in Ln: 1 Col: 5"
+                    "  ship"
+                    "      ^"
+                    "  Note: The error occurred at the end of the input stream."
+                    "  Expecting: integer number (32-bit, signed) or 'rand' (case-insensitive)"
+                    ""
+                ] |> String.concat "\r\n"
+            Assert.Equal("", Left exp, FParsec.runEither pship "ship")
+        )
+    ]
+
 [<Tests>]
 let ballotBoxTests =
     testList "ballotBoxTests" [
