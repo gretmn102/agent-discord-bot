@@ -216,6 +216,50 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 AppsHub.start AppsHub.Hub.InitQuiz client e
             | CommandParser.BallotBox(description, choices) ->
                 AppsHub.start (AppsHub.Hub.InitBallotBox(description, choices)) client e
+            | CommandParser.MassShip usersIds ->
+                let f (msg:DSharpPlus.Entities.DiscordMessage) =
+                    async {
+                        let usersAvatars =
+                            usersIds
+                            |> Seq.map (fun userId ->
+                                let user = await (e.Guild.GetMemberAsync userId)
+                                Ship.WebClientDownloader.getData [] user.AvatarUrl
+                            )
+                            |> Seq.map (function
+                                | Right xs -> xs
+                                | Left _ -> [||]
+                            )
+                            |> Array.ofSeq
+
+                        let b = DSharpPlus.Entities.DiscordMessageBuilder()
+                        // let embed = DSharpPlus.Entities.DiscordEmbedBuilder()
+                        // embed.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
+                        // embed.Description <-
+                        //     let nickOrName (user:DSharpPlus.Entities.DiscordMember) =
+                        //         match user.Nickname with
+                        //         | null -> user.Username
+                        //         | nick -> nick
+
+                        //     if perc < 50 then
+                        //         sprintf "Между %s и %s..." (nickOrName who) (nickOrName whom)
+                        //     else
+                        //         sprintf "Между %s и %s что-то есть!" (nickOrName who) (nickOrName whom)
+                        let fileName = "massShip.png"
+                        // embed.WithImageUrl (sprintf "attachment://%s" fileName) |> ignore
+
+                        // b.Embed <- embed.Build()
+
+                        use m = new System.IO.MemoryStream()
+                        Ship.massShip usersAvatars m
+                        m.Position <- 0L
+                        b.WithFile(fileName, m) |> ignore
+                        let! _ = Async.AwaitTask (msg.ModifyAsync(b))
+                        ()
+                    }
+
+                let msg = await (client.SendMessageAsync (e.Channel, "Processing..."))
+                Async.Start (f msg)
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-

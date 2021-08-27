@@ -25,6 +25,7 @@ type Act =
 
 type Cmd =
     | Act of Act * UserId option
+    | MassShip of UserId list
     | Cyoa of AppsHub.Hub.CyoaT
     | SomeQuiz
     | Unknown
@@ -51,6 +52,12 @@ let pship : _ Parser =
     skipString "ship"
     >>? ((ptarget |>> Target) <|> (skipStringCI "rand" >>% Rand))
 
+let pmassShip =
+    pipe2
+        (skipStringCI "massShip" .>> spaces)
+        (many (puserMention .>> spaces))
+        (fun cmd usersIds -> MassShip usersIds)
+
 let pcommand =
     let cmd =
         choice [
@@ -70,6 +77,7 @@ let pcommand =
         stringReturn "quizPizza" (Cyoa AppsHub.Hub.QuizPizza)
         stringReturn "quiz" SomeQuiz
         pballotBox
+        pmassShip
     ]
 
 let start botId str =
