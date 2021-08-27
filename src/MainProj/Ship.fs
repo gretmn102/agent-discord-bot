@@ -54,6 +54,10 @@ let (width, height), templateBmp =
     (width, height), dstBmp
 // templateBmp.Save("output.png")
 
+// https://docs.sixlabors.com/articles/fonts/gettingstarted.html
+let collection = new SixLabors.Fonts.FontCollection()
+let fontFamily = collection.Install("Fonts/DejaVuSansCondensed.ttf")
+
 let img user1Avatar user2Avatar perc (outputStream:System.IO.MemoryStream) =
     use dstBmp = new Image<Rgba32>(templateBmp.Width, templateBmp.Height)
     dstBmp.Mutate (fun ctx ->
@@ -77,10 +81,6 @@ let img user1Avatar user2Avatar perc (outputStream:System.IO.MemoryStream) =
     let drawText shift prec =
         // let i = 100
         let txtBrush = new SolidBrush(getColor prec)
-        // https://docs.sixlabors.com/articles/fonts/gettingstarted.html
-        let family = SixLabors.Fonts.SystemFonts.Find "DejaVu Sans Condensed"
-        // FontFamily.Families
-        // |> Array.find (fun x -> x.Name.Contains "eja")
 
         let fontSize =
             // 320 66.5
@@ -88,7 +88,7 @@ let img user1Avatar user2Avatar perc (outputStream:System.IO.MemoryStream) =
             // (300. * x) / 320.
             (66.5f * float32 height) / 320.f
 
-        let font = new SixLabors.Fonts.Font(family, fontSize)
+        let font = new SixLabors.Fonts.Font(fontFamily, fontSize)
         let str = sprintf "%d%%" prec
 
         let options = new DrawingOptions()
