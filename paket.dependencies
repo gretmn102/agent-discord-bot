@@ -12,7 +12,8 @@ nuget Newtonsoft.Json
 nuget Newtonsoft.Json.Bson
 nuget YamlDotNet
 nuget TextCopy
-nuget System.Drawing.Common
+nuget SixLabors.ImageSharp
+nuget SixLabors.ImageSharp.Drawing
 
 source https://gitlab.com/api/v4/projects/28574921/packages/nuget/index.json
 storage: none

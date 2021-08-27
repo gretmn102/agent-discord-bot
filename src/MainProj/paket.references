@@ -2,4 +2,5 @@ FSharp.Core
 DSharpPlus
 FParsec
 FSharpMyExt
-System.Drawing.Common
+SixLabors.ImageSharp
+SixLabors.ImageSharp.Drawing
