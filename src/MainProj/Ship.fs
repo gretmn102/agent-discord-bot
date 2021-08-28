@@ -170,10 +170,17 @@ let roundImg (dstSrc:Image) =
     // mask.Save("output.png")
     dstSrc.Mutate (fun ctx ->
         let opt = GraphicsOptions()
-        opt.AlphaCompositionMode <- PixelAlphaCompositionMode.Xor
+        opt.AlphaCompositionMode <- PixelAlphaCompositionMode.DestOut
         ctx.DrawImage(mask, opt)
         |> ignore
     )
+let test () =
+    let userAvatar =
+        WebClientDownloader.getData [] "https://cdn.discordapp.com/avatars/877961992005111818/a5d11850634fa5c22e8e70163f834e26.png?size=128"
+        |> Either.get
+    use x = Image<Rgba32>.Load(userAvatar)
+    roundImg x
+    x.Save("output.png")
 
 let massShip (avatars:byte [] []) (outputStream:System.IO.MemoryStream) =
     // [very cool gradient](https://stackoverflow.com/a/49321304)
@@ -258,6 +265,7 @@ let massShip (avatars:byte [] []) (outputStream:System.IO.MemoryStream) =
 // let user2Avatar = WebClientDownloader.getData [] "https://cdn.discordapp.com/avatars/436300487307034634/6112783a3ddbe8d59e6b6ec7f419b796.png?size=128"
 // let user3Avatar = WebClientDownloader.getData [] "https://discord.com/assets/1f0bfc0865d324c2587920a7d80c609b.png"
 // let user4Avatar = WebClientDownloader.getData [] "https://discord.com/assets/3c6ccb83716d1e4fb91d3082f6b21d77.png"
+// let userAvatar = WebClientDownloader.getData [] "https://cdn.discordapp.com/avatars/877961992005111818/a5d11850634fa5c22e8e70163f834e26.png?size=128"
 // #load "Ship.fs"
 // open Ship
 // [|
