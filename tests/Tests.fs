@@ -9,13 +9,6 @@ open FsharpMyExtension.Either
 #endif
 open CommandParser
 
-module FParsec =
-    open FParsec
-    let runEither p str =
-        match run p str with
-        | Success(x, _, _) -> Right x
-        | Failure(x, _, _) -> Left x
-
 [<Tests>]
 let commandParserTests =
     testList "commandParserTests" [
@@ -36,7 +29,8 @@ let commandParserTests =
                     "      ^"
                     "Expecting: 'admire', 'ballotBox', 'battery', 'bully', 'catail', 'cyoa',"
                     "'fairytail', 'quiz', 'quizPizza', 'quizWithMultiChoices', 'ship',"
-                    "'someGirlsQuiz' or 'take'"
+                    "'someGirlsQuiz', 'take', 'massShip' (case-insensitive) or 'numberToWords'"
+                    "(case-insensitive)"
                     ""
                 ] |> String.concat "\r\n"
             Assert.Equal("msg6", Left act, start botId (sprintf "<@%d> .unknown" botId))
@@ -49,13 +43,13 @@ let commandParserTests =
 let pshipTests =
     testList "pshipTests" [
         testCase "pshipTestsShipRand" (fun _ ->
-            Assert.Equal("", Right Rand, FParsec.runEither pship "shipRand")
+            Assert.Equal("", Right Rand, FParsecUtils.runEither pship "shipRand")
         )
         testCase "pshipTestsShip0" (fun _ ->
-            Assert.Equal("", Right (Target 0), FParsec.runEither pship "ship0")
+            Assert.Equal("", Right (Target 0), FParsecUtils.runEither pship "ship0")
         )
         testCase "pshipTestsShip100" (fun _ ->
-            Assert.Equal("", Right (Target 100), FParsec.runEither pship "ship100")
+            Assert.Equal("", Right (Target 100), FParsecUtils.runEither pship "ship100")
         )
         testCase "pshipTestsErr" (fun _ ->
             let exp =
@@ -72,7 +66,7 @@ let pshipTests =
                     "  Expecting: integer number (32-bit, signed) or 'rand' (case-insensitive)"
                     ""
                 ] |> String.concat "\r\n"
-            Assert.Equal("", Left exp, FParsec.runEither pship "ship")
+            Assert.Equal("", Left exp, FParsecUtils.runEither pship "ship")
         )
     ]
 
@@ -93,7 +87,7 @@ let ballotBoxTests =
                   (BallotBox
                      ("Нужны ли нам такие голосовалки?",
                       ["Да"; "Нет"; "Удоли!11"; "Vox Populi, Vox Dei"]))
-            Assert.Equal("", exp, FParsec.runEither pballotBox input)
+            Assert.Equal("", exp, FParsecUtils.runEither pballotBox input)
         )
         testCase "ballotBoxTests2" (fun _ ->
             let input =
@@ -108,7 +102,7 @@ let ballotBoxTests =
                 Right
                   (BallotBox
                      ("Нужны ли нам такие голосовалки?", ["Да"; "Нет"; "Vox Populi, Vox Dei"]))
-            Assert.Equal("", exp, FParsec.runEither pballotBox input)
+            Assert.Equal("", exp, FParsecUtils.runEither pballotBox input)
         )
     ]
 

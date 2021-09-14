@@ -23,7 +23,9 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="FParsecUtils.fs" />
     <Compile Include="Types.fs" />
+    <Compile Include="NumberToWords.fs" />
     <Compile Include="Ship.fs" />
     <Compile Include="BallotBox.fs" />
     <Compile Include="Quiz.fs" />

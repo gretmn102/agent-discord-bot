@@ -31,6 +31,7 @@ type Cmd =
     | Unknown
     | Pass
     | BallotBox of description:string * choices:string list
+    | NumberToWords of bigint
 
 let prefix = pchar '.'
 
@@ -76,6 +77,7 @@ let pcommand =
         stringReturn "quizWithMultiChoices" (Cyoa AppsHub.Hub.QuizWithMultiChoices)
         stringReturn "quizPizza" (Cyoa AppsHub.Hub.QuizPizza)
         stringReturn "quiz" SomeQuiz
+        pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox
         pmassShip
     ]

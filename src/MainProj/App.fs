@@ -271,8 +271,20 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         "`.bully @user` — забуллить кого-то <:Demon_Kingsmile:877678191693692969>"
                         "`.admire @user` — любоваться"
                         "`.battery` — спеть \"Батарейку\""
+                        "`.numberToWords <число>` — говорит число словами, например, `.numberToWords 21435` выдаст:"
+                        "```"
+                        "двадцать одна тысяча четыреста тридцать пять```"
                     ] |> String.concat "\n"
 
+                b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
+                awaiti (client.SendMessageAsync (e.Channel, b.Build()))
+            | CommandParser.NumberToWords num ->
+                let b = DSharpPlus.Entities.DiscordEmbedBuilder()
+                b.Description <-
+                    try
+                        NumberToWords.toNumName num
+                    with e ->
+                        e.Message
                 b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
                 awaiti (client.SendMessageAsync (e.Channel, b.Build()))
         | Left x ->
