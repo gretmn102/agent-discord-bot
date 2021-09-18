@@ -13,6 +13,11 @@ type MessagePath =
         MessageId: MessageId
     }
 
+/// "🦉" -> Some "assets/59e611bd4994d2978d695df90db540c4.svg"
+let unicodeEmojiGetUrlImage = function
+    | "🦉" -> Some "assets/59e611bd4994d2978d695df90db540c4.svg"
+    | _ -> None
+
 type ResultView =
     {
         View: DSharpPlus.Entities.DiscordMessageBuilder option

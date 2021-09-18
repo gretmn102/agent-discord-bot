@@ -5,6 +5,7 @@ open Microsoft.Extensions.Logging
 
 open System.Threading.Tasks
 open Types
+open Svg
 
 let botEventId = new EventId(42, "Bot-Event")
 
@@ -288,10 +289,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
                 awaiti (client.SendMessageAsync (e.Channel, b.Build()))
             | CommandParser.EmojiFont (emoji, str) ->
-                match emoji with
-                | CommandParser.CustomEmoji emoji ->
-                    let emojiSrc = sprintf "https://cdn.discordapp.com/emojis/%d.png?v=1" emoji.Id
-                    let emojiImg = Ship.WebClientDownloader.getData [] emojiSrc
+                let emojiFont emojiImg =
                     use m = new System.IO.MemoryStream()
                     EmojiFont.drawText emojiImg str m
                     m.Position <- 0L
@@ -300,8 +298,28 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                     b.WithFile("image.png", m) |> ignore
 
                     awaiti (client.SendMessageAsync (e.Channel, b))
+                let emojiImgWidth = 32
+                match emoji with
+                | CommandParser.CustomEmoji emoji ->
+                    let emojiSrc = sprintf "https://cdn.discordapp.com/emojis/%d.png?size=%d" emoji.Id emojiImgWidth
+                    let emojiImg = Ship.WebClientDownloader.getData [] emojiSrc
+                    emojiFont emojiImg
                 | CommandParser.UnicodeEmoji emoji ->
-                    awaiti (client.SendMessageAsync (e.Channel, "Пока что поддерживаются только custom emoji 😔"))
+                    match unicodeEmojiGetUrlImage emoji with
+                    | None ->
+                        awaiti (client.SendMessageAsync (e.Channel, sprintf "\"%s\" — этот emoji пока что не поддерживается." emoji))
+                    | Some src ->
+                        let emojiSrc = sprintf "https://discord.com/%s" src
+                        let emojiImg =
+                            WebClientDownloader.get [] emojiSrc
+                            |> Either.map (fun emojiImg ->
+                                let svgDoc: SvgDocument = SvgDocument.FromSvg emojiImg
+                                use bmp = svgDoc.Draw(emojiImgWidth, emojiImgWidth)
+                                use m = new System.IO.MemoryStream()
+                                bmp.Save(m, System.Drawing.Imaging.ImageFormat.Png)
+                                m.ToArray()
+                            )
+                        emojiFont emojiImg
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 
