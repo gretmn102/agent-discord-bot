@@ -4,6 +4,7 @@ type GuildId = uint64
 type UserId = uint64
 type ChannelId = uint64
 type MessageId = uint64
+type EmojiId = uint64
 
 type MessagePath =
     {

@@ -10,6 +10,26 @@ let puserMention : _ Parser =
 let puserMentionTarget (userId:UserId) : _ Parser =
     skipString "<@" >>. optional (skipChar '!') >>. skipString (string userId) >>. skipChar '>'
 
+type CustomEmoji =
+    {
+        Id: EmojiId
+        Animated: bool
+        Name: string
+    }
+
+let pcustomEmoji: _ Parser =
+    pipe3
+        (stringReturn "<:" false <|> stringReturn "<a:" true)
+        (manySatisfy ((<>) ':') .>> skipChar ':')
+        (puint64 .>> pchar '>')
+        (fun animated name id ->
+            {
+                Id = id
+                Animated = animated
+                Name = name
+            }
+        )
+
 type ShipOption =
     | Rand
     | Target of int
@@ -23,6 +43,10 @@ type Act =
     | Battery
     | Ship of ShipOption
 
+type UnicodeOrCustomEmoji =
+    | UnicodeEmoji of string
+    | CustomEmoji of CustomEmoji
+
 type Cmd =
     | Act of Act * UserId option
     | MassShip of UserId list
@@ -32,6 +56,7 @@ type Cmd =
     | Pass
     | BallotBox of description:string * choices:string list
     | NumberToWords of bigint
+    | EmojiFont of UnicodeOrCustomEmoji * string
 
 let prefix = pchar '.'
 
@@ -80,6 +105,11 @@ let pcommand =
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox
         pmassShip
+
+        skipStringCI "emojiFont" >>. spaces
+        >>. (pcustomEmoji |>> CustomEmoji <|> (many1Satisfy ((<>) ' ') |>> UnicodeEmoji) .>> spaces)
+        .>>. manySatisfy (fun _ -> true)
+        |>> EmojiFont
     ]
 
 let start botId str =

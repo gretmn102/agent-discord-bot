@@ -287,6 +287,21 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         e.Message
                 b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
                 awaiti (client.SendMessageAsync (e.Channel, b.Build()))
+            | CommandParser.EmojiFont (emoji, str) ->
+                match emoji with
+                | CommandParser.CustomEmoji emoji ->
+                    let emojiSrc = sprintf "https://cdn.discordapp.com/emojis/%d.png?v=1" emoji.Id
+                    let emojiImg = Ship.WebClientDownloader.getData [] emojiSrc
+                    use m = new System.IO.MemoryStream()
+                    EmojiFont.drawText emojiImg str m
+                    m.Position <- 0L
+
+                    let b = DSharpPlus.Entities.DiscordMessageBuilder()
+                    b.WithFile("image.png", m) |> ignore
+
+                    awaiti (client.SendMessageAsync (e.Channel, b))
+                | CommandParser.UnicodeEmoji emoji ->
+                    awaiti (client.SendMessageAsync (e.Channel, "Пока что поддерживаются только custom emoji 😔"))
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 
