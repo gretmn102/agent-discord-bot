@@ -16,6 +16,7 @@ type MessagePath =
 /// "🦉" -> Some "assets/59e611bd4994d2978d695df90db540c4.svg"
 let unicodeEmojiGetUrlImage = function
     | "🦉" -> Some "assets/59e611bd4994d2978d695df90db540c4.svg"
+    | "🥕" -> Some "assets/505b14bf36ec47cdbe22258a9419471e.svg"
     | _ -> None
 
 type ResultView =
