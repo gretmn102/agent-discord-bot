@@ -18,6 +18,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>heart.png</TargetPath>
     </ContentWithTargetPath>
+    <ContentWithTargetPath Include="rus_lowercase_sheet.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>rus_lowercase_sheet.png</TargetPath>
+    </ContentWithTargetPath>
     <Content Include="Fonts\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
