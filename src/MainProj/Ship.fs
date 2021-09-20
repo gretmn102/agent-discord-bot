@@ -1,19 +1,7 @@
 module Ship
 open FsharpMyExtension
 open FsharpMyExtension.Either
-
-module WebClientDownloader =
-    open FsharpMyExtension.WebClientDownloader
-
-    let getData (headers:(string * string) list) (url:string) =
-        let hd = webClient.Headers
-
-        headers |> List.iter hd.Set
-        try
-            webClient.DownloadData url
-            |> Right
-        with
-            | x -> Left x.Message
+open Types
 
 // #r @"C:\Users\User\.nuget\packages\sixlabors.fonts\1.0.0-beta15\lib\netstandard2.1\SixLabors.Fonts.dll"
 // #r @"C:\Users\User\.nuget\packages\sixlabors.imagesharp.drawing\1.0.0-beta13\lib\netcoreapp3.1\SixLabors.ImageSharp.Drawing.dll"

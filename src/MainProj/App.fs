@@ -89,8 +89,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             embed.WithImageUrl (sprintf "attachment://%s" fileName) |> ignore
             b.Embed <- embed.Build()
 
-            let user1Avatar = Ship.WebClientDownloader.getData [] who.AvatarUrl
-            let user2Avatar = Ship.WebClientDownloader.getData [] whom.AvatarUrl
+            let user1Avatar = WebClientDownloader.getData [] who.AvatarUrl
+            let user2Avatar = WebClientDownloader.getData [] whom.AvatarUrl
 
             use m = new System.IO.MemoryStream()
             Ship.img user1Avatar user2Avatar perc m
@@ -224,7 +224,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                             usersIds
                             |> Seq.map (fun userId ->
                                 let user = await (e.Guild.GetMemberAsync userId)
-                                Ship.WebClientDownloader.getData [] user.AvatarUrl
+                                WebClientDownloader.getData [] user.AvatarUrl
                             )
                             |> Seq.map (function
                                 | Right xs -> xs
@@ -302,24 +302,20 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 match emoji with
                 | CommandParser.CustomEmoji emoji ->
                     let emojiSrc = sprintf "https://cdn.discordapp.com/emojis/%d.png?size=%d" emoji.Id emojiImgWidth
-                    let emojiImg = Ship.WebClientDownloader.getData [] emojiSrc
+                    let emojiImg = WebClientDownloader.getData [] emojiSrc
                     emojiFont emojiImg
                 | CommandParser.UnicodeEmoji emoji ->
-                    match unicodeEmojiGetUrlImage emoji with
-                    | None ->
-                        awaiti (client.SendMessageAsync (e.Channel, sprintf "\"%s\" — этот emoji пока что не поддерживается." emoji))
-                    | Some src ->
-                        let emojiSrc = sprintf "https://discord.com/%s" src
-                        let emojiImg =
-                            WebClientDownloader.get [] emojiSrc
-                            |> Either.map (fun emojiImg ->
-                                let svgDoc: SvgDocument = SvgDocument.FromSvg emojiImg
-                                use bmp = svgDoc.Draw(emojiImgWidth, emojiImgWidth)
-                                use m = new System.IO.MemoryStream()
-                                bmp.Save(m, System.Drawing.Imaging.ImageFormat.Png)
-                                m.ToArray()
-                            )
-                        emojiFont emojiImg
+                    match StandartDiscordEmoji.getEmojiSheet () with
+                    | Right emojiSheet ->
+                        use m = new System.IO.MemoryStream()
+                        if StandartDiscordEmoji.getEmoji emojiSheet emoji m then
+                            m.ToArray()
+                            |> Right
+                            |> emojiFont
+                        else
+                            awaiti (client.SendMessageAsync (e.Channel, sprintf "\"%s\" — этот emoji пока что не поддерживается." emoji))
+                    | Left errMsg ->
+                        emojiFont (Left errMsg)
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 
