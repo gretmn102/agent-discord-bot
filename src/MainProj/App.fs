@@ -53,6 +53,11 @@ let batteryGifs =
         "https://c.tenor.com/X45Rd5nfc7oAAAAM/energize-energized.gif"
     |]
 
+let catchAssets =
+    [|
+        "https://cdn.discordapp.com/attachments/864883475386990664/895218342141509632/Screenshot_20181219-151451_1.jpg"
+    |]
+
 let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateEventArgs) =
     let authorId = e.Author.Id
     let botId = client.CurrentUser.Id
@@ -211,6 +216,13 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         [ match whomId with Some x -> x | None -> () ]
                         "Нельзя с самим собой шипериться!"
                         "Нельзя со мной шипериться! :scream_cat: "
+                | CommandParser.Catch ->
+                    cmdBuilder
+                        whomId
+                        catchAssets
+                        (sprintf "**%s** ловит **%s**")
+                        "Самого нельзя ловить!"
+                        "Меня нельзя ловить! Я этого не вынесу :scream_cat: "
             | CommandParser.Cyoa x ->
                 AppsHub.start (AppsHub.Hub.InitCyoa x) client e
             | CommandParser.SomeQuiz ->
@@ -272,6 +284,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         "`.bully @user` — забуллить кого-то <:Demon_Kingsmile:877678191693692969>"
                         "`.admire @user` — любоваться"
                         "`.battery` — спеть \"Батарейку\""
+                        "`.catch @user` — поймать кого-то."
                         "`.numberToWords <число>` — говорит число словами, например, `.numberToWords 21435` выдаст:"
                         "```"
                         "двадцать одна тысяча четыреста тридцать пять```"
