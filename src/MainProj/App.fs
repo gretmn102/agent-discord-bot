@@ -272,6 +272,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
 
                 let msg = await (client.SendMessageAsync (e.Channel, "Processing..."))
                 Async.Start (f msg)
+            | CommandParser.Role r ->
+                Role.Main.giveOrChangeRole e r
 
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()

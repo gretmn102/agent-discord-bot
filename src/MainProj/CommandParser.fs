@@ -58,6 +58,7 @@ type Cmd =
     | BallotBox of description:string * choices:string list
     | NumberToWords of bigint
     | EmojiFont of UnicodeOrCustomEmoji * string
+    | Role of Role.Main.RoleEditModel
 
 let prefix = pchar '.'
 
@@ -104,6 +105,8 @@ let pcommand =
         stringReturn "quizWithMultiChoices" (Cyoa AppsHub.Hub.QuizWithMultiChoices)
         stringReturn "quizPizza" (Cyoa AppsHub.Hub.QuizPizza)
         stringReturn "quiz" SomeQuiz
+        Role.Main.Parser.pcommand |>> Role
+
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox
         pmassShip
