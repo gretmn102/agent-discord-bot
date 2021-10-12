@@ -5,3 +5,4 @@ FSharpMyExt
 SixLabors.ImageSharp
 SixLabors.ImageSharp.Drawing
 Svg
+MongoDB.Driver

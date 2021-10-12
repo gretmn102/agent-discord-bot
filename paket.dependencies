@@ -15,6 +15,7 @@ nuget TextCopy
 nuget SixLabors.ImageSharp
 nuget SixLabors.ImageSharp.Drawing
 nuget Svg
+nuget MongoDB.Driver
 
 source https://gitlab.com/api/v4/projects/28574921/packages/nuget/index.json
 storage: none

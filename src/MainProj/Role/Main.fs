@@ -3,14 +3,13 @@ open FsharpMyExtension
 open DSharpPlus
 
 open Types
+open Model
 
 
 type RoleEditModel = {
     Name: string
     Color: Entities.DiscordColor
 }
-
-type Roles = Map<GuildId * UserId, RoleId>
 
 let permissiveRoleId = 897089894327939082UL
 
@@ -28,43 +27,48 @@ let reducer =
             guildMember.Roles
             |> Seq.exists (fun role ->
                 role.Id = permissiveRoleId)
+        let createAndGrantRole () =
+            if guild.Roles.Count <= 250 then
+                let role =
+                    guild.CreateRoleAsync (
+                        name = roleEditModel.Name,
+                        color = System.Nullable(roleEditModel.Color)
+                    )
+                    |> await
+
+                guildMember.GrantRoleAsync role
+                |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                awaiti <| replyMessage.ModifyAsync(Entities.Optional("Grant role"))
+
+                let x = insert (guild.Id, guildMember.Id, role.Id)
+
+                Map.add (guild.Id, guildMember.Id) x roles
+            else
+                awaiti <| replyMessage.ModifyAsync(Entities.Optional("The number of roles exceeds 250"))
+
+                roles
 
         if hasPermissiveRole then
             match Map.tryFind (guild.Id, guildMember.Id) roles with
-            | Some userRoleId ->
-                let userRole = guild.GetRole(userRoleId)
-
-                userRole.ModifyAsync (
-                    name = roleEditModel.Name,
-                    color = System.Nullable(roleEditModel.Color)
-                )
-                |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
-
-                awaiti <| replyMessage.ModifyAsync(Entities.Optional("Changed role"))
-
-                roles
-            | None ->
-                if guild.Roles.Count <= 250 then
-                    let role =
-                        guild.CreateRoleAsync (
-                            name = roleEditModel.Name,
-                            color = System.Nullable(roleEditModel.Color)
-                        )
-                        |> await
-
-                    guildMember.GrantRoleAsync role
+            | Some roleData ->
+                let userRole = guild.GetRole(roleData.RoleId)
+                if isNull userRole then
+                    createAndGrantRole ()
+                else
+                    userRole.ModifyAsync (
+                        name = roleEditModel.Name,
+                        color = System.Nullable(roleEditModel.Color)
+                    )
                     |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
 
-                    awaiti <| replyMessage.ModifyAsync(Entities.Optional("Grant role"))
-
-                    // TODO: write to db
-                    Map.add (guild.Id, guildMember.Id) role.Id roles
-                else
-                    awaiti <| replyMessage.ModifyAsync(Entities.Optional("The number of roles exceeds 250"))
+                    awaiti <| replyMessage.ModifyAsync(Entities.Optional("Changed role"))
 
                     roles
+            | None ->
+                createAndGrantRole ()
         else
-            awaiti <| replyMessage.ModifyAsync(Entities.Optional("you don't have permissive role"))
+            awaiti <| replyMessage.ModifyAsync(Entities.Optional("You don't have permissive role"))
 
             roles
 
@@ -74,11 +78,15 @@ let reducer =
                 let! msg = mail.Receive()
                 match msg with
                 | GiveOrChangeRole (e, roleEditModel) ->
-                let roles = giveOrChangeRole e roleEditModel roles
-
-                return! loop roles
+                    let roles =
+                        try
+                            giveOrChangeRole e roleEditModel roles
+                        with e ->
+                            printfn "%A" e
+                            roles
+                    return! loop roles
             }
-        loop Map.empty
+        loop (getAll ())
     )
 
 let giveOrChangeRole e roleEditModel =
