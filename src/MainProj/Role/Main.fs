@@ -28,7 +28,7 @@ let reducer =
             |> Seq.exists (fun role ->
                 role.Id = permissiveRoleId)
         let createAndGrantRole () =
-            if guild.Roles.Count <= 250 then
+            if guild.Roles.Count < 250 then
                 let role =
                     guild.CreateRoleAsync (
                         name = roleEditModel.Name,
@@ -39,7 +39,7 @@ let reducer =
                 guildMember.GrantRoleAsync role
                 |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
 
-                awaiti <| replyMessage.ModifyAsync(Entities.Optional("Grant role"))
+                awaiti <| replyMessage.ModifyAsync(Entities.Optional("Role granted"))
 
                 let x = insert (guild.Id, guildMember.Id, role.Id)
 
