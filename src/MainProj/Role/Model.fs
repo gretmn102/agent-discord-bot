@@ -4,8 +4,8 @@ open MongoDB.Bson
 
 open Types
 
-let login = System.Environment.GetEnvironmentVariable "BOT_DB_L"
-let password = System.Environment.GetEnvironmentVariable "BOT_DB_P"
+let login = System.Environment.GetEnvironmentVariable "BotDbL"
+let password = System.Environment.GetEnvironmentVariable "BotDbP"
 
 let settings =
     MongoClientSettings.FromConnectionString (
