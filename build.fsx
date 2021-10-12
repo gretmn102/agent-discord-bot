@@ -81,6 +81,11 @@ Target.create "RunMain" (fun _ ->
     |> dotnet "run -c Release"
 )
 
+Target.create "RunMainTest" (fun _ ->
+    mainProjDir
+    |> dotnet "run -c TestBot"
+)
+
 Target.create "RunTests" (fun _ ->
     testProjPath
     |> Fake.IO.Path.getDirectory

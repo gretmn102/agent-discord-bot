@@ -336,9 +336,16 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
 
 [<EntryPoint>]
 let main argv =
-    match System.Environment.GetEnvironmentVariable "DiscordCommandBotToken" with
+    let tokenEnvVar =
+        #if TEST_BOT
+        "TestBotToken"
+        #else
+        "DiscordCommandBotToken"
+        #endif
+
+    match System.Environment.GetEnvironmentVariable tokenEnvVar with
     | null ->
-        printfn "DiscordCommandBotToken not setup"
+        printfn "Environment variable `%s` not setup" tokenEnvVar
         1
     | token ->
         let config = DSharpPlus.DiscordConfiguration()

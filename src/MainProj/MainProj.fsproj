@@ -5,6 +5,9 @@
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'TestBot|AnyCPU' ">
+    <DefineConstants>TRACE;TEST_BOT</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <ContentWithTargetPath Include="Quiz.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

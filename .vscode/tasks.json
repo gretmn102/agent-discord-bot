@@ -16,6 +16,18 @@
             "problemMatcher": []
         },
         {
+            "label": "RunMainTest",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "fake",
+                "build",
+                "-t",
+                "RunMainTest"
+            ],
+            "problemMatcher": []
+        },
+        {
             "label": "build",
             "type": "shell",
             "command": "dotnet",
@@ -38,6 +50,17 @@
                 "build",
                 "-t",
                 "RunTests"
+            ],
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Deploy",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "fake",
+                "build"
             ],
             "group": "test",
             "problemMatcher": []
