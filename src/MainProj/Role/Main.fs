@@ -90,25 +90,30 @@ let reducer =
             await (e.Channel.SendMessageAsync("Processing..."))
 
         let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
 
-        let guildPermissiveRoles =
-            match Map.tryFind guild.Id guildPermissiveRoles with
-            | Some permissiveRoles ->
-                let permissiveRoles =
-                    { permissiveRoles with
-                        RoleIds = Set.add roleId permissiveRoles.RoleIds }
+        if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
+            let guildPermissiveRoles =
+                match Map.tryFind guild.Id guildPermissiveRoles with
+                | Some permissiveRoles ->
+                    let permissiveRoles =
+                        { permissiveRoles with
+                            RoleIds = Set.add roleId permissiveRoles.RoleIds }
 
-                PermissiveRoles.replace permissiveRoles
+                    PermissiveRoles.replace permissiveRoles
 
-                Map.add guild.Id permissiveRoles guildPermissiveRoles
-            | None ->
-                let x = PermissiveRoles.insert (guild.Id, Set.singleton roleId)
-                Map.add guild.Id x guildPermissiveRoles
+                    Map.add guild.Id permissiveRoles guildPermissiveRoles
+                | None ->
+                    let x = PermissiveRoles.insert (guild.Id, Set.singleton roleId)
+                    Map.add guild.Id x guildPermissiveRoles
 
-        awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been added")))
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been added")))
 
-        guildPermissiveRoles
+            guildPermissiveRoles
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
 
+            guildPermissiveRoles
     let removePermisiveRole
         (e:EventArgs.MessageCreateEventArgs)
         (roleId: RoleId)
@@ -118,26 +123,33 @@ let reducer =
             await (e.Channel.SendMessageAsync("Processing..."))
 
         let guild = e.Guild
-        match Map.tryFind guild.Id guildPermissiveRoles with
-        | Some permissiveRoles ->
-            if Set.contains roleId permissiveRoles.RoleIds then
-                let permissiveRoles =
-                    { permissiveRoles with
-                        RoleIds = Set.remove roleId permissiveRoles.RoleIds }
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
 
-                PermissiveRoles.replace permissiveRoles
+        if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
+            match Map.tryFind guild.Id guildPermissiveRoles with
+            | Some permissiveRoles ->
+                if Set.contains roleId permissiveRoles.RoleIds then
+                    let permissiveRoles =
+                        { permissiveRoles with
+                            RoleIds = Set.remove roleId permissiveRoles.RoleIds }
 
-                let guildPermissiveRoles = Map.add guild.Id permissiveRoles guildPermissiveRoles
+                    PermissiveRoles.replace permissiveRoles
 
-                awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been removed")))
-                guildPermissiveRoles
-            else
+                    let guildPermissiveRoles = Map.add guild.Id permissiveRoles guildPermissiveRoles
+
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been removed")))
+                    guildPermissiveRoles
+                else
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional("The role has already been removed")))
+
+                    guildPermissiveRoles
+
+            | None ->
                 awaiti (replyMessage.ModifyAsync(Entities.Optional("The role has already been removed")))
 
                 guildPermissiveRoles
-
-        | None ->
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("The role has already been removed")))
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
 
             guildPermissiveRoles
 
