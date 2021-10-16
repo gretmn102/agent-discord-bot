@@ -15,6 +15,7 @@ type Req =
     | GiveOrChangeRole of EventArgs.MessageCreateEventArgs * RoleEditModel
     | AddPermissiveRole of EventArgs.MessageCreateEventArgs * RoleId
     | RemovePermissiveRole of EventArgs.MessageCreateEventArgs * RoleId
+    | GetPermissiveRoles of EventArgs.MessageCreateEventArgs
 
 let reducer =
     let giveOrChangeRole
@@ -175,6 +176,36 @@ let reducer =
                     let guildPermissiveRoles = removePermisiveRole e roleId guildPermissiveRoles
 
                     return! loop (guildPermissiveRoles, roles)
+                | GetPermissiveRoles e ->
+                    let message =
+                        match Map.tryFind e.Guild.Id guildPermissiveRoles with
+                        | Some permissiveRoles ->
+                            let b = Entities.DiscordMessageBuilder()
+                            let embed = Entities.DiscordEmbedBuilder()
+                            embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                            embed.Description <-
+                                [
+                                    yield "Permissive roles: "
+                                    yield! permissiveRoles.RoleIds |> Set.map (sprintf "* <@&%d>")
+                                ] |> String.concat "\n"
+
+                            b.Embed <- embed.Build()
+                            b
+                        | None ->
+                            let b = Entities.DiscordMessageBuilder()
+                            let embed = Entities.DiscordEmbedBuilder()
+                            embed.Description <-
+                                [
+                                    "This server doesn't yet have permissive roles. To add them, use the command:"
+                                    "```"
+                                    ".addPermissiveRole <role_mention|role_id>"
+                                    "```"
+                                ] |> String.concat "\n"
+                            b.Embed <- embed.Build()
+                            b
+                    awaiti (e.Channel.SendMessageAsync (message))
+
+                    return! loop (guildPermissiveRoles, roles)
             }
 
         loop (PermissiveRoles.getAll (), Roles.getAll ())
@@ -188,6 +219,9 @@ let addPermisiveRole e roleId =
 
 let removePermisiveRole e roleId =
     reducer.Post(RemovePermissiveRole(e, roleId))
+
+let getPermisiveRole e =
+    reducer.Post(GetPermissiveRoles e)
 
 module Parser =
     open FParsec
@@ -233,3 +267,6 @@ module Parser =
     let premovePermissiveRole: RoleId Parser =
         pstringCI "removePermissiveRole" >>. spaces
         >>. (pmentionRole <|> puint64)
+
+    let pgetPermissiveRoles: _ Parser =
+        pstringCI "permissiveRoles"

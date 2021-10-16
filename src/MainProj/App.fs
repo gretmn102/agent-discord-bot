@@ -279,7 +279,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 Role.Main.addPermisiveRole e r
             | CommandParser.RemovePermissiveRole r ->
                 Role.Main.removePermisiveRole e r
-
+            | CommandParser.GetPermissiveRoles ->
+                Role.Main.getPermisiveRole e
 
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
