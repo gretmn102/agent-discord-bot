@@ -58,7 +58,10 @@ type Cmd =
     | BallotBox of description:string * choices:string list
     | NumberToWords of bigint
     | EmojiFont of UnicodeOrCustomEmoji * string
+
     | Role of Role.Main.RoleEditModel
+    | AddPermissiveRole of RoleId
+    | RemovePermissiveRole of RoleId
 
 let prefix = pchar '.'
 
@@ -105,7 +108,10 @@ let pcommand =
         stringReturn "quizWithMultiChoices" (Cyoa AppsHub.Hub.QuizWithMultiChoices)
         stringReturn "quizPizza" (Cyoa AppsHub.Hub.QuizPizza)
         stringReturn "quiz" SomeQuiz
-        Role.Main.Parser.pcommand |>> Role
+
+        Role.Main.Parser.pgiveOrChangeRole |>> Role
+        Role.Main.Parser.paddPermissiveRole |>> AddPermissiveRole
+        Role.Main.Parser.premovePermissiveRole |>> RemovePermissiveRole
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

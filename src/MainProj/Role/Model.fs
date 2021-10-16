@@ -18,38 +18,74 @@ let settings =
 let client = new MongoClient(settings)
 let database = client.GetDatabase("bot")
 
-type RoleData =
-    {
-        mutable Id: ObjectId
-        mutable GuildId: GuildId
-        mutable UserId: UserId
-        mutable RoleId: RoleId
-    }
-    static member Init(guildId: GuildId, userId: UserId, roleId: RoleId) =
+module Roles =
+    type RoleData =
         {
-            Id = ObjectId.Empty
-            GuildId = guildId
-            UserId = userId
-            RoleId = roleId
+            mutable Id: ObjectId
+            mutable GuildId: GuildId
+            mutable UserId: UserId
+            mutable RoleId: RoleId
         }
+        static member Init(guildId: GuildId, userId: UserId, roleId: RoleId) =
+            {
+                Id = ObjectId.Empty
+                GuildId = guildId
+                UserId = userId
+                RoleId = roleId
+            }
 
-let roles = database.GetCollection<RoleData>("roles")
+    let roles = database.GetCollection<RoleData>("roles")
 
-type Roles = Map<GuildId * UserId, RoleData>
+    type Roles = Map<GuildId * UserId, RoleData>
 
-let getAll (): Roles =
-    roles.Find(fun x -> true).ToEnumerable()
-    |> Seq.fold
-        (fun st x ->
-            Map.add (x.GuildId, x.UserId) x st
-        )
-        Map.empty
+    let getAll (): Roles =
+        roles.Find(fun x -> true).ToEnumerable()
+        |> Seq.fold
+            (fun st x ->
+                Map.add (x.GuildId, x.UserId) x st
+            )
+            Map.empty
 
-let replace (newRoleData: RoleData) =
-    roles.ReplaceOne((fun x -> x.Id = newRoleData.Id), newRoleData)
-    |> ignore
+    let replace (newRoleData: RoleData) =
+        roles.ReplaceOne((fun x -> x.Id = newRoleData.Id), newRoleData)
+        |> ignore
 
-let insert (guildId: GuildId, userId: UserId, roleId: RoleId) =
-    let x = RoleData.Init(guildId, userId, roleId)
-    roles.InsertOne(x)
-    x
+    let insert (guildId: GuildId, userId: UserId, roleId: RoleId) =
+        let x = RoleData.Init(guildId, userId, roleId)
+        roles.InsertOne(x)
+        x
+
+module PermissiveRoles =
+    type PermissiveRolesData =
+        {
+            mutable Id: ObjectId
+            mutable GuildId: GuildId
+            mutable RoleIds: RoleId Set
+        }
+        static member Init(guildId: GuildId, roleIds: RoleId Set) =
+            {
+                Id = ObjectId.Empty
+                GuildId = guildId
+                RoleIds = roleIds
+            }
+
+    let permissiveRoles = database.GetCollection<PermissiveRolesData>("permissiveRoles")
+
+    type GuildPermissiveRoles = Map<GuildId, PermissiveRolesData>
+
+    let getAll (): GuildPermissiveRoles =
+        permissiveRoles.Find(fun x -> true).ToEnumerable()
+        |> Seq.fold
+            (fun st x ->
+                Map.add x.GuildId x st
+            )
+            Map.empty
+
+    let replace (newData: PermissiveRolesData) =
+        permissiveRoles.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+        |> ignore
+
+    let insert (guildId: GuildId, roleIds: RoleId Set) =
+        let x = PermissiveRolesData.Init(guildId, roleIds)
+        permissiveRoles.InsertOne(x)
+        x

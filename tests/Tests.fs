@@ -29,9 +29,10 @@ let commandParserTests =
                     "      ^"
                     "Expecting: 'admire', 'ballotBox', 'battery', 'bully', 'catail', 'cyoa',"
                     "'fairytail', 'quiz', 'quizPizza', 'quizWithMultiChoices', 'ship',"
-                    "'someGirlsQuiz', 'take', 'catch' (case-insensitive), 'emojiFont'"
-                    "(case-insensitive), 'massShip' (case-insensitive) or 'numberToWords'"
-                    "(case-insensitive)"
+                    "'someGirlsQuiz', 'take', 'addPermissiveRole' (case-insensitive), 'catch'"
+                    "(case-insensitive), 'emojiFont' (case-insensitive), 'massShip'"
+                    "(case-insensitive), 'numberToWords' (case-insensitive), 'removePermissiveRole'"
+                    "(case-insensitive) or 'role' (case-insensitive)"
                     ""
                 ] |> String.concat "\r\n"
             Assert.Equal("msg6", Left act, start botId (sprintf "<@%d> .unknown" botId))
