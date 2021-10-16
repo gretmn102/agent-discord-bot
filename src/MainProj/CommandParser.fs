@@ -63,6 +63,7 @@ type Cmd =
     | AddPermissiveRole of RoleId
     | RemovePermissiveRole of RoleId
     | GetPermissiveRoles
+    | GetUserRoles
 
 let prefix = pchar '.'
 
@@ -114,6 +115,7 @@ let pcommand =
         Role.Main.Parser.paddPermissiveRole |>> AddPermissiveRole
         Role.Main.Parser.premovePermissiveRole |>> RemovePermissiveRole
         Role.Main.Parser.pgetPermissiveRoles >>% GetPermissiveRoles
+        Role.Main.Parser.pgetUserRoles >>% GetUserRoles
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

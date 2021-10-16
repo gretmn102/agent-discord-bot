@@ -1,4 +1,5 @@
 module Role.Model
+open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
 
@@ -36,13 +37,17 @@ module Roles =
 
     let roles = database.GetCollection<RoleData>("roles")
 
-    type Roles = Map<GuildId * UserId, RoleData>
+    type GuildUserRoles = Map<GuildId, Map<UserId, RoleData>>
 
-    let getAll (): Roles =
+    let getAll (): GuildUserRoles =
         roles.Find(fun x -> true).ToEnumerable()
         |> Seq.fold
             (fun st x ->
-                Map.add (x.GuildId, x.UserId) x st
+                st
+                |> Map.addOrModWith
+                    x.GuildId
+                    (fun () -> Map.add x.UserId x Map.empty)
+                    (fun st -> Map.add x.UserId x st)
             )
             Map.empty
 

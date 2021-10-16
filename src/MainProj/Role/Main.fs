@@ -16,13 +16,14 @@ type Req =
     | AddPermissiveRole of EventArgs.MessageCreateEventArgs * RoleId
     | RemovePermissiveRole of EventArgs.MessageCreateEventArgs * RoleId
     | GetPermissiveRoles of EventArgs.MessageCreateEventArgs
+    | GetUserRoles of EventArgs.MessageCreateEventArgs
 
 let reducer =
     let giveOrChangeRole
         (e:EventArgs.MessageCreateEventArgs)
         (roleEditModel: RoleEditModel)
         (guildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles)
-        (roles: Roles.Roles) =
+        (guildUserRoles: Roles.GuildUserRoles) =
 
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
@@ -53,34 +54,42 @@ let reducer =
 
                 let x = Roles.insert (guild.Id, guildMember.Id, role.Id)
 
-                Map.add (guild.Id, guildMember.Id) x roles
+                guildUserRoles
+                |> Map.addOrModWith
+                    x.GuildId
+                    (fun () -> Map.add x.UserId x Map.empty)
+                    (fun st -> Map.add x.UserId x st)
             else
                 awaiti <| replyMessage.ModifyAsync(Entities.Optional("The number of roles exceeds 250"))
 
-                roles
+                guildUserRoles
 
         if hasPermissiveRole then
-            match Map.tryFind (guild.Id, guildMember.Id) roles with
-            | Some roleData ->
-                let userRole = guild.GetRole(roleData.RoleId)
-                if isNull userRole then
+            match Map.tryFind guild.Id guildUserRoles with
+            | Some userRoles ->
+                match Map.tryFind guildMember.Id userRoles with
+                | Some roleData ->
+                    let userRole = guild.GetRole(roleData.RoleId)
+                    if isNull userRole then
+                        createAndGrantRole ()
+                    else
+                        userRole.ModifyAsync (
+                            name = roleEditModel.Name,
+                            color = System.Nullable(roleEditModel.Color)
+                        )
+                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                        awaiti <| replyMessage.ModifyAsync(Entities.Optional("Changed role"))
+
+                        guildUserRoles
+                | None ->
                     createAndGrantRole ()
-                else
-                    userRole.ModifyAsync (
-                        name = roleEditModel.Name,
-                        color = System.Nullable(roleEditModel.Color)
-                    )
-                    |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
-
-                    awaiti <| replyMessage.ModifyAsync(Entities.Optional("Changed role"))
-
-                    roles
             | None ->
                 createAndGrantRole ()
         else
             awaiti <| replyMessage.ModifyAsync(Entities.Optional("You don't have permissive role"))
 
-            roles
+            guildUserRoles
 
     let addPermisiveRole
         (e:EventArgs.MessageCreateEventArgs)
@@ -155,27 +164,27 @@ let reducer =
             guildPermissiveRoles
 
     MailboxProcessor.Start (fun mail ->
-        let rec loop (guildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles, roles: Roles.Roles) =
+        let rec loop (guildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles, guildUserRoles: Roles.GuildUserRoles) =
             async {
                 let! msg = mail.Receive()
                 match msg with
                 | GiveOrChangeRole (e, roleEditModel) ->
                     let roles =
                         try
-                            giveOrChangeRole e roleEditModel guildPermissiveRoles roles
+                            giveOrChangeRole e roleEditModel guildPermissiveRoles guildUserRoles
                         with e ->
                             printfn "%A" e
-                            roles
+                            guildUserRoles
 
                     return! loop (guildPermissiveRoles, roles)
                 | AddPermissiveRole (e, roleId) ->
                     let guildPermissiveRoles = addPermisiveRole e roleId guildPermissiveRoles
 
-                    return! loop (guildPermissiveRoles, roles)
+                    return! loop (guildPermissiveRoles, guildUserRoles)
                 | RemovePermissiveRole (e, roleId) ->
                     let guildPermissiveRoles = removePermisiveRole e roleId guildPermissiveRoles
 
-                    return! loop (guildPermissiveRoles, roles)
+                    return! loop (guildPermissiveRoles, guildUserRoles)
                 | GetPermissiveRoles e ->
                     let message =
                         match Map.tryFind e.Guild.Id guildPermissiveRoles with
@@ -205,7 +214,41 @@ let reducer =
                             b
                     awaiti (e.Channel.SendMessageAsync (message))
 
-                    return! loop (guildPermissiveRoles, roles)
+                    return! loop (guildPermissiveRoles, guildUserRoles)
+                | GetUserRoles e ->
+                    let message =
+                        match Map.tryFind e.Guild.Id guildUserRoles with
+                        | Some userRoles ->
+                            let b = Entities.DiscordMessageBuilder()
+                            let embed = Entities.DiscordEmbedBuilder()
+                            embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                            embed.Description <-
+                                [
+                                    yield "User roles: "
+                                    yield!
+                                        userRoles
+                                        |> Seq.map (fun (KeyValue(_, userRole)) ->
+                                            sprintf "* <@!%d> — <@&%d>" userRole.UserId userRole.RoleId
+                                        )
+                                ] |> String.concat "\n"
+
+                            b.Embed <- embed.Build()
+                            b
+                        | None ->
+                            let b = Entities.DiscordMessageBuilder()
+                            let embed = Entities.DiscordEmbedBuilder()
+                            embed.Description <-
+                                [
+                                    "This server doesn't yet have user roles. To add them, user must have a permissive role and use the command:"
+                                    "```"
+                                    ".role \"Role name\" #000000"
+                                    "```"
+                                ] |> String.concat "\n"
+                            b.Embed <- embed.Build()
+                            b
+                    awaiti (e.Channel.SendMessageAsync (message))
+
+                    return! loop (guildPermissiveRoles, guildUserRoles)
             }
 
         loop (PermissiveRoles.getAll (), Roles.getAll ())
@@ -222,6 +265,9 @@ let removePermisiveRole e roleId =
 
 let getPermisiveRole e =
     reducer.Post(GetPermissiveRoles e)
+
+let getUserRoles e =
+    reducer.Post(GetUserRoles e)
 
 module Parser =
     open FParsec
@@ -270,3 +316,6 @@ module Parser =
 
     let pgetPermissiveRoles: _ Parser =
         pstringCI "permissiveRoles"
+
+    let pgetUserRoles: _ Parser =
+        pstringCI "userRoles"
