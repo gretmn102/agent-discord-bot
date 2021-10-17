@@ -60,6 +60,10 @@ module Roles =
         roles.InsertOne(x)
         x
 
+    let remove (roleData: RoleData) =
+        roles.DeleteOne(fun x -> x.Id = roleData.Id)
+        |> ignore
+
 module PermissiveRoles =
     type PermissiveRolesData =
         {

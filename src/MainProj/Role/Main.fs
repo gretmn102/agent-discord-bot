@@ -17,6 +17,7 @@ type Req =
     | RemovePermissiveRole of EventArgs.MessageCreateEventArgs * RoleId
     | GetPermissiveRoles of EventArgs.MessageCreateEventArgs
     | GetUserRoles of EventArgs.MessageCreateEventArgs
+    | RemoveUserRole of EventArgs.MessageCreateEventArgs * RoleId
 
 let reducer =
     let giveOrChangeRole
@@ -228,7 +229,7 @@ let reducer =
                                     yield!
                                         userRoles
                                         |> Seq.map (fun (KeyValue(_, userRole)) ->
-                                            sprintf "* <@!%d> — <@&%d>" userRole.UserId userRole.RoleId
+                                            sprintf "* <@!%d> — <@&%d> (%d)" userRole.UserId userRole.RoleId userRole.RoleId
                                         )
                                 ] |> String.concat "\n"
 
@@ -247,6 +248,47 @@ let reducer =
                             b.Embed <- embed.Build()
                             b
                     awaiti (e.Channel.SendMessageAsync (message))
+
+                    return! loop (guildPermissiveRoles, guildUserRoles)
+                | RemoveUserRole (e, userRoleId) ->
+                    let replyMessage =
+                        await (e.Channel.SendMessageAsync("Processing..."))
+
+                    let guild = e.Guild
+                    let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                    let guildUserRoles =
+                        if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
+                            match Map.tryFind guild.Id guildUserRoles with
+                            | Some userRoles ->
+                                let userRole =
+                                    userRoles
+                                    |> Map.tryPick (fun _ userRole ->
+                                        if userRole.RoleId = userRoleId then
+                                            Some userRole
+                                        else
+                                            None
+                                    )
+
+                                match userRole with
+                                | Some roleRole ->
+                                    Roles.remove roleRole
+
+                                    let guildUserRoles =
+                                        let userRole =
+                                            Map.remove roleRole.UserId userRoles
+                                        Map.add guild.Id userRole guildUserRoles
+
+                                    awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "%d role has been removed from DB" userRoleId)))
+                                    guildUserRoles
+                                | None ->
+                                    awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "%d role doesn't exists in DB" userRoleId)))
+                                    guildUserRoles
+                            | None ->
+                                awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have user roles")))
+                                guildUserRoles
+                        else
+                            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+                            guildUserRoles
 
                     return! loop (guildPermissiveRoles, guildUserRoles)
             }
@@ -268,6 +310,9 @@ let getPermisiveRole e =
 
 let getUserRoles e =
     reducer.Post(GetUserRoles e)
+
+let removeUserRole e roleId =
+    reducer.Post(RemoveUserRole(e, roleId))
 
 module Parser =
     open FParsec
@@ -319,3 +364,7 @@ module Parser =
 
     let pgetUserRoles: _ Parser =
         pstringCI "userRoles"
+
+    let premoveUserRole: _ Parser =
+        pstringCI "removeUserRole" >>. spaces
+        >>. (pmentionRole <|> puint64)
