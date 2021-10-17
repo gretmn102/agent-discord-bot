@@ -98,3 +98,38 @@ module PermissiveRoles =
         let x = PermissiveRolesData.Init(guildId, roleIds)
         permissiveRoles.InsertOne(x)
         x
+
+module TemplateRoles =
+    type TemplateRoleData =
+        {
+            mutable Id: ObjectId
+            mutable GuildId: GuildId
+            mutable TemplateRoleId: RoleId
+        }
+        static member Init(guildId: GuildId, roleIds: RoleId) =
+            {
+                Id = ObjectId.Empty
+                GuildId = guildId
+                TemplateRoleId = roleIds
+            }
+
+    let permissiveRoles = database.GetCollection<TemplateRoleData>("temlateRoles")
+
+    type GuildTemplateRoles = Map<GuildId, TemplateRoleData>
+
+    let getAll (): GuildTemplateRoles =
+        permissiveRoles.Find(fun x -> true).ToEnumerable()
+        |> Seq.fold
+            (fun st x ->
+                Map.add x.GuildId x st
+            )
+            Map.empty
+
+    let replace (newData: TemplateRoleData) =
+        permissiveRoles.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+        |> ignore
+
+    let insert (guildId: GuildId, templateRoleId: RoleId) =
+        let x = TemplateRoleData.Init(guildId, templateRoleId)
+        permissiveRoles.InsertOne(x)
+        x

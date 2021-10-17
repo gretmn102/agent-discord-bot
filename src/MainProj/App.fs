@@ -285,6 +285,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 Role.Main.getUserRoles e
             | CommandParser.RemoveUserRole userRole ->
                 Role.Main.removeUserRole e userRole
+            | CommandParser.SetTemplateRole userRole ->
+                Role.Main.setTemplateRole e userRole
 
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()

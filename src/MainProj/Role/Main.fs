@@ -20,6 +20,15 @@ type Req =
     | RemoveUserRole of EventArgs.MessageCreateEventArgs * RoleId
     | GuildRoleDeletedHandler of EventArgs.GuildRoleDeleteEventArgs
 
+    | SetTemplateRole of EventArgs.MessageCreateEventArgs * RoleId
+
+type State =
+    {
+        GuildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles
+        GuildUserRoles: Roles.GuildUserRoles
+        GuildTemplateRoles: TemplateRoles.GuildTemplateRoles
+    }
+
 let reducer =
     let giveOrChangeRole
         (e:EventArgs.MessageCreateEventArgs)
@@ -220,30 +229,30 @@ let reducer =
             onServerDoesNotHaveUserRoles ()
 
     MailboxProcessor.Start (fun mail ->
-        let rec loop (guildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles, guildUserRoles: Roles.GuildUserRoles) =
+        let rec loop (state: State) =
             async {
                 let! msg = mail.Receive()
                 match msg with
                 | GiveOrChangeRole (e, roleEditModel) ->
                     let roles =
                         try
-                            giveOrChangeRole e roleEditModel guildPermissiveRoles guildUserRoles
+                            giveOrChangeRole e roleEditModel state.GuildPermissiveRoles state.GuildUserRoles
                         with e ->
                             printfn "%A" e
-                            guildUserRoles
+                            state.GuildUserRoles
 
-                    return! loop (guildPermissiveRoles, roles)
+                    return! loop { state with GuildUserRoles = roles }
                 | AddPermissiveRole (e, roleId) ->
-                    let guildPermissiveRoles = addPermisiveRole e roleId guildPermissiveRoles
+                    let guildPermissiveRoles = addPermisiveRole e roleId state.GuildPermissiveRoles
 
-                    return! loop (guildPermissiveRoles, guildUserRoles)
+                    return! loop { state with GuildPermissiveRoles = guildPermissiveRoles }
                 | RemovePermissiveRole (e, roleId) ->
-                    let guildPermissiveRoles = removePermisiveRoleCmd e roleId guildPermissiveRoles
+                    let guildPermissiveRoles = removePermisiveRoleCmd e roleId state.GuildPermissiveRoles
 
-                    return! loop (guildPermissiveRoles, guildUserRoles)
+                    return! loop { state with GuildPermissiveRoles = guildPermissiveRoles }
                 | GetPermissiveRoles e ->
                     let message =
-                        match Map.tryFind e.Guild.Id guildPermissiveRoles with
+                        match Map.tryFind e.Guild.Id state.GuildPermissiveRoles with
                         | Some permissiveRoles ->
                             let b = Entities.DiscordMessageBuilder()
                             let embed = Entities.DiscordEmbedBuilder()
@@ -270,10 +279,10 @@ let reducer =
                             b
                     awaiti (e.Channel.SendMessageAsync (message))
 
-                    return! loop (guildPermissiveRoles, guildUserRoles)
+                    return! loop state
                 | GetUserRoles e ->
                     let message =
-                        match Map.tryFind e.Guild.Id guildUserRoles with
+                        match Map.tryFind e.Guild.Id state.GuildUserRoles with
                         | Some userRoles ->
                             let b = Entities.DiscordMessageBuilder()
                             let embed = Entities.DiscordEmbedBuilder()
@@ -304,7 +313,7 @@ let reducer =
                             b
                     awaiti (e.Channel.SendMessageAsync (message))
 
-                    return! loop (guildPermissiveRoles, guildUserRoles)
+                    return! loop state
                 | RemoveUserRole (e, userRoleId) ->
                     let replyMessage =
                         await (e.Channel.SendMessageAsync("Processing..."))
@@ -313,7 +322,7 @@ let reducer =
                     let guildMember = await (guild.GetMemberAsync(e.Author.Id))
                     let guildUserRoles =
                         if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
-                            guildUserRoles
+                            state.GuildUserRoles
                             |> removeUserRole
                                 guild.Id
                                 userRoleId
@@ -323,22 +332,22 @@ let reducer =
                                 )
                                 (fun () ->
                                     awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "%d role doesn't exists in DB" userRoleId)))
-                                    guildUserRoles
+                                    state.GuildUserRoles
                                 )
                                 (fun () ->
                                     awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have user roles")))
-                                    guildUserRoles
+                                    state.GuildUserRoles
                                 )
                         else
                             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
-                            guildUserRoles
+                            state.GuildUserRoles
 
-                    return! loop (guildPermissiveRoles, guildUserRoles)
+                    return! loop { state with GuildUserRoles = guildUserRoles }
                 | GuildRoleDeletedHandler e ->
                     let guildId = e.Guild.Id
                     let roleId = e.Role.Id
 
-                    let guildPermissiveRoles, guildUserRoles =
+                    let state =
                         let removeUserRole guildUserRoles =
                             guildUserRoles
                             |> removeUserRole
@@ -348,18 +357,56 @@ let reducer =
                                 (fun _ -> guildUserRoles)
                                 (fun _ -> guildUserRoles)
 
-                        guildPermissiveRoles
+                        state.GuildPermissiveRoles
                         |> removePermissiveRole
                             guildId
                             roleId
-                            (fun guildPermissiveRoles -> guildPermissiveRoles, guildUserRoles)
-                            (fun _ -> guildPermissiveRoles, removeUserRole guildUserRoles)
-                            (fun _ -> guildPermissiveRoles, removeUserRole guildUserRoles)
+                            (fun guildPermissiveRoles ->
+                                { state with GuildPermissiveRoles = guildPermissiveRoles })
+                            (fun _ -> { state with GuildUserRoles = removeUserRole state.GuildUserRoles })
+                            (fun _ -> { state with GuildUserRoles = removeUserRole state.GuildUserRoles })
 
-                    return! loop (guildPermissiveRoles, guildUserRoles)
+                    return! loop state
+                | SetTemplateRole (e, templateRoleId) ->
+                    let replyMessage =
+                        await (e.Channel.SendMessageAsync("Processing..."))
+
+                    let guild = e.Guild
+                    let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                    let templateRoles =
+                        if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
+                            let guildTemplateRoles = state.GuildTemplateRoles
+                            let guildPermissiveRoles =
+                                match Map.tryFind guild.Id guildTemplateRoles with
+                                | Some templateRoles ->
+                                    let templateRoles =
+                                        { templateRoles with
+                                            TemplateRoleId = templateRoleId }
+
+                                    TemplateRoles.replace templateRoles
+
+                                    Map.add guild.Id templateRoles guildTemplateRoles
+                                | None ->
+                                    let x = TemplateRoles.insert (guild.Id, templateRoleId)
+                                    Map.add guild.Id x guildTemplateRoles
+
+                            awaiti (replyMessage.ModifyAsync(Entities.Optional("Template role has been set")))
+
+                            guildPermissiveRoles
+                        else
+                            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+                            state.GuildTemplateRoles
+
+                    return! loop { state with GuildTemplateRoles = templateRoles }
             }
 
-        loop (PermissiveRoles.getAll (), Roles.getAll ())
+        let init =
+            {
+                GuildPermissiveRoles = PermissiveRoles.getAll ()
+                GuildUserRoles = Roles.getAll ()
+                GuildTemplateRoles = TemplateRoles.getAll ()
+            }
+        loop init
     )
 
 let giveOrChangeRole e roleEditModel =
@@ -382,6 +429,9 @@ let removeUserRole e roleId =
 
 let guildRoleDeletedHandler (e: EventArgs.GuildRoleDeleteEventArgs) =
     reducer.Post(GuildRoleDeletedHandler e)
+
+let setTemplateRole e roleId =
+    reducer.Post(SetTemplateRole(e, roleId))
 
 module Parser =
     open FParsec
@@ -436,4 +486,8 @@ module Parser =
 
     let premoveUserRole: _ Parser =
         pstringCI "removeUserRole" >>. spaces
+        >>. (pmentionRole <|> puint64)
+
+    let psetTemplateRole: _ Parser =
+        pstringCI "setTemplateRole" >>. spaces
         >>. (pmentionRole <|> puint64)
