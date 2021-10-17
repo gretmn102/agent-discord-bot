@@ -18,6 +18,7 @@ type Req =
     | GetPermissiveRoles of EventArgs.MessageCreateEventArgs
     | GetUserRoles of EventArgs.MessageCreateEventArgs
     | RemoveUserRole of EventArgs.MessageCreateEventArgs * RoleId
+    | GuildRoleDeletedHandler of EventArgs.GuildRoleDeleteEventArgs
 
 let reducer =
     let giveOrChangeRole
@@ -125,7 +126,33 @@ let reducer =
             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
 
             guildPermissiveRoles
-    let removePermisiveRole
+
+    let removePermissiveRole
+        guildId
+        roleId
+        onRoleHasBeenRemoved
+        onRoleDoesNotExists
+        onServerDoesNotHaveRoles
+        (guildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles) =
+
+            match Map.tryFind guildId guildPermissiveRoles with
+            | Some permissiveRoles ->
+                if Set.contains roleId permissiveRoles.RoleIds then
+                    let permissiveRoles =
+                        { permissiveRoles with
+                            RoleIds = Set.remove roleId permissiveRoles.RoleIds }
+
+                    PermissiveRoles.replace permissiveRoles
+
+                    let guildPermissiveRoles = Map.add guildId permissiveRoles guildPermissiveRoles
+
+                    onRoleHasBeenRemoved guildPermissiveRoles
+                else
+                    onRoleDoesNotExists ()
+            | None ->
+                onServerDoesNotHaveRoles ()
+
+    let removePermisiveRoleCmd
         (e:EventArgs.MessageCreateEventArgs)
         (roleId: RoleId)
         (guildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles) =
@@ -137,32 +164,60 @@ let reducer =
         let currentMember = await (guild.GetMemberAsync(e.Author.Id))
 
         if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
-            match Map.tryFind guild.Id guildPermissiveRoles with
-            | Some permissiveRoles ->
-                if Set.contains roleId permissiveRoles.RoleIds then
-                    let permissiveRoles =
-                        { permissiveRoles with
-                            RoleIds = Set.remove roleId permissiveRoles.RoleIds }
-
-                    PermissiveRoles.replace permissiveRoles
-
-                    let guildPermissiveRoles = Map.add guild.Id permissiveRoles guildPermissiveRoles
-
+            guildPermissiveRoles
+            |> removePermissiveRole
+                guild.Id
+                roleId
+                (fun guildPermissiveRoles ->
                     awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been removed")))
                     guildPermissiveRoles
-                else
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional("The role has already been removed")))
-
+                )
+                (fun () ->
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional("Role doesn't exists in DB")))
                     guildPermissiveRoles
-
-            | None ->
-                awaiti (replyMessage.ModifyAsync(Entities.Optional("The role has already been removed")))
-
-                guildPermissiveRoles
+                )
+                (fun () ->
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have permissive roles")))
+                    guildPermissiveRoles
+                )
         else
             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
 
             guildPermissiveRoles
+
+    let removeUserRole
+        guildId
+        roleId
+        onRoleHasBeenRemoved
+        onRoleDoesNotExists
+        onServerDoesNotHaveUserRoles
+        (guildUserRoles: Roles.GuildUserRoles) =
+
+        match Map.tryFind guildId guildUserRoles with
+        | Some userRoles ->
+            let userRole =
+                userRoles
+                |> Map.tryPick (fun _ userRole ->
+                    if userRole.RoleId = roleId then
+                        Some userRole
+                    else
+                        None
+                )
+
+            match userRole with
+            | Some roleRole ->
+                Roles.remove roleRole
+
+                let guildUserRoles =
+                    let userRole =
+                        Map.remove roleRole.UserId userRoles
+                    Map.add guildId userRole guildUserRoles
+
+                onRoleHasBeenRemoved guildUserRoles
+            | None ->
+                onRoleDoesNotExists ()
+        | None ->
+            onServerDoesNotHaveUserRoles ()
 
     MailboxProcessor.Start (fun mail ->
         let rec loop (guildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles, guildUserRoles: Roles.GuildUserRoles) =
@@ -183,7 +238,7 @@ let reducer =
 
                     return! loop (guildPermissiveRoles, guildUserRoles)
                 | RemovePermissiveRole (e, roleId) ->
-                    let guildPermissiveRoles = removePermisiveRole e roleId guildPermissiveRoles
+                    let guildPermissiveRoles = removePermisiveRoleCmd e roleId guildPermissiveRoles
 
                     return! loop (guildPermissiveRoles, guildUserRoles)
                 | GetPermissiveRoles e ->
@@ -258,37 +313,48 @@ let reducer =
                     let guildMember = await (guild.GetMemberAsync(e.Author.Id))
                     let guildUserRoles =
                         if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
-                            match Map.tryFind guild.Id guildUserRoles with
-                            | Some userRoles ->
-                                let userRole =
-                                    userRoles
-                                    |> Map.tryPick (fun _ userRole ->
-                                        if userRole.RoleId = userRoleId then
-                                            Some userRole
-                                        else
-                                            None
-                                    )
-
-                                match userRole with
-                                | Some roleRole ->
-                                    Roles.remove roleRole
-
-                                    let guildUserRoles =
-                                        let userRole =
-                                            Map.remove roleRole.UserId userRoles
-                                        Map.add guild.Id userRole guildUserRoles
-
+                            guildUserRoles
+                            |> removeUserRole
+                                guild.Id
+                                userRoleId
+                                (fun guildUserRoles ->
                                     awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "%d role has been removed from DB" userRoleId)))
                                     guildUserRoles
-                                | None ->
+                                )
+                                (fun () ->
                                     awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "%d role doesn't exists in DB" userRoleId)))
                                     guildUserRoles
-                            | None ->
-                                awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have user roles")))
-                                guildUserRoles
+                                )
+                                (fun () ->
+                                    awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have user roles")))
+                                    guildUserRoles
+                                )
                         else
                             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
                             guildUserRoles
+
+                    return! loop (guildPermissiveRoles, guildUserRoles)
+                | GuildRoleDeletedHandler e ->
+                    let guildId = e.Guild.Id
+                    let roleId = e.Role.Id
+
+                    let guildPermissiveRoles, guildUserRoles =
+                        let removeUserRole guildUserRoles =
+                            guildUserRoles
+                            |> removeUserRole
+                                guildId
+                                roleId
+                                id
+                                (fun _ -> guildUserRoles)
+                                (fun _ -> guildUserRoles)
+
+                        guildPermissiveRoles
+                        |> removePermissiveRole
+                            guildId
+                            roleId
+                            (fun guildPermissiveRoles -> guildPermissiveRoles, guildUserRoles)
+                            (fun _ -> guildPermissiveRoles, removeUserRole guildUserRoles)
+                            (fun _ -> guildPermissiveRoles, removeUserRole guildUserRoles)
 
                     return! loop (guildPermissiveRoles, guildUserRoles)
             }
@@ -313,6 +379,9 @@ let getUserRoles e =
 
 let removeUserRole e roleId =
     reducer.Post(RemoveUserRole(e, roleId))
+
+let guildRoleDeletedHandler (e: EventArgs.GuildRoleDeleteEventArgs) =
+    reducer.Post(GuildRoleDeletedHandler e)
 
 module Parser =
     open FParsec

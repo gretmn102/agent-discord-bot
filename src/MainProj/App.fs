@@ -383,6 +383,12 @@ let main argv =
             Task.CompletedTask
         ))
 
+        client.add_GuildRoleDeleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            Role.Main.guildRoleDeletedHandler e
+
+            Task.CompletedTask
+        ))
+
         client.add_ClientErrored(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             client.Logger.LogError(botEventId, e.Exception, "Exception occured", [||])
 
