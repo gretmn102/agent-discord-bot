@@ -33,8 +33,9 @@ let reducer =
     let giveOrChangeRole
         (e:EventArgs.MessageCreateEventArgs)
         (roleEditModel: RoleEditModel)
-        (guildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles)
-        (guildUserRoles: Roles.GuildUserRoles) =
+        (state: State) =
+
+        let guildPermissiveRoles, guildUserRoles = state.GuildPermissiveRoles, state.GuildUserRoles
 
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
@@ -50,31 +51,43 @@ let reducer =
             | None -> false
 
         let createAndGrantRole () =
-            if guild.Roles.Count < 250 then
-                let role =
-                    guild.CreateRoleAsync (
-                        name = roleEditModel.Name,
-                        color = System.Nullable(roleEditModel.Color)
-                    )
-                    |> await
 
-                guildMember.GrantRoleAsync role
-                |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+            match Map.tryFind guild.Id state.GuildTemplateRoles with
+            | Some templateRole ->
+                let templateRole = guild.GetRole templateRole.TemplateRoleId
 
-                awaiti <| replyMessage.ModifyAsync(Entities.Optional("Role granted"))
+                if isNull templateRole then
+                    awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner installed the template role, but it has been removed"))
+                    guildUserRoles
+                else
+                    if guild.Roles.Count < 250 then
+                        let role =
+                            guild.CreateRoleAsync (
+                                name = roleEditModel.Name,
+                                color = System.Nullable roleEditModel.Color,
+                                permissions = System.Nullable templateRole.Permissions
+                            )
+                            |> await
+                        guildMember.GrantRoleAsync role
+                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
 
-                let x = Roles.insert (guild.Id, guildMember.Id, role.Id)
+                        awaiti <| replyMessage.ModifyAsync(Entities.Optional("Role granted"))
+
+                        let x = Roles.insert (guild.Id, guildMember.Id, role.Id)
+
+                        guildUserRoles
+                        |> Map.addOrModWith
+                            x.GuildId
+                            (fun () -> Map.add x.UserId x Map.empty)
+                            (fun st -> Map.add x.UserId x st)
+                    else
+                        awaiti <| replyMessage.ModifyAsync(Entities.Optional("The number of roles exceeds 250"))
+
+                        guildUserRoles
+            | None ->
+                awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner didn't set the template role"))
 
                 guildUserRoles
-                |> Map.addOrModWith
-                    x.GuildId
-                    (fun () -> Map.add x.UserId x Map.empty)
-                    (fun st -> Map.add x.UserId x st)
-            else
-                awaiti <| replyMessage.ModifyAsync(Entities.Optional("The number of roles exceeds 250"))
-
-                guildUserRoles
-
         if hasPermissiveRole then
             match Map.tryFind guild.Id guildUserRoles with
             | Some userRoles ->
@@ -236,7 +249,7 @@ let reducer =
                 | GiveOrChangeRole (e, roleEditModel) ->
                     let roles =
                         try
-                            giveOrChangeRole e roleEditModel state.GuildPermissiveRoles state.GuildUserRoles
+                            giveOrChangeRole e roleEditModel state
                         with e ->
                             printfn "%A" e
                             state.GuildUserRoles
