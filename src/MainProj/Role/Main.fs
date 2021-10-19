@@ -19,7 +19,7 @@ type Req =
     | GetUserRoles of EventArgs.MessageCreateEventArgs
     | RemoveUserRole of EventArgs.MessageCreateEventArgs * RoleId
     | GuildRoleDeletedHandler of EventArgs.GuildRoleDeleteEventArgs
-
+    | UpdateRolesPermission of EventArgs.MessageCreateEventArgs
     | SetTemplateRole of EventArgs.MessageCreateEventArgs * RoleId
 
 type State =
@@ -411,6 +411,44 @@ let reducer =
                             state.GuildTemplateRoles
 
                     return! loop { state with GuildTemplateRoles = templateRoles }
+                | UpdateRolesPermission e ->
+                    let replyMessage =
+                        await (e.Channel.SendMessageAsync("Processing..."))
+
+                    let guild = e.Guild
+                    let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                    if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
+                        match Map.tryFind guild.Id state.GuildTemplateRoles with
+                        | Some templateRole ->
+                            let templateRole = guild.GetRole templateRole.TemplateRoleId
+
+                            if isNull templateRole then
+                                awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner installed the template role, but it has been removed"))
+                            else
+                                match Map.tryFind guild.Id state.GuildUserRoles with
+                                | Some userRoles ->
+                                    userRoles
+                                    |> Seq.iter (fun (KeyValue(_, userRole)) ->
+                                        let userRole = guild.GetRole userRole.RoleId
+                                        if isNull userRole then ()
+                                        else
+                                            userRole.ModifyAsync(
+                                                permissions = System.Nullable templateRole.Permissions
+                                            )
+                                            |> fun x -> x.GetAwaiter().GetResult()
+
+                                            System.Threading.Thread.Sleep 250
+                                    )
+
+                                    awaiti (replyMessage.ModifyAsync(Entities.Optional("User roles has been updated")))
+                                | None ->
+                                    awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have user roles")))
+                        | None ->
+                            awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner didn't set the template role"))
+                    else
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+
+                    return! loop state
             }
 
         let init =
@@ -445,6 +483,9 @@ let guildRoleDeletedHandler (e: EventArgs.GuildRoleDeleteEventArgs) =
 
 let setTemplateRole e roleId =
     reducer.Post(SetTemplateRole(e, roleId))
+
+let updateRolesPermission e =
+    reducer.Post(UpdateRolesPermission e)
 
 module Parser =
     open FParsec
@@ -504,3 +545,6 @@ module Parser =
     let psetTemplateRole: _ Parser =
         pstringCI "setTemplateRole" >>. spaces
         >>. (pmentionRole <|> puint64)
+
+    let pupdateUserRolesPermissions: _ Parser =
+        pstringCI "updateUserRolesPermissions" >>. spaces
