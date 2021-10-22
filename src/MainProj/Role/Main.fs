@@ -68,6 +68,10 @@ let reducer =
                                 permissions = System.Nullable templateRole.Permissions
                             )
                             |> await
+
+                        role.ModifyPositionAsync(templateRole.Position - 1)
+                        |> fun x -> x.GetAwaiter().GetResult()
+
                         guildMember.GrantRoleAsync role
                         |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
 
