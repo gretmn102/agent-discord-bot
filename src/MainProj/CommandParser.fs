@@ -43,6 +43,7 @@ type Act =
     | Battery
     | Ship of ShipOption
     | Catch
+    | Angry
 
 type UnicodeOrCustomEmoji =
     | UnicodeEmoji of string
@@ -104,6 +105,7 @@ let pcommand =
             skipString "admire" >>% Admire
             skipString "battery" >>% Battery
             skipStringCI "catch" >>% Catch
+            skipStringCI "angry" >>% Angry
             pship |>> Ship
         ]
     choice [
