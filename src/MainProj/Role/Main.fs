@@ -69,8 +69,34 @@ let reducer =
                             )
                             |> await
 
-                        role.ModifyPositionAsync(templateRole.Position - 1)
-                        |> fun x -> x.GetAwaiter().GetResult()
+                        try
+                            role.ModifyPositionAsync(templateRole.Position - 1)
+                            |> fun x -> x.GetAwaiter().GetResult()
+                        with
+                            ex ->
+                                let jsonMessage =
+                                    match ex with
+                                    | :? Exceptions.BadRequestException as x ->
+                                        x.JsonMessage
+                                    | :? Exceptions.UnauthorizedException as x ->
+                                        x.JsonMessage
+                                    | x -> x.Message
+
+                                let b = Entities.DiscordMessageBuilder()
+                                let embed = Entities.DiscordEmbedBuilder()
+                                embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                                embed.Description <-
+                                    [
+                                        "Error:"
+                                        "```"
+                                        sprintf "%s" jsonMessage
+                                        "```"
+                                        sprintf "The bot role must be higher than <@&%d>, or move the role yourself" templateRole.Id
+                                    ] |> String.concat "\n"
+
+                                b.Embed <- embed.Build()
+
+                                awaiti <| e.Channel.SendMessageAsync(b)
 
                         guildMember.GrantRoleAsync role
                         |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
