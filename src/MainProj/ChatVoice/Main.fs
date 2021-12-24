@@ -29,11 +29,7 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                     let guild = e.Guild
                     let channel = guild.GetChannel beforeChatId
                     let guildMember =
-                        try
-                            // the error occurs when a person is already in the voice channel, and the bot has just started
-                            before.Member
-                        with _ ->
-                            await (e.Guild.GetMemberAsync e.User.Id)
+                        await (e.Guild.GetMemberAsync e.User.Id)
 
                     let closedChannelPermissions =
                         LanguagePrimitives.EnumOfValue<int64, DSharpPlus.Permissions>(1071698659905L)
@@ -56,7 +52,8 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                     | Some beforeChatId ->
                         let guild = e.Guild
                         let channel = guild.GetChannel beforeChatId
-                        let guildMember = after.Member
+                        let guildMember =
+                            await (e.Guild.GetMemberAsync e.User.Id)
 
                         let openedChannelPermissions =
                             LanguagePrimitives.EnumOfValue<int64, DSharpPlus.Permissions>(1071698660929L)
