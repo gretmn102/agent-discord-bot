@@ -24,22 +24,25 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
             match e.Before with
             | null -> ()
             | before ->
-                match Map.tryFind before.Channel.Id voiceChats with
-                | Some beforeChatId ->
-                    let guild = e.Guild
-                    let channel = guild.GetChannel beforeChatId
-                    let guildMember =
-                        await (e.Guild.GetMemberAsync e.User.Id)
+                match before.Channel with
+                | null -> ()
+                | channel ->
+                    match Map.tryFind channel.Id voiceChats with
+                    | Some beforeChatId ->
+                        let guild = e.Guild
+                        let channel = guild.GetChannel beforeChatId
+                        let guildMember =
+                            await (e.Guild.GetMemberAsync e.User.Id)
 
-                    let closedChannelPermissions =
-                        LanguagePrimitives.EnumOfValue<int64, DSharpPlus.Permissions>(1071698659905L)
+                        let closedChannelPermissions =
+                            LanguagePrimitives.EnumOfValue<int64, DSharpPlus.Permissions>(1071698659905L)
 
-                    try
-                        channel.AddOverwriteAsync(guildMember, closedChannelPermissions)
-                        |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
-                    with e ->
-                        printfn "channel.AddOverwriteAsync: %s" e.Message
-                | None -> ()
+                        try
+                            channel.AddOverwriteAsync(guildMember, closedChannelPermissions)
+                            |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
+                        with e ->
+                            printfn "channel.AddOverwriteAsync: %s" e.Message
+                    | None -> ()
 
         do // show
             match e.After with
