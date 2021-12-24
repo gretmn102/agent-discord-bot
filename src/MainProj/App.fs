@@ -424,6 +424,12 @@ let main argv =
             Task.CompletedTask
         ))
 
+        client.add_VoiceStateUpdated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            ChatVoice.Main.voiceHandle e
+
+            Task.CompletedTask
+        ))
+
         client.ConnectAsync().GetAwaiter().GetResult()
 
         (Task.Delay -1).GetAwaiter().GetResult()
