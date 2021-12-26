@@ -20,6 +20,9 @@ let settings: Settings =
 let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
     match Map.tryFind e.Guild.Id settings with
     | Some voiceChats ->
+        let accessChannelsPermission =
+            DSharpPlus.Permissions.AccessChannels
+
         do // hide
             match e.Before with
             | null -> ()
@@ -34,11 +37,8 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                         let guildMember =
                             await (e.Guild.GetMemberAsync e.User.Id)
 
-                        let closedChannelPermissions =
-                            LanguagePrimitives.EnumOfValue<int64, DSharpPlus.Permissions>(1071698659905L)
-
                         try
-                            channel.AddOverwriteAsync(guildMember, closedChannelPermissions)
+                            channel.AddOverwriteAsync(guildMember, deny=accessChannelsPermission)
                             |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
                         with e ->
                             printfn "channel.AddOverwriteAsync: %s" e.Message
@@ -58,13 +58,10 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                         let guildMember =
                             await (e.Guild.GetMemberAsync e.User.Id)
 
-                        let openedChannelPermissions =
-                            LanguagePrimitives.EnumOfValue<int64, DSharpPlus.Permissions>(1071698660929L)
-
                         try
-                            channel.AddOverwriteAsync(guildMember, openedChannelPermissions)
+                            channel.AddOverwriteAsync(guildMember, allow=accessChannelsPermission)
                             |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
                         with e ->
-                            printfn "channel.AddOverwriteAsync: %s" e.Message
+                            printfn "channel.AddOverwriteAsync: %A" e.Message
                     | None -> ()
     | None -> ()
