@@ -41,6 +41,8 @@
     <Compile Include="Role\Main.fs" />
     <Compile Include="ChatVoice\Model.fs" />
     <Compile Include="ChatVoice\Main.fs" />
+    <Compile Include="VoiceChannelNotification\Model.fs" />
+    <Compile Include="VoiceChannelNotification\Main.fs" />
     <Compile Include="Ship.fs" />
     <Compile Include="EmojiFont.fs" />
     <Compile Include="BallotBox.fs" />

@@ -426,6 +426,7 @@ let main argv =
 
         client.add_VoiceStateUpdated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             ChatVoice.Main.voiceHandle e
+            VoiceChannelNotification.Main.voiceHandle e
 
             Task.CompletedTask
         ))
