@@ -36,6 +36,7 @@
   <ItemGroup>
     <Compile Include="FParsecUtils.fs" />
     <Compile Include="Types.fs" />
+    <Compile Include="Db.fs" />
     <Compile Include="NumberToWords.fs" />
     <Compile Include="Role\Model.fs" />
     <Compile Include="Role\Main.fs" />
