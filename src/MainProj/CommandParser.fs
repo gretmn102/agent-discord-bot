@@ -69,6 +69,8 @@ type Cmd =
     | SetTemplateRole of RoleId
     | UpdateUserRolesPermissions
 
+    | Doorkeeper of (DSharpPlus.EventArgs.MessageCreateEventArgs -> unit)
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -124,6 +126,8 @@ let pcommand =
         Role.Main.Parser.premoveUserRole |>> RemoveUserRole
         Role.Main.Parser.psetTemplateRole |>> SetTemplateRole
         Role.Main.Parser.pupdateUserRolesPermissions >>% UpdateUserRolesPermissions
+
+        Doorkeeper.Main.Parser.start |>> Doorkeeper
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

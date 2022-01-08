@@ -308,6 +308,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.UpdateUserRolesPermissions ->
                 Role.Main.updateRolesPermission e
 
+            | CommandParser.Doorkeeper f -> f e
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
