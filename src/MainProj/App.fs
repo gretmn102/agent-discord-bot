@@ -387,6 +387,7 @@ let main argv =
         config.set_Token token
         config.set_TokenType DSharpPlus.TokenType.Bot
         config.set_AutoReconnect true
+        config.set_Intents (DSharpPlus.DiscordIntents.AllUnprivileged ||| DSharpPlus.DiscordIntents.GuildMembers)
 
         let client = new DSharpPlus.DiscordClient(config)
 
@@ -428,6 +429,16 @@ let main argv =
             ChatVoice.Main.voiceHandle e
             VoiceChannelNotification.Main.voiceHandle e
 
+            Task.CompletedTask
+        ))
+
+        client.add_GuildMemberAdded (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            Doorkeeper.Main.handle e
+
+            Task.CompletedTask
+        ))
+
+        client.add_GuildMemberRemoved (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             Task.CompletedTask
         ))
 
