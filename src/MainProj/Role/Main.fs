@@ -519,6 +519,9 @@ let updateRolesPermission e =
 
 module Parser =
     open FParsec
+
+    open DiscordMessage.Parser
+
     type 'Result Parser = Primitives.Parser<'Result, unit>
 
     let pquote: _ Parser =
@@ -536,11 +539,6 @@ module Parser =
         |>> fun hex ->
             System.Convert.ToInt32(hex, 16)
             |> Entities.DiscordColor
-
-    let pmentionRole: RoleId Parser =
-        skipString "<@&" >>. puint64 .>> skipChar '>'
-    let pmentionRoleTarget (roleId: RoleId) : _ Parser =
-        skipString "<@&" >>. skipString (string roleId) .>> skipChar '>'
 
     let pgiveOrChangeRole: _ Parser =
         pstringCI "role" >>. spaces

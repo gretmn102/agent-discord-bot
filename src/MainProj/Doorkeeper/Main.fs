@@ -138,12 +138,10 @@ let handle (e: EventArgs.GuildMemberAddEventArgs) =
 
 module Parser =
     open FParsec
-    type 'Result Parser = Primitives.Parser<'Result, unit>
 
-    let pmentionRole: RoleId Parser =
-        skipString "<@&" >>. puint64 .>> skipChar '>'
-    let pmentionRoleTarget (roleId: RoleId) : _ Parser =
-        skipString "<@&" >>. skipString (string roleId) .>> skipChar '>'
+    open DiscordMessage.Parser
+
+    type 'Result Parser = Primitives.Parser<'Result, unit>
 
     let pgetNewcomersRoles: _ Parser =
         skipStringCI "newcomersRoles"

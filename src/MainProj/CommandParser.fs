@@ -1,34 +1,13 @@
 module CommandParser
 open FsharpMyExtension
 open FsharpMyExtension.Either
-open Types
 open FParsec
 
+open Types
+open DiscordMessage
+open DiscordMessage.Parser
+
 type 'a Parser = Parser<'a, unit>
-let puserMention : _ Parser =
-    skipString "<@" >>. optional (skipChar '!') >>. puint64 .>> skipChar '>'
-let puserMentionTarget (userId:UserId) : _ Parser =
-    skipString "<@" >>. optional (skipChar '!') >>. skipString (string userId) >>. skipChar '>'
-
-type CustomEmoji =
-    {
-        Id: EmojiId
-        Animated: bool
-        Name: string
-    }
-
-let pcustomEmoji: _ Parser =
-    pipe3
-        (stringReturn "<:" false <|> stringReturn "<a:" true)
-        (manySatisfy ((<>) ':') .>> skipChar ':')
-        (puint64 .>> pchar '>')
-        (fun animated name id ->
-            {
-                Id = id
-                Animated = animated
-                Name = name
-            }
-        )
 
 type ShipOption =
     | Rand
