@@ -48,7 +48,7 @@ type Cmd =
     | SetTemplateRole of RoleId
     | UpdateUserRolesPermissions
 
-    | Doorkeeper of (DSharpPlus.EventArgs.MessageCreateEventArgs -> unit)
+    | Doorkeeper of Doorkeeper.Main.NewcomersRolesMsg
 
 let prefix = pchar '.'
 

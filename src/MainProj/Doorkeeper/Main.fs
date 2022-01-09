@@ -136,6 +136,9 @@ let m =
 let handle (e: EventArgs.GuildMemberAddEventArgs) =
     m.Post (GuildMemberAddedHandle e)
 
+let execNewcomersRolesCmd e msg =
+    m.Post (NewcomersRolesCmd (e, msg))
+
 module Parser =
     open FParsec
 
@@ -152,9 +155,7 @@ module Parser =
 
     let start: _ Parser =
         choice [
-            psetNewcomersRoles |>> fun roleIds (e: EventArgs.MessageCreateEventArgs) ->
-                m.Post (NewcomersRolesCmd (e, SetNewcomersRoles roleIds))
+            psetNewcomersRoles |>> SetNewcomersRoles
 
-            pgetNewcomersRoles >>% fun (e: EventArgs.MessageCreateEventArgs) ->
-                m.Post (NewcomersRolesCmd (e, GetNewcomersRoles))
+            pgetNewcomersRoles >>% GetNewcomersRoles
         ]
