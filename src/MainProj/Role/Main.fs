@@ -133,7 +133,21 @@ let reducer =
                         )
                         |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
 
-                        awaiti <| replyMessage.ModifyAsync(Entities.Optional("Changed role"))
+                        let roleGranded =
+                            guildMember.Roles
+                            |> Seq.exists (fun x -> x.Id = userRole.Id)
+
+                        if roleGranded then
+                            awaiti <| replyMessage.ModifyAsync(Entities.Optional("Role has been changed"))
+                        else
+                            try
+                                guildMember.GrantRoleAsync userRole
+                                |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                awaiti <| replyMessage.ModifyAsync(Entities.Optional("Role has been changed and returned to user"))
+                            with e ->
+                                let errMsg = sprintf "An error occurred when returning the role to the user:\n%s" e.Message
+                                awaiti <| replyMessage.ModifyAsync(Entities.Optional(errMsg))
 
                         guildUserRoles
                 | None ->
