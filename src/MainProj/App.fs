@@ -311,6 +311,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.Doorkeeper newcomersRolesMsg ->
                 Doorkeeper.Main.execNewcomersRolesCmd e newcomersRolesMsg
 
+            | CommandParser.VoiceChannelNotification msg ->
+                VoiceChannelNotification.Main.execVoiceNotificationCmd e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-

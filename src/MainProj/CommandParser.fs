@@ -50,6 +50,8 @@ type Cmd =
 
     | Doorkeeper of Doorkeeper.Main.NewcomersRolesMsg
 
+    | VoiceChannelNotification of VoiceChannelNotification.Main.VoiceNotificationMsg
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -107,6 +109,8 @@ let pcommand =
         Role.Main.Parser.pupdateUserRolesPermissions >>% UpdateUserRolesPermissions
 
         Doorkeeper.Main.Parser.start |>> Doorkeeper
+
+        VoiceChannelNotification.Main.Parser.start |>> VoiceChannelNotification
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox
