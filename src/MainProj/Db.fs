@@ -14,3 +14,5 @@ let settings =
 
 let client = new MongoClient(settings)
 let database = client.GetDatabase("bot")
+
+let superUserId = 796931597898088448UL

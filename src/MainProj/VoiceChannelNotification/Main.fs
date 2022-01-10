@@ -73,7 +73,9 @@ let voiceNotificationReduce
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
-        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
+            || (Db.superUserId = e.Author.Id) then
+
             let guildVoiceNotification: VoiceNotification.GuildVoiceNotification =
                 match Map.tryFind e.Guild.Id guildVoiceNotification with
                 | Some voiceNotificationData ->
@@ -102,7 +104,9 @@ let voiceNotificationReduce
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
-        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
+            || (Db.superUserId = e.Author.Id) then
+
             match FParsecUtils.runEither Parser.ptemplateMessage templateMessage with
             | Right _ ->
                 let guildVoiceNotification: VoiceNotification.GuildVoiceNotification =
