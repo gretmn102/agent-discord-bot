@@ -17,7 +17,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>QuizPizza.json</TargetPath>
     </ContentWithTargetPath>
-    <ContentWithTargetPath Include="heart.png">
+    <ContentWithTargetPath Include="Ship\heart.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>heart.png</TargetPath>
     </ContentWithTargetPath>
@@ -47,7 +47,7 @@
     <Compile Include="VoiceChannelNotification\Main.fs" />
     <Compile Include="Doorkeeper\Model.fs" />
     <Compile Include="Doorkeeper\Main.fs" />
-    <Compile Include="Ship.fs" />
+    <Compile Include="Ship\Ship.fs" />
     <Compile Include="EmojiFont.fs" />
     <Compile Include="BallotBox.fs" />
     <Compile Include="Quiz\Quiz.fs" />
