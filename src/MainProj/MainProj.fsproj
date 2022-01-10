@@ -9,11 +9,11 @@
     <DefineConstants>TRACE;TEST_BOT</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <ContentWithTargetPath Include="Quiz.json">
+    <ContentWithTargetPath Include="Quiz\Quiz.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Quiz.json</TargetPath>
     </ContentWithTargetPath>
-    <ContentWithTargetPath Include="QuizPizza.json">
+    <ContentWithTargetPath Include="Quiz\QuizPizza.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>QuizPizza.json</TargetPath>
     </ContentWithTargetPath>
@@ -50,7 +50,7 @@
     <Compile Include="Ship.fs" />
     <Compile Include="EmojiFont.fs" />
     <Compile Include="BallotBox.fs" />
-    <Compile Include="Quiz.fs" />
+    <Compile Include="Quiz\Quiz.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />
