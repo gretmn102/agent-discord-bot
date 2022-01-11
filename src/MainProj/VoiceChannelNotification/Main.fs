@@ -148,31 +148,43 @@ let reduce (msg: Msg) (state: State): State =
                     match after.Channel with
                     | null -> state
                     | enteredVoiceChannel ->
-                        let outputChannel = e.Guild.GetChannel(outputChannelId)
-                        let guildMember = await (e.Guild.GetMemberAsync(e.User.Id))
+                        let isDiff =
+                            match e.Before with
+                            | null -> true
+                            | before ->
+                                match before.Channel with
+                                | null -> true
+                                | beforeChannel ->
+                                    beforeChannel.Id <> enteredVoiceChannel.Id
 
-                        let message =
-                            FParsecUtils.runEither Parser.ptemplateMessage templateMsg
-                            |> Either.map (
-                                List.map (function
-                                    | Parser.Text x -> x
-                                    | Parser.NickName ->
-                                        match guildMember.Nickname with
-                                        | null -> e.User.Username
-                                        | x -> x
-                                    | Parser.UserName -> e.User.Username
-                                    | Parser.VoiceChannel ->
-                                        sprintf "<#%d>" enteredVoiceChannel.Id
+                        if isDiff then
+                            let outputChannel = e.Guild.GetChannel(outputChannelId)
+                            let guildMember = await (e.Guild.GetMemberAsync(e.User.Id))
+
+                            let message =
+                                FParsecUtils.runEither Parser.ptemplateMessage templateMsg
+                                |> Either.map (
+                                    List.map (function
+                                        | Parser.Text x -> x
+                                        | Parser.NickName ->
+                                            match guildMember.Nickname with
+                                            | null -> e.User.Username
+                                            | x -> x
+                                        | Parser.UserName -> e.User.Username
+                                        | Parser.VoiceChannel ->
+                                            sprintf "<#%d>" enteredVoiceChannel.Id
+                                    )
+                                    >> System.String.Concat
                                 )
-                                >> System.String.Concat
+
+                            message
+                            |> Either.iter (fun message ->
+                                awaiti (outputChannel.SendMessageAsync message)
                             )
 
-                        message
-                        |> Either.iter (fun message ->
-                            awaiti (outputChannel.SendMessageAsync message)
-                        )
-
-                        state
+                            state
+                        else
+                            state
             | _ -> state
         | None -> state
 
