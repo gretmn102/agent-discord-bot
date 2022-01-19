@@ -409,6 +409,7 @@ let main argv =
 
         client.add_MessageCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             cmd client e
+            Ranking.Main.handle e
 
             Task.CompletedTask
         ))
