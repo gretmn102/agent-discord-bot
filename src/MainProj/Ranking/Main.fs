@@ -19,9 +19,28 @@ type State =
     }
 
 let lowerBoundExp, upperBoundExp = 15, 25
-let getExpByLevel level = 5 * (level * level) + (50 * level) + 100
-let inline getLevelByExp exp =
-    int (sqrt (125. + 5. * float exp) / 5. - 5.)
+
+let getExpByLevel level =
+    let level = uint64 level
+    5UL * (level * level) + (50UL * level) + 100UL
+
+let getLevelTotalExp level =
+    let rec f currExp currentLevel =
+        if currentLevel < level then
+            let exp = getExpByLevel(currentLevel)
+            f (currExp + exp) (currentLevel + 1UL)
+        else
+            currExp
+    f 0UL 0UL
+
+let getLevelBySumExp exp =
+    let rec f currExp level =
+        let exp = getExpByLevel(level)
+        if currExp >= exp then
+            f (currExp - exp) (level + 1UL)
+        else
+            level
+    f exp 0UL
 
 let r = System.Random ()
 
@@ -34,11 +53,11 @@ let updateExp
 
     let exec rankings =
         let exec (rank: Rankings.RankingData) =
-            let oldLevel = getLevelByExp rank.Exp
+            let oldLevel = getLevelBySumExp rank.Exp
             let newExp = update rank.Exp
-            let newLevel = getLevelByExp newExp
+            let newLevel = getLevelBySumExp newExp
 
-            if newLevel > 0 && oldLevel <> newLevel then
+            if newLevel > 0UL && oldLevel <> newLevel then
                 match setting.OutputChannelId with
                 | Some outputChannelId ->
                     match e.Guild.GetChannel outputChannelId with
