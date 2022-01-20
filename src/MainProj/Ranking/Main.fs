@@ -349,7 +349,7 @@ module Parser =
 
     let psetOutputChannel: _ Parser =
         skipStringCI "setRankingOutput" >>. spaces
-        >>. (pmentionRole <|> puint64)
+        >>. (pchannelMention <|> puint64)
 
     let psetExp: _ Parser =
         skipStringCI "setExp" >>. spaces
