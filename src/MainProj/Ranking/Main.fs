@@ -363,7 +363,7 @@ module Parser =
     let psetLevelRoles: _ Parser =
         let proleIdLevel =
             tuple2
-                ((pchannelMention <|> puint64) .>> spaces)
+                ((pmentionRole <|> puint64) .>> spaces)
                 pint32
 
         skipStringCI "setLevelRoles" >>. spaces
