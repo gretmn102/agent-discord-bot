@@ -7,6 +7,7 @@ open Model
 type SettingMsg =
     | SetOutputChannel of ChannelId
     | SetExp of UserId * uint64
+    | GetRank of UserId option
     | SetLevelRoles of (ChannelId * int) list
     | GetLevelRoles
 
@@ -327,6 +328,42 @@ let settingReduce
 
         state
 
+    | GetRank userId ->
+        let msg =
+            let userId = match userId with None -> e.Author.Id | Some userId -> userId
+
+            let calc exp =
+                let level = getLevelBySumExp exp
+
+                sprintf "Уровень <@!%d> — %d.\nОпыта %d / %d до следующего уровня.\nВсего опыта — %d."
+                    userId
+                    level
+                    (exp - getLevelTotalExp level)
+                    (getExpByLevel level)
+                    exp
+
+            match Map.tryFind e.Guild.Id state.Rankings with
+            | Some ranking ->
+                match Map.tryFind userId ranking with
+                | Some r -> calc r.Exp
+                | None -> calc 0UL
+            | None -> calc 0UL
+
+        let b = Entities.DiscordMessageBuilder()
+
+        let color = Entities.DiscordColor "#2f3136"
+
+        let embed =
+            Entities.DiscordEmbedBuilder()
+                .WithDescription(msg)
+                .WithColor(color)
+                .Build()
+
+        b.WithEmbed embed |> ignore
+
+        awaiti (e.Channel.SendMessageAsync(b))
+
+        state
 
 let reduce (msg: Msg) (state: State): State =
     match msg with
@@ -407,10 +444,15 @@ module Parser =
     let pgetLevelRoles: _ Parser =
         skipStringCI "getLevelRoles"
 
+    let pgetRank: _ Parser =
+        skipStringCI "rank" >>. spaces
+        >>. opt (puserMention <|> puint64)
+
     let start: _ Parser =
         choice [
             psetOutputChannel |>> SetOutputChannel
             psetExp |>> SetExp
             psetLevelRoles |>> SetLevelRoles
             pgetLevelRoles >>% GetLevelRoles
+            pgetRank |>> GetRank
         ]
