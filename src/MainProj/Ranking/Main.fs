@@ -124,7 +124,10 @@ let updateExp
 
                         b.WithEmbed embed |> ignore
 
-                        awaiti (outputChannel.SendMessageAsync(b))
+                        try
+                            awaiti (outputChannel.SendMessageAsync(b))
+                        with e ->
+                            printfn "I don't have the permission to write to %d channel" outputChannel.Id
 
                 | None -> ()
 
