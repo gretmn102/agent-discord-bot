@@ -6,6 +6,7 @@ open Model
 
 type SettingMsg =
     | SetOutputChannel of ChannelId
+    | SetExp of UserId * uint64
 
 type Msg =
     | NewMessageHandle of EventArgs.MessageCreateEventArgs
@@ -24,10 +25,60 @@ let inline getLevelByExp exp =
 
 let r = System.Random ()
 
+let updateExp
+    (e: EventArgs.MessageCreateEventArgs)
+    (userId: UserId)
+    (setting: RankingSettings.RankingSettingData)
+    update
+    state =
+
+    let exec rankings =
+        let exec (rank: Rankings.RankingData) =
+            let oldLevel = getLevelByExp rank.Exp
+            let newExp = update rank.Exp
+            let newLevel = getLevelByExp newExp
+
+            if newLevel > 0 && oldLevel <> newLevel then
+                match setting.OutputChannelId with
+                | Some outputChannelId ->
+                    match e.Guild.GetChannel outputChannelId with
+                    | null -> ()
+                    | outputChannel ->
+                        let msg = sprintf "%s поднялся до %d уровня." e.Author.Username newLevel
+                        awaiti (outputChannel.SendMessageAsync(msg))
+                | None -> ()
+
+                // TODO: дать роль, если она подошла по условиям
+
+            let newRank =
+                { rank with Exp = newExp }
+
+            Rankings.replace newRank
+
+            { state with
+                Rankings =
+                    let m = Map.add userId newRank rankings
+                    Map.add e.Guild.Id m state.Rankings
+            }
+
+        match Map.tryFind userId rankings with
+        | Some rank ->
+            exec rank
+        | None ->
+            let rank = Rankings.insert(e.Guild.Id, userId, 0UL)
+
+            exec rank
+
+    match Map.tryFind e.Guild.Id state.Rankings with
+    | Some rankings ->
+        exec rankings
+    | None ->
+        exec Map.empty
+
 let settingReduce
     (e: EventArgs.MessageCreateEventArgs)
     (msg: SettingMsg)
-    (state: RankingSettings.GuildRankingSettings): RankingSettings.GuildRankingSettings =
+    (state: State): State =
 
     match msg with
     | SetOutputChannel outputChannelId ->
@@ -37,8 +88,10 @@ let settingReduce
             await (e.Channel.SendMessageAsync("Processing..."))
 
         if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-            let state: RankingSettings.GuildRankingSettings =
-                match Map.tryFind e.Guild.Id state with
+            let settings: RankingSettings.GuildRankingSettings =
+                let settings = state.Settings
+
+                match Map.tryFind e.Guild.Id settings with
                 | Some setting ->
                     let newcomersRoles =
                         { setting with
@@ -47,14 +100,44 @@ let settingReduce
 
                     RankingSettings.replace newcomersRoles
 
-                    Map.add guild.Id newcomersRoles state
+                    Map.add guild.Id newcomersRoles settings
                 | None ->
                     let x = RankingSettings.insert (guild.Id, [||], Some outputChannelId)
-                    Map.add guild.Id x state
+                    Map.add guild.Id x settings
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Output channel for ranking has been set")))
 
+            { state with Settings = settings}
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission")))
+
             state
+
+    | SetExp(targetUserId, exp) ->
+        let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync("Processing..."))
+
+        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+            match Map.tryFind guild.Id state.Settings with
+            | Some setting ->
+                let state =
+                    state
+                    |> updateExp
+                        e
+                        targetUserId
+                        setting
+                        (fun _ -> exp)
+
+                let msg = sprintf "User <@!%d> exp has been set to %d" targetUserId exp
+                awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+
+                state
+            | None ->
+                awaiti (replyMessage.ModifyAsync(Entities.Optional "Firstly set up the ranking system"))
+
+                state
         else
             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission")))
 
@@ -67,55 +150,18 @@ let reduce (msg: Msg) (state: State): State =
         else
             match Map.tryFind e.Guild.Id state.Settings with
             | Some setting ->
-                let exec rankings =
-                    let exec (rank: Rankings.RankingData) =
-                        let oldLevel = getLevelByExp rank.Exp
-                        let newExp = rank.Exp + uint64 (r.Next(lowerBoundExp, upperBoundExp + 1))
-                        let newLevel = getLevelByExp newExp
+                state
+                |> updateExp
+                    e
+                    e.Author.Id
+                    setting
+                    (fun currExp ->
+                        currExp + uint64 (r.Next(lowerBoundExp, upperBoundExp + 1)))
 
-                        if newLevel > 0 && oldLevel <> newLevel then
-                            match setting.OutputChannelId with
-                            | Some outputChannelId ->
-                                match e.Guild.GetChannel outputChannelId with
-                                | null -> ()
-                                | outputChannel ->
-                                    let msg = sprintf "%s поднялся до %d уровня." e.Author.Username newLevel
-                                    awaiti (outputChannel.SendMessageAsync(msg))
-                            | None -> ()
-
-                            // TODO: дать роль, если она подошла по условиям
-
-                        let newRank =
-                            { rank with Exp = newExp }
-
-                        Rankings.replace newRank
-
-                        { state with
-                            Rankings =
-                                let m = Map.add e.Author.Id newRank rankings
-                                Map.add e.Guild.Id m state.Rankings
-                        }
-
-                    match Map.tryFind e.Author.Id rankings with
-                    | Some rank ->
-                        exec rank
-                    | None ->
-                        let rank = Rankings.insert(e.Guild.Id, e.Author.Id, 0UL)
-
-                        exec rank
-
-                match Map.tryFind e.Guild.Id state.Rankings with
-                | Some rankings ->
-                    exec rankings
-                | None ->
-                    exec Map.empty
             | None -> state
 
     | SettingMsg (e, msg) ->
-        { state with
-            Settings =
-                settingReduce e msg state.Settings
-        }
+        settingReduce e msg state
 
 let m =
     let init = {
@@ -156,7 +202,14 @@ module Parser =
         skipStringCI "setRankingOutput" >>. spaces
         >>. (pmentionRole <|> puint64)
 
+    let psetExp: _ Parser =
+        skipStringCI "setExp" >>. spaces
+        >>. tuple2
+                ((puserMention <|> puint64) .>> spaces)
+                puint64
+
     let start: _ Parser =
         choice [
             psetOutputChannel |>> SetOutputChannel
+            psetExp |>> SetExp
         ]
