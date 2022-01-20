@@ -52,6 +52,8 @@ type Cmd =
 
     | VoiceChannelNotification of VoiceChannelNotification.Main.VoiceNotificationMsg
 
+    | RankingCmd of Ranking.Main.SettingMsg
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -111,6 +113,8 @@ let pcommand =
         Doorkeeper.Main.Parser.start |>> Doorkeeper
 
         VoiceChannelNotification.Main.Parser.start |>> VoiceChannelNotification
+
+        Ranking.Main.Parser.start |>> RankingCmd
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

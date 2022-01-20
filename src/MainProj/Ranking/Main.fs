@@ -4,8 +4,12 @@ open DSharpPlus
 open Types
 open Model
 
+type SettingMsg =
+    | SetOutputChannel of ChannelId
+
 type Msg =
     | NewMessageHandle of EventArgs.MessageCreateEventArgs
+    | SettingMsg of EventArgs.MessageCreateEventArgs * SettingMsg
 
 type State =
     {
@@ -20,6 +24,42 @@ let inline getLevelByExp exp =
 
 let r = System.Random ()
 
+let settingReduce
+    (e: EventArgs.MessageCreateEventArgs)
+    (msg: SettingMsg)
+    (state: RankingSettings.GuildRankingSettings): RankingSettings.GuildRankingSettings =
+
+    match msg with
+    | SetOutputChannel outputChannelId ->
+        let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync("Processing..."))
+
+        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+            let state: RankingSettings.GuildRankingSettings =
+                match Map.tryFind e.Guild.Id state with
+                | Some setting ->
+                    let newcomersRoles =
+                        { setting with
+                            OutputChannelId = Some outputChannelId
+                        }
+
+                    RankingSettings.replace newcomersRoles
+
+                    Map.add guild.Id newcomersRoles state
+                | None ->
+                    let x = RankingSettings.insert (guild.Id, [||], Some outputChannelId)
+                    Map.add guild.Id x state
+
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("Output channel for ranking has been set")))
+
+            state
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission")))
+
+            state
+
 let reduce (msg: Msg) (state: State): State =
     match msg with
     | NewMessageHandle e ->
@@ -27,14 +67,13 @@ let reduce (msg: Msg) (state: State): State =
         else
             match Map.tryFind e.Guild.Id state.Settings with
             | Some setting ->
-                match Map.tryFind e.Guild.Id state.Rankings with
-                | Some rankings ->
+                let exec rankings =
                     let exec (rank: Rankings.RankingData) =
                         let oldLevel = getLevelByExp rank.Exp
                         let newExp = rank.Exp + uint64 (r.Next(lowerBoundExp, upperBoundExp + 1))
                         let newLevel = getLevelByExp newExp
 
-                        if oldLevel <> newLevel then
+                        if newLevel > 0 && oldLevel <> newLevel then
                             match setting.OutputChannelId with
                             | Some outputChannelId ->
                                 match e.Guild.GetChannel outputChannelId with
@@ -64,8 +103,19 @@ let reduce (msg: Msg) (state: State): State =
                         let rank = Rankings.insert(e.Guild.Id, e.Author.Id, 0UL)
 
                         exec rank
-                | None -> state
+
+                match Map.tryFind e.Guild.Id state.Rankings with
+                | Some rankings ->
+                    exec rankings
+                | None ->
+                    exec Map.empty
             | None -> state
+
+    | SettingMsg (e, msg) ->
+        { state with
+            Settings =
+                settingReduce e msg state.Settings
+        }
 
 let m =
     let init = {
@@ -91,3 +141,22 @@ let m =
 
 let handle (e: EventArgs.MessageCreateEventArgs) =
     m.Post (NewMessageHandle e)
+
+let execSettingCmd e msg =
+    m.Post (SettingMsg (e, msg))
+
+module Parser =
+    open FParsec
+
+    open DiscordMessage.Parser
+
+    type 'Result Parser = Primitives.Parser<'Result, unit>
+
+    let psetOutputChannel: _ Parser =
+        skipStringCI "setRankingOutput" >>. spaces
+        >>. (pmentionRole <|> puint64)
+
+    let start: _ Parser =
+        choice [
+            psetOutputChannel |>> SetOutputChannel
+        ]

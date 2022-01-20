@@ -314,6 +314,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.VoiceChannelNotification msg ->
                 VoiceChannelNotification.Main.execVoiceNotificationCmd e msg
 
+            | CommandParser.RankingCmd msg ->
+                Ranking.Main.execSettingCmd e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
