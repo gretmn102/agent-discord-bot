@@ -14,10 +14,13 @@ type Msg =
     | NewMessageHandle of EventArgs.MessageCreateEventArgs
     | SettingMsg of EventArgs.MessageCreateEventArgs * SettingMsg
 
+type Ticks = int64
+
 type State =
     {
         Settings: RankingSettings.GuildRankingSettings
         Rankings: Rankings.GuildRankings
+        CoolDowns: Map<UserId, Ticks>
     }
 
 let lowerBoundExp, upperBoundExp = 15, 25
@@ -44,17 +47,20 @@ let getLevelBySumExp exp =
             level
     f exp 0UL
 
+let coolDown: Ticks = 10000L * 1000L * 60L // 60 sec
+
 let r = System.Random ()
 
 let updateExp
     (e: EventArgs.MessageCreateEventArgs)
     (userId: UserId)
+    cooldown
     (setting: RankingSettings.RankingSettingData)
     update
-    state =
+    (state: State) =
 
     let exec rankings =
-        let exec (rank: Rankings.RankingData) =
+        let exec (rank: Rankings.RankingData) (state: State) =
             let oldLevel = getLevelBySumExp rank.Exp
             let newExp = update rank.Exp
             let newLevel = getLevelBySumExp newExp
@@ -144,11 +150,37 @@ let updateExp
 
         match Map.tryFind userId rankings with
         | Some rank ->
-            exec rank
+            match Map.tryFind userId state.CoolDowns with
+            | Some lastTime ->
+                let now = System.DateTime.Now.Ticks
+
+                if now - lastTime - cooldown < 0L then
+                    state
+                else
+                    let state =
+                        { state with
+                            CoolDowns = Map.add userId now state.CoolDowns
+                        }
+
+                    exec rank state
+            | None ->
+                let now = System.DateTime.Now.Ticks
+                let state =
+                    { state with
+                        CoolDowns = Map.add userId now state.CoolDowns
+                    }
+
+                exec rank state
         | None ->
             let rank = Rankings.insert(e.Guild.Id, userId, 0UL)
 
-            exec rank
+            let now = System.DateTime.Now.Ticks
+            let state =
+                { state with
+                    CoolDowns = Map.add userId now state.CoolDowns
+                }
+
+            exec rank state
 
     match Map.tryFind e.Guild.Id state.Rankings with
     | Some rankings ->
@@ -208,6 +240,7 @@ let settingReduce
                     |> updateExp
                         e
                         targetUserId
+                        0L
                         setting
                         (fun _ -> exp)
 
@@ -306,6 +339,7 @@ let reduce (msg: Msg) (state: State): State =
                 |> updateExp
                     e
                     e.Author.Id
+                    coolDown
                     setting
                     (fun currExp ->
                         currExp + uint64 (r.Next(lowerBoundExp, upperBoundExp + 1)))
@@ -319,6 +353,7 @@ let m =
     let init = {
         Settings = RankingSettings.getAll ()
         Rankings = Rankings.getAll ()
+        CoolDowns = Map.empty
     }
 
     MailboxProcessor.Start (fun mail ->
