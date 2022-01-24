@@ -52,7 +52,7 @@ type Cmd =
 
     | VoiceChannelNotification of VoiceChannelNotification.Main.VoiceNotificationMsg
 
-    | RankingCmd of Ranking.Main.SettingMsg
+    | RankingCmd of Ranking.Main.Request
 
 let prefix = pchar '.'
 

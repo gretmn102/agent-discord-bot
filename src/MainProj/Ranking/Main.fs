@@ -4,16 +4,19 @@ open DSharpPlus
 open Types
 open Model
 
-type SettingMsg =
+type SettingRequest =
     | SetOutputChannel of ChannelId
-    | SetExp of UserId * uint64
-    | GetRank of UserId option
     | SetLevelRoles of (ChannelId * int) list
     | GetLevelRoles
 
+type Request =
+    | SetExp of UserId * uint64
+    | GetRank of UserId option
+    | SettingRequest of SettingRequest
+
 type Msg =
     | NewMessageHandle of EventArgs.MessageCreateEventArgs
-    | SettingMsg of EventArgs.MessageCreateEventArgs * SettingMsg
+    | Request of EventArgs.MessageCreateEventArgs * Request
 
 type Ticks = int64
 
@@ -191,7 +194,7 @@ let updateExp
 
 let settingReduce
     (e: EventArgs.MessageCreateEventArgs)
-    (msg: SettingMsg)
+    (msg: SettingRequest)
     (state: State): State =
 
     match msg with
@@ -222,37 +225,6 @@ let settingReduce
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Output channel for ranking has been set")))
 
             { state with Settings = settings}
-        else
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission")))
-
-            state
-
-    | SetExp(targetUserId, exp) ->
-        let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-
-        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-            match Map.tryFind guild.Id state.Settings with
-            | Some setting ->
-                let state =
-                    state
-                    |> updateExp
-                        e
-                        targetUserId
-                        0L
-                        setting
-                        (fun _ -> exp)
-
-                let msg = sprintf "User <@!%d> exp has been set to %d" targetUserId exp
-                awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
-
-                state
-            | None ->
-                awaiti (replyMessage.ModifyAsync(Entities.Optional "Firstly set up the ranking system"))
-
-                state
         else
             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission")))
 
@@ -328,6 +300,12 @@ let settingReduce
 
         state
 
+let requestReduce
+    (e: EventArgs.MessageCreateEventArgs)
+    (msg: Request)
+    (state: State): State =
+
+    match msg with
     | GetRank userId ->
         let msg =
             let userId = match userId with None -> e.Author.Id | Some userId -> userId
@@ -365,6 +343,40 @@ let settingReduce
 
         state
 
+    | SetExp(targetUserId, exp) ->
+        let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync("Processing..."))
+
+        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+            match Map.tryFind guild.Id state.Settings with
+            | Some setting ->
+                let state =
+                    state
+                    |> updateExp
+                        e
+                        targetUserId
+                        0L
+                        setting
+                        (fun _ -> exp)
+
+                let msg = sprintf "User <@!%d> exp has been set to %d" targetUserId exp
+                awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+
+                state
+            | None ->
+                awaiti (replyMessage.ModifyAsync(Entities.Optional "Firstly set up the ranking system"))
+
+                state
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission")))
+
+            state
+
+    | SettingRequest settingMsg ->
+        settingReduce e settingMsg state
+
 let reduce (msg: Msg) (state: State): State =
     match msg with
     | NewMessageHandle e ->
@@ -383,8 +395,8 @@ let reduce (msg: Msg) (state: State): State =
 
             | None -> state
 
-    | SettingMsg (e, msg) ->
-        settingReduce e msg state
+    | Request (e, msg) ->
+        requestReduce e msg state
 
 let m =
     let init = {
@@ -413,7 +425,7 @@ let handle (e: EventArgs.MessageCreateEventArgs) =
     m.Post (NewMessageHandle e)
 
 let execSettingCmd e msg =
-    m.Post (SettingMsg (e, msg))
+    m.Post (Request (e, msg))
 
 module Parser =
     open FParsec
@@ -449,10 +461,14 @@ module Parser =
         >>. opt (puserMention <|> puint64)
 
     let start: _ Parser =
+        let psetting =
+            choice [
+                psetOutputChannel |>> SetOutputChannel
+                psetLevelRoles |>> SetLevelRoles
+                pgetLevelRoles >>% GetLevelRoles
+            ]
         choice [
-            psetOutputChannel |>> SetOutputChannel
-            psetExp |>> SetExp
-            psetLevelRoles |>> SetLevelRoles
-            pgetLevelRoles >>% GetLevelRoles
             pgetRank |>> GetRank
+            psetExp |>> SetExp
+            psetting |>> SettingRequest
         ]
