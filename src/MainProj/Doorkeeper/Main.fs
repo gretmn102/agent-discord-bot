@@ -1,21 +1,87 @@
 /// An entity that welcomes newbies and give a role or says goodbye to the leavers
 module Doorkeeper.Main
+open FsharpMyExtension
+open FsharpMyExtension.Either
 open DSharpPlus
 
 open Types
 open Model
 
+type Template =
+    | Text of string
+    | UserName
+    | UserMention
+    static member UserNameName = "userName"
+    static member UserMentionName = "userMention"
+
+    static member ToString = function
+        | Text x -> x
+        | UserName -> sprintf "<@%s>" Template.UserNameName
+        | UserMention -> sprintf "<@%s>" Template.UserMentionName
+
 type NewcomersRolesMsg =
     | SetNewcomersRoles of RoleId list
     | GetNewcomersRoles
 
+type WelcomeSettingMsg =
+    | SetWelcomeSetting of ChannelId * Template list
+
+type Request =
+    | NewcomersRolesReq of NewcomersRolesMsg
+    | WelcomeSettingReq of WelcomeSettingMsg
+
+module Parser =
+    open FParsec
+
+    open DiscordMessage.Parser
+
+    type 'Result Parser = Primitives.Parser<'Result, unit>
+
+    let pgetNewcomersRoles: _ Parser =
+        skipStringCI "newcomersRoles"
+
+    let psetNewcomersRoles: RoleId list Parser =
+        skipStringCI "setNewcomersRoles" >>. spaces
+        >>. many (pmentionRole <|> puint64 .>> spaces)
+
+    let ptemplateMessage: _ Parser =
+        let praw = many1Satisfy ((<>) '<')
+        let pall =
+            choice [
+                praw |>> Template.Text
+                puserMentionTargetStr Template.UserNameName >>% UserName
+                puserMentionTargetStr Template.UserMentionName >>% UserMention
+                pstring "<" |>> Template.Text
+            ]
+
+        many pall
+
+    let psetWelcomeMessage: _ Parser =
+        skipStringCI "setWelcomeSetting" >>. spaces
+        >>. tuple2
+                (pchannelMention .>> spaces)
+                ptemplateMessage
+
+    let start: _ Parser =
+        let p =
+            choice [
+                psetNewcomersRoles |>> SetNewcomersRoles
+                pgetNewcomersRoles >>% GetNewcomersRoles
+
+            ]
+        choice [
+            p |>> NewcomersRolesReq
+            psetWelcomeMessage |>> (SetWelcomeSetting >> WelcomeSettingReq)
+        ]
+
 type Msg =
-    | NewcomersRolesCmd of EventArgs.MessageCreateEventArgs * NewcomersRolesMsg
+    | Request of EventArgs.MessageCreateEventArgs * Request
     | GuildMemberAddedHandle of EventArgs.GuildMemberAddEventArgs
 
 type State =
     {
         NewcomersRoles: NewcomersRoles.GuildNewcomersRoles
+        WelcomeSetting: WelcomeSetting.GuildWelcomeSetting
     }
 
 let newcomersRolesReduce
@@ -86,10 +152,74 @@ let newcomersRolesReduce
 
         guildNewcomersRoles
 
+let welcomeSettingReduce
+    (e: EventArgs.MessageCreateEventArgs)
+    (msg: WelcomeSettingMsg)
+    (guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting): WelcomeSetting.GuildWelcomeSetting =
+
+    match msg with
+    | SetWelcomeSetting(channelId, template) ->
+        let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync("Processing..."))
+
+        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+            let template = template |> List.map Template.ToString |> String.concat ""
+            let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
+                match Map.tryFind e.Guild.Id guildWelcomeSetting with
+                | Some welcomeSettingData ->
+                    let newcomersRoles =
+                        { welcomeSettingData with
+                            OutputChannel = Some channelId
+                            TemplateMessage =
+                                Some template
+
+                        }
+
+                    WelcomeSetting.replace newcomersRoles
+
+                    Map.add guild.Id newcomersRoles guildWelcomeSetting
+                | None ->
+                    let x = WelcomeSetting.insert (guild.Id, Some channelId, Some template)
+                    Map.add guild.Id x guildWelcomeSetting
+
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome setting has been set")))
+
+            guildWelcomeSetting
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+
+            guildWelcomeSetting
+
 let reduce (msg: Msg) (state: State): State =
     match msg with
     | GuildMemberAddedHandle e ->
-        match Map.tryFind e.Guild.Id state.NewcomersRoles with
+        let guildId = e.Guild.Id
+
+        match Map.tryFind guildId state.WelcomeSetting with
+        | Some data ->
+            match data.OutputChannel, data.TemplateMessage with
+            | Some outputChannelId, Some templateMessage ->
+                match e.Guild.GetChannel outputChannelId with
+                | null -> ()
+                | outputChannel ->
+                    FParsecUtils.runEither Parser.ptemplateMessage templateMessage
+                    |> Either.map (
+                        List.map (function
+                            | Text x -> x
+                            | UserMention -> e.Member.Mention
+                            | UserName -> e.Member.Username
+                        )
+                        >> System.String.Concat
+                    )
+                    |> Either.iter (fun msg ->
+                        awaiti <| outputChannel.SendMessageAsync msg
+                    )
+            | _ -> ()
+        | None -> ()
+
+        match Map.tryFind guildId state.NewcomersRoles with
         | Some data ->
             data.RoleIds
             |> Seq.iter (fun roleId ->
@@ -106,15 +236,23 @@ let reduce (msg: Msg) (state: State): State =
 
         state
 
-    | NewcomersRolesCmd (e, cmd) ->
-        { state with
-            NewcomersRoles =
-                newcomersRolesReduce e cmd state.NewcomersRoles
-        }
+    | Request(e, cmd) ->
+        match cmd with
+        | NewcomersRolesReq cmd ->
+            { state with
+                NewcomersRoles =
+                    newcomersRolesReduce e cmd state.NewcomersRoles
+            }
+        | WelcomeSettingReq cmd ->
+            { state with
+                WelcomeSetting =
+                    welcomeSettingReduce e cmd state.WelcomeSetting
+            }
 
 let m =
     let init = {
         NewcomersRoles = NewcomersRoles.getAll ()
+        WelcomeSetting = WelcomeSetting.getAll ()
     }
 
     MailboxProcessor.Start (fun mail ->
@@ -137,25 +275,5 @@ let handle (e: EventArgs.GuildMemberAddEventArgs) =
     m.Post (GuildMemberAddedHandle e)
 
 let execNewcomersRolesCmd e msg =
-    m.Post (NewcomersRolesCmd (e, msg))
+    m.Post (Request (e, msg))
 
-module Parser =
-    open FParsec
-
-    open DiscordMessage.Parser
-
-    type 'Result Parser = Primitives.Parser<'Result, unit>
-
-    let pgetNewcomersRoles: _ Parser =
-        skipStringCI "newcomersRoles"
-
-    let psetNewcomersRoles: RoleId list Parser =
-        skipStringCI "setNewcomersRoles" >>. spaces
-        >>. many (pmentionRole <|> puint64 .>> spaces)
-
-    let start: _ Parser =
-        choice [
-            psetNewcomersRoles |>> SetNewcomersRoles
-
-            pgetNewcomersRoles >>% GetNewcomersRoles
-        ]

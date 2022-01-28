@@ -48,7 +48,7 @@ type Cmd =
     | SetTemplateRole of RoleId
     | UpdateUserRolesPermissions
 
-    | Doorkeeper of Doorkeeper.Main.NewcomersRolesMsg
+    | Doorkeeper of Doorkeeper.Main.Request
 
     | VoiceChannelNotification of VoiceChannelNotification.Main.VoiceNotificationMsg
 
