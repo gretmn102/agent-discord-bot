@@ -197,6 +197,21 @@ let reduce (msg: Msg) (state: State): State =
     | GuildMemberAddedHandle e ->
         let guildId = e.Guild.Id
 
+        match Map.tryFind guildId state.NewcomersRoles with
+        | Some data ->
+            data.RoleIds
+            |> Seq.iter (fun roleId ->
+                match e.Guild.Roles.[roleId] with
+                | null -> ()
+                | role ->
+                    try
+                        e.Member.GrantRoleAsync(role)
+                        |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
+                    with e ->
+                        printfn "%A" e.Message
+            )
+        | None -> ()
+
         match Map.tryFind guildId state.WelcomeSetting with
         | Some data ->
             match data.OutputChannel, data.TemplateMessage with
@@ -217,21 +232,6 @@ let reduce (msg: Msg) (state: State): State =
                         awaiti <| outputChannel.SendMessageAsync msg
                     )
             | _ -> ()
-        | None -> ()
-
-        match Map.tryFind guildId state.NewcomersRoles with
-        | Some data ->
-            data.RoleIds
-            |> Seq.iter (fun roleId ->
-                match e.Guild.Roles.[roleId] with
-                | null -> ()
-                | role ->
-                    try
-                        e.Member.GrantRoleAsync(role)
-                        |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
-                    with e ->
-                        printfn "%A" e.Message
-            )
         | None -> ()
 
         state
