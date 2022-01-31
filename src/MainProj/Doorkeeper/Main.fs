@@ -195,44 +195,45 @@ let welcomeSettingReduce
 let reduce (msg: Msg) (state: State): State =
     match msg with
     | GuildMemberAddedHandle e ->
-        let guildId = e.Guild.Id
+        if not e.Member.IsBot then
+            let guildId = e.Guild.Id
 
-        match Map.tryFind guildId state.NewcomersRoles with
-        | Some data ->
-            data.RoleIds
-            |> Seq.iter (fun roleId ->
-                match e.Guild.Roles.[roleId] with
-                | null -> ()
-                | role ->
-                    try
-                        e.Member.GrantRoleAsync(role)
-                        |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
-                    with e ->
-                        printfn "%A" e.Message
-            )
-        | None -> ()
+            match Map.tryFind guildId state.NewcomersRoles with
+            | Some data ->
+                data.RoleIds
+                |> Seq.iter (fun roleId ->
+                    match e.Guild.Roles.[roleId] with
+                    | null -> ()
+                    | role ->
+                        try
+                            e.Member.GrantRoleAsync(role)
+                            |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
+                        with e ->
+                            printfn "%A" e.Message
+                )
+            | None -> ()
 
-        match Map.tryFind guildId state.WelcomeSetting with
-        | Some data ->
-            match data.OutputChannel, data.TemplateMessage with
-            | Some outputChannelId, Some templateMessage ->
-                match e.Guild.GetChannel outputChannelId with
-                | null -> ()
-                | outputChannel ->
-                    FParsecUtils.runEither Parser.ptemplateMessage templateMessage
-                    |> Either.map (
-                        List.map (function
-                            | Text x -> x
-                            | UserMention -> e.Member.Mention
-                            | UserName -> e.Member.Username
+            match Map.tryFind guildId state.WelcomeSetting with
+            | Some data ->
+                match data.OutputChannel, data.TemplateMessage with
+                | Some outputChannelId, Some templateMessage ->
+                    match e.Guild.GetChannel outputChannelId with
+                    | null -> ()
+                    | outputChannel ->
+                        FParsecUtils.runEither Parser.ptemplateMessage templateMessage
+                        |> Either.map (
+                            List.map (function
+                                | Text x -> x
+                                | UserMention -> e.Member.Mention
+                                | UserName -> e.Member.Username
+                            )
+                            >> System.String.Concat
                         )
-                        >> System.String.Concat
-                    )
-                    |> Either.iter (fun msg ->
-                        awaiti <| outputChannel.SendMessageAsync msg
-                    )
-            | _ -> ()
-        | None -> ()
+                        |> Either.iter (fun msg ->
+                            awaiti <| outputChannel.SendMessageAsync msg
+                        )
+                | _ -> ()
+            | None -> ()
 
         state
 
