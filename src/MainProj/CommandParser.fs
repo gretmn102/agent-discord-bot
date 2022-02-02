@@ -54,6 +54,8 @@ type Cmd =
 
     | RankingCmd of Ranking.Main.Request
 
+    | MusicCmd of Music.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -115,6 +117,8 @@ let pcommand =
         VoiceChannelNotification.Main.Parser.start |>> VoiceChannelNotification
 
         Ranking.Main.Parser.start |>> RankingCmd
+
+        Music.Main.Parser.start |>> MusicCmd
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

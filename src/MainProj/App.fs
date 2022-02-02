@@ -2,8 +2,9 @@ module App
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open Microsoft.Extensions.Logging
-
 open System.Threading.Tasks
+open DSharpPlus.VoiceNext
+
 open Types
 open Svg
 
@@ -314,6 +315,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.VoiceChannelNotification msg ->
                 VoiceChannelNotification.Main.execVoiceNotificationCmd e msg
 
+            | CommandParser.MusicCmd msg ->
+                Music.Main.exec client e msg
+
             | CommandParser.RankingCmd msg ->
                 Ranking.Main.execSettingCmd e msg
 
@@ -399,6 +403,8 @@ let main argv =
         config.set_Intents (DSharpPlus.DiscordIntents.AllUnprivileged ||| DSharpPlus.DiscordIntents.GuildMembers)
 
         let client = new DSharpPlus.DiscordClient(config)
+
+        let voice = client.UseVoiceNext()
 
         client.add_Ready(Emzi0767.Utilities.AsyncEventHandler (fun client readyEventArgs ->
             client.Logger.LogInformation(botEventId, "Client is ready to process events.")
