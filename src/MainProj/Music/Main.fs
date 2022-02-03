@@ -7,10 +7,14 @@ open Types
 type Request =
     | Join
     | Leave
+    | Play of string
+    | Stop
 
 type Msg = DiscordClient * EventArgs.MessageCreateEventArgs * Request
 
-type State = { Empty: unit }
+type State = {
+    CancelationToken: System.Threading.CancellationTokenSource
+}
 
 let reduce (msg: Msg) (state: State) =
     match msg with
@@ -18,7 +22,7 @@ let reduce (msg: Msg) (state: State) =
         match client.GetVoiceNext() with
         | null ->
             awaiti <| e.Channel.SendMessageAsync("VNext is not enabled or configured.")
-
+            state
         | vnext ->
             match msg with
             | Join ->
@@ -37,6 +41,7 @@ let reduce (msg: Msg) (state: State) =
                 | vnc ->
                     awaiti <| e.Channel.SendMessageAsync("Already connected in this guild.")
 
+                state
             | Leave ->
                 match vnext.GetConnection(e.Guild) with
                 | null ->
@@ -44,11 +49,78 @@ let reduce (msg: Msg) (state: State) =
                 | vnc ->
                     vnc.Disconnect()
 
-        state
+                state
+            | Play path ->
+                match vnext.GetConnection(e.Guild) with
+                | null ->
+                    awaiti <| e.Channel.SendMessageAsync("Not connected in this guild.")
+
+                    state
+                | vnc ->
+                    let cancelToken =
+                        if vnc.IsPlaying then
+                            state.CancelationToken.Cancel()
+
+                            new System.Threading.CancellationTokenSource()
+                        else
+                            state.CancelationToken
+
+                    vnc.WaitForPlaybackFinishAsync().GetAwaiter().GetResult()
+
+                    async {
+                        try
+                            do! Async.AwaitTask(vnc.SendSpeakingAsync(true))
+                            let psi =
+                                new System.Diagnostics.ProcessStartInfo (
+                                    FileName = "ffmpeg.exe",
+                                    Arguments = sprintf "-i \"%s\" -ac 2 -f s16le -ar 48000 pipe:1 -loglevel quiet" path,
+                                    RedirectStandardOutput = true,
+                                    UseShellExecute = false
+                                )
+                            use ffmpeg = System.Diagnostics.Process.Start psi
+                            use ffout = ffmpeg.StandardOutput.BaseStream
+
+                            let txStream = vnc.GetTransmitSink()
+
+                            do! Async.AwaitTask(ffout.CopyToAsync(txStream, cancellationToken=cancelToken.Token))
+
+                            do! Async.AwaitTask(txStream.FlushAsync())
+                            do! Async.AwaitTask(vnc.WaitForPlaybackFinishAsync())
+                            do! Async.AwaitTask(vnc.SendSpeakingAsync(false))
+                            let msg = sprintf "Finished playing %s" path
+                            let! _ = Async.AwaitTask(e.Channel.SendMessageAsync(msg))
+                            ()
+                        with ex ->
+                            let msg = sprintf "```%s```" ex.Message
+                            let! _ = Async.AwaitTask(e.Channel.SendMessageAsync msg)
+                            ()
+                    }
+                    |> Async.Start
+
+                    { state with
+                        CancelationToken = cancelToken }
+
+            | Stop ->
+                match vnext.GetConnection(e.Guild) with
+                | null ->
+                    awaiti <| e.Channel.SendMessageAsync("Not connected in this guild.")
+
+                    state
+                | vnc ->
+                    let cancelToken =
+                        if vnc.IsPlaying then
+                            state.CancelationToken.Cancel()
+
+                            new System.Threading.CancellationTokenSource()
+                        else
+                            state.CancelationToken
+
+                    { state with
+                        CancelationToken = cancelToken }
 
 let m =
     let init = {
-        Empty = ()
+        CancelationToken = new System.Threading.CancellationTokenSource()
     }
 
     MailboxProcessor.Start (fun mail ->
@@ -83,8 +155,17 @@ module Parser =
     let pleave: _ Parser =
         skipStringCI "leave"
 
+    let pplay: _ Parser =
+        skipStringCI "play" >>. spaces
+        >>. manySatisfy (fun _ -> true)
+
+    let pstop: _ Parser =
+        skipStringCI "stop"
+
     let start =
         choice [
             pjoin >>% Join
             pleave >>% Leave
+            pplay |>> Play
+            pstop >>% Stop
         ]
