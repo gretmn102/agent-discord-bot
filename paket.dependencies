@@ -13,8 +13,9 @@ nuget Newtonsoft.Json
 nuget Newtonsoft.Json.Bson
 nuget YamlDotNet
 nuget TextCopy
-nuget SixLabors.ImageSharp
-nuget SixLabors.ImageSharp.Drawing
+nuget SixLabors.ImageSharp == 1.0.4
+nuget SixLabors.Fonts == 1.0.0-beta15
+nuget SixLabors.ImageSharp.Drawing == 1.0.0-beta13
 nuget Svg
 nuget MongoDB.Driver
 
