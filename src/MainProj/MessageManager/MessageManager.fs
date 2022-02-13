@@ -5,8 +5,11 @@ open DSharpPlus
 
 open Types
 
+type MessageUrl = string
+
 type Request =
     | SendMessage of Either<string, ChannelId * Entities.DiscordMessageBuilder>
+    | GetMessage of MessagePath
 
 module Parser =
     open FParsec
@@ -37,10 +40,48 @@ module Parser =
                     with e ->
                         Left e.Message)
 
+    let pgetMessage: _ Parser =
+        skipStringCI "getMessage" >>. spaces
+        >>. pipe3
+                (skipString "https://discord.com/channels/" >>. puint64 .>> pchar '/')
+                (puint64 .>> pchar '/')
+                puint64
+                (fun guildId channelId messageId ->
+                    {
+                        GuildId = guildId
+                        ChannelId = channelId
+                        MessageId = messageId
+                    }
+                )
+
     let start: _ Parser =
         choice [
             psendMessage |>> SendMessage
+            pgetMessage |>> GetMessage
         ]
+
+
+open Newtonsoft.Json
+
+type RestChannelMessageEditPayload = {
+    [<JsonProperty("content", NullValueHandling = NullValueHandling.Include)>]
+    Content: string
+
+    [<JsonProperty("embeds", NullValueHandling = NullValueHandling.Ignore)>]
+    Embeds: Entities.DiscordEmbed System.Collections.Generic.IReadOnlyList
+
+    // [<JsonProperty("allowed_mentions", NullValueHandling = NullValueHandling.Ignore)>]
+    // Mentions: DiscordMentions
+
+    [<JsonProperty("components", NullValueHandling = NullValueHandling.Ignore)>]
+    Components: System.Collections.Generic.IReadOnlyCollection<Entities.DiscordActionRowComponent>
+
+    [<JsonProperty("flags", NullValueHandling = NullValueHandling.Ignore)>]
+    Flags: System.Nullable<MessageFlags>
+
+    [<JsonProperty("attachments", NullValueHandling = NullValueHandling.Ignore)>]
+    Attachments: Entities.DiscordAttachment System.Collections.Generic.IReadOnlyList
+}
 
 
 type Msg = EventArgs.MessageCreateEventArgs * Request
@@ -68,6 +109,51 @@ let reduce ((e, msg): Msg) (state: State): State =
                     awaiti (replyMessage.ModifyAsync(Entities.Optional("Done")))
             | Left x ->
                 awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "```\n%s\n```" x)))
+        else
+            let msg =
+                sprintf "%s you don't have administration permission for this command" e.Author.Mention
+            awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+
+        state
+
+    | GetMessage messagePath ->
+        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync("Processing..."))
+        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+            if e.Guild.Id = messagePath.GuildId then
+                match e.Guild.GetChannel messagePath.ChannelId with
+                | null ->
+                    let msg =
+                        sprintf "Not found %d channel" messagePath.ChannelId
+
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+                | channel ->
+                    match await (channel.GetMessageAsync messagePath.MessageId) with
+                    | null ->
+                        let msg =
+                            sprintf "Not found %d message" messagePath.MessageId
+
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+                    | msg ->
+                        let msg =
+                            {
+                                Content = msg.Content
+                                Embeds = msg.Embeds
+                                Components = msg.Components
+                                Flags = msg.Flags
+                                Attachments = msg.Attachments
+                            }
+
+                        let msg =
+                            sprintf "```\n%s\n```" (Net.Serialization.DiscordJson.SerializeObject(msg))
+
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+            else
+                let msg =
+                    sprintf "You can specify a message only for the current guild"
+
+                awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
         else
             let msg =
                 sprintf "%s you don't have administration permission for this command" e.Author.Mention
