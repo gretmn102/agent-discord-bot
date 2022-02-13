@@ -322,7 +322,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 Ranking.Main.execSettingCmd e msg
 
             | CommandParser.MessageManagerCmd msg ->
-                MessageManager.exec e msg
+                MessageManager.exec client e msg
 
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
