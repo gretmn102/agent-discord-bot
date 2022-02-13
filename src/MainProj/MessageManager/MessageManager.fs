@@ -124,9 +124,15 @@ let reduce ((client, e, msg): Msg) (state: State): State =
                         sprintf "%d channel not found" targetChannelId
                     awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
                 | targetChannel ->
-                    awaiti (targetChannel.SendMessageAsync msg)
+                    try
+                        awaiti (targetChannel.SendMessageAsync msg)
 
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional("Done")))
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional("Done")))
+                    with e ->
+                        let msg =
+                            sprintf "```\n%s\n```" e.Message
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional(msg)))
+
             | Left x ->
                 awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "```\n%s\n```" x)))
         else
