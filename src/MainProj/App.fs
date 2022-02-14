@@ -324,6 +324,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.MessageManagerCmd msg ->
                 MessageManager.exec client e msg
 
+            | CommandParser.ReactionEventCmd msg ->
+                ReactionEvent.Main.exec e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -458,6 +461,18 @@ let main argv =
         ))
 
         client.add_GuildMemberRemoved (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            Task.CompletedTask
+        ))
+
+        client.add_MessageReactionAdded (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            ReactionEvent.Main.handle (ReactionEvent.Main.AddedEvent e)
+
+            Task.CompletedTask
+        ))
+
+        client.add_MessageReactionRemoved (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            ReactionEvent.Main.handle (ReactionEvent.Main.RemovedEvent e)
+
             Task.CompletedTask
         ))
 

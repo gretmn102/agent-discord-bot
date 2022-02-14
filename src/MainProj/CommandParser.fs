@@ -54,6 +54,8 @@ type Cmd =
 
     | MessageManagerCmd of MessageManager.Request
 
+    | ReactionEventCmd of ReactionEvent.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -119,6 +121,8 @@ let pcommand =
         Music.Main.Parser.start |>> MusicCmd
 
         MessageManager.Parser.start |>> MessageManagerCmd
+
+        ReactionEvent.Main.Parser.start |>> ReactionEventCmd
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

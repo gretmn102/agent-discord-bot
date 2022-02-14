@@ -55,6 +55,8 @@
     <Compile Include="BallotBox.fs" />
     <Compile Include="Quiz\Quiz.fs" />
     <Compile Include="MessageManager\MessageManager.fs" />
+    <Compile Include="ReactionEvent\Model.fs" />
+    <Compile Include="ReactionEvent\Main.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />
