@@ -365,11 +365,11 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                     awaiti (client.SendMessageAsync (e.Channel, b))
                 let emojiImgWidth = 32
                 match emoji with
-                | CommandParser.CustomEmoji emoji ->
+                | DiscordMessage.CustomEmoji emoji ->
                     let emojiSrc = sprintf "https://cdn.discordapp.com/emojis/%d.png?size=%d" emoji.Id emojiImgWidth
                     let emojiImg = WebClientDownloader.getData [] emojiSrc
                     emojiFont emojiImg
-                | CommandParser.UnicodeEmoji emoji ->
+                | DiscordMessage.UnicodeEmoji emoji ->
                     match StandartDiscordEmoji.getEmojiSheet () with
                     | Right emojiSheet ->
                         use m = new System.IO.MemoryStream()

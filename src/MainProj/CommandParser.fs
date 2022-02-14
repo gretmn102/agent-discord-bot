@@ -24,10 +24,6 @@ type Act =
     | Catch
     | Angry
 
-type UnicodeOrCustomEmoji =
-    | UnicodeEmoji of string
-    | CustomEmoji of CustomEmoji
-
 type Cmd =
     | Act of Act * UserId option
     | MassShip of UserId list
@@ -129,7 +125,7 @@ let pcommand =
         pmassShip
 
         skipStringCI "emojiFont" >>. spaces
-        >>. (pcustomEmoji |>> CustomEmoji <|> (many1Satisfy ((<>) ' ') |>> UnicodeEmoji) .>> spaces)
+        >>. (pemoji .>> spaces)
         .>>. manySatisfy (fun _ -> true)
         |>> EmojiFont
     ]

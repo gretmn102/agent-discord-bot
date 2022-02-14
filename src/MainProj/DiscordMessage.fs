@@ -8,6 +8,10 @@ type CustomEmoji =
         Name: string
     }
 
+type UnicodeOrCustomEmoji =
+    | UnicodeEmoji of string
+    | CustomEmoji of CustomEmoji
+
 module Parser =
     open FParsec
 
@@ -63,3 +67,6 @@ module Parser =
                     MessageId = messageId
                 }
             )
+
+    let pemoji<'u> : Parser<_, 'u> =
+        pcustomEmoji |>> CustomEmoji <|> (many1Satisfy ((<>) ' ') |>> UnicodeEmoji)
