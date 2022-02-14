@@ -43,19 +43,6 @@ module Parser =
                     with e ->
                         Left e.Message)
 
-    let pmessagePath: _ Parser =
-        pipe3
-            (skipString "https://discord.com/channels/" >>. puint64 .>> pchar '/')
-            (puint64 .>> pchar '/')
-            puint64
-            (fun guildId channelId messageId ->
-                {
-                    GuildId = guildId
-                    ChannelId = channelId
-                    MessageId = messageId
-                }
-            )
-
     let pgetMessage: _ Parser =
         skipStringCI "getMessage" >>. spaces
         >>. pmessagePath

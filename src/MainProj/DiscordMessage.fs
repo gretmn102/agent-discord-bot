@@ -50,3 +50,16 @@ module Parser =
                     Name = name
                 }
             )
+
+    let pmessagePath<'u> : Parser<_, 'u> =
+        pipe3
+            (skipString "https://discord.com/channels/" >>. puint64 .>> pchar '/')
+            (puint64 .>> pchar '/')
+            puint64
+            (fun guildId channelId messageId ->
+                {
+                    GuildId = guildId
+                    ChannelId = channelId
+                    MessageId = messageId
+                }
+            )
