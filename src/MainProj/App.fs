@@ -465,13 +465,15 @@ let main argv =
         ))
 
         client.add_MessageReactionAdded (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            ReactionEvent.Main.handle (ReactionEvent.Main.AddedEvent e)
+            if client.CurrentUser.Id <> e.User.Id then
+                ReactionEvent.Main.handle (ReactionEvent.Main.AddedEvent e)
 
             Task.CompletedTask
         ))
 
         client.add_MessageReactionRemoved (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            ReactionEvent.Main.handle (ReactionEvent.Main.RemovedEvent e)
+            if client.CurrentUser.Id <> e.User.Id then
+                ReactionEvent.Main.handle (ReactionEvent.Main.RemovedEvent e)
 
             Task.CompletedTask
         ))
