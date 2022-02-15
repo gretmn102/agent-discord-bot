@@ -11,6 +11,7 @@ type Request =
     | SendMessage of Either<string, ChannelId * Entities.DiscordMessageBuilder>
     | GetMessage of MessagePath
     | EditMessage of Either<string, MessagePath * Entities.DiscordMessageBuilder>
+    | SwitchBotReactions of MessagePath * DiscordMessage.UnicodeOrCustomEmoji list
 
 module Parser =
     open FParsec
@@ -60,11 +61,18 @@ module Parser =
                     with e ->
                         Left e.Message)
 
+    let pswitchBotReactions: _ Parser =
+        skipStringCI "switchBotReactions" >>. spaces
+        >>. tuple2
+                (pmessagePath .>> spaces)
+                (many1 (pemoji .>> spaces))
+
     let start: _ Parser =
         choice [
             psendMessage |>> SendMessage
             pgetMessage |>> GetMessage
             peditMessage |>> EditMessage
+            pswitchBotReactions |>> SwitchBotReactions
         ]
 
 
@@ -215,6 +223,65 @@ let reduce ((client, e, msg): Msg) (state: State): State =
                         sprintf "```\n%s\n```" errMsg
 
                     awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+        else
+            let msg =
+                sprintf "%s you don't have administration permission for this command" e.Author.Mention
+            awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+
+        state
+
+    | SwitchBotReactions(messagePath, emojis) ->
+        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync("Processing..."))
+        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+            if e.Guild.Id = messagePath.GuildId then
+                match e.Guild.GetChannel messagePath.ChannelId with
+                | null ->
+                    let msg =
+                        sprintf "Not found %d channel" messagePath.ChannelId
+
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+                | channel ->
+                    match await (channel.GetMessageAsync messagePath.MessageId) with
+                    | null ->
+                        let msg =
+                            sprintf "Not found %d message" messagePath.MessageId
+
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+
+                    | msg ->
+                        emojis
+                        |> List.iter (fun emoji ->
+                            let emoji =
+                                match emoji with
+                                | DiscordMessage.CustomEmoji x ->
+                                    match Entities.DiscordEmoji.TryFromGuildEmote(client, x.Id) with
+                                    | true, emoji -> Some emoji
+                                    | false, _ -> None
+                                | DiscordMessage.UnicodeEmoji x ->
+                                    match Entities.DiscordEmoji.TryFromUnicode(client, x) with
+                                    | true, emoji -> Some emoji
+                                    | false, _ -> None
+
+                            emoji
+                            |> Option.iter (fun emoji ->
+                                let reactions = await (msg.GetReactionsAsync(emoji))
+                                if reactions |> Seq.exists (fun x -> x.Id = client.CurrentUser.Id) then
+                                    (msg.DeleteOwnReactionAsync emoji).GetAwaiter().GetResult()
+                                else
+                                    (msg.CreateReactionAsync emoji).GetAwaiter().GetResult()
+                            )
+                        )
+
+                        let msg = "Done"
+
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+            else
+                let msg =
+                    sprintf "You can specify a message only for the current guild"
+
+                awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
         else
             let msg =
                 sprintf "%s you don't have administration permission for this command" e.Author.Mention
