@@ -120,9 +120,13 @@ let reduce ((client, e, msg): Msg) (state: State): State =
                     awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
                 | targetChannel ->
                     try
-                        awaiti (targetChannel.SendMessageAsync msg)
+                        let newMessage = await (targetChannel.SendMessageAsync msg)
 
-                        awaiti (replyMessage.ModifyAsync(Entities.Optional("Done")))
+                        let msg =
+                            sprintf "%s\nDone!"
+                                (MessagePath.OfDiscordMessage newMessage).ToDiscordPath
+
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
                     with e ->
                         let msg =
                             sprintf "```\n%s\n```" e.Message

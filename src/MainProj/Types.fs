@@ -28,6 +28,14 @@ type MessagePath =
         ChannelId: ChannelId
         MessageId: MessageId
     }
+    static member OfDiscordMessage (msg: DSharpPlus.Entities.DiscordMessage) =
+        {
+            GuildId = msg.Channel.Guild.Id
+            ChannelId = msg.Channel.Id
+            MessageId = msg.Id
+        }
+    member this.ToDiscordPath =
+        sprintf "https://discord.com/channels/%d/%d/%d" this.GuildId this.ChannelId this.MessageId
 
 module StandartDiscordEmoji =
     let emojiSheetMapWidth = 42
