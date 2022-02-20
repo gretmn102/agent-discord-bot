@@ -56,6 +56,8 @@ type Cmd =
 
     | ReactionEventCmd of ReactionEvent.Main.Request
 
+    | BirthdayCmd of Birthday.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -123,6 +125,8 @@ let pcommand =
         MessageManager.Parser.start |>> MessageManagerCmd
 
         ReactionEvent.Main.Parser.start |>> ReactionEventCmd
+
+        Birthday.Main.Parser.start |>> BirthdayCmd
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

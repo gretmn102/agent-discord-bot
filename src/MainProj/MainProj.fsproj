@@ -57,6 +57,8 @@
     <Compile Include="MessageManager\MessageManager.fs" />
     <Compile Include="ReactionEvent\Model.fs" />
     <Compile Include="ReactionEvent\Main.fs" />
+    <Compile Include="Birthday\Model.fs" />
+    <Compile Include="Birthday\Main.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />

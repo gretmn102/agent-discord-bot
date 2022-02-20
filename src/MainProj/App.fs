@@ -327,6 +327,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.ReactionEventCmd msg ->
                 ReactionEvent.Main.exec e msg
 
+            | CommandParser.BirthdayCmd msg ->
+                Birthday.Main.exec e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
