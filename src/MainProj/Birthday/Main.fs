@@ -78,7 +78,51 @@ let settingReduce
 
             state
 
+
+type JobType = {
+    RemoveBirthdayRoles: UserId Set
+    Birthdays: UserId Set
+}
+
+let addJob (scheduler: Scheduler.Scheduler<JobType>) (dayMonth: Birthday.DayMonth) userId =
+    let date = System.DateTime(System.DateTime.Now.Year, dayMonth.Month, dayMonth.Day)
+
+    let value =
+        match scheduler.GetJob date with
+        | None ->
+            {
+                Birthdays = Set.singleton userId
+                RemoveBirthdayRoles = Set.empty
+            }
+        | Some x ->
+            { x.Type with
+                Birthdays = Set.add userId x.Type.Birthdays
+            }
+
+    scheduler.AddJob {
+        Time = date
+        Type = value
+    }
+
+let removeJob (scheduler: Scheduler.Scheduler<JobType>) (dayMonth: Birthday.DayMonth) userId =
+    let oldDate = System.DateTime(System.DateTime.Now.Year, dayMonth.Month, dayMonth.Day)
+
+    match scheduler.GetJob oldDate with
+    | Some x ->
+        let value =
+            { x.Type with
+                Birthdays = Set.remove userId x.Type.Birthdays
+            }
+        scheduler.AddJob {
+            Time = oldDate
+            Type = value
+        }
+    | None ->
+        // TODO
+        ()
+
 let birthdayReduce
+    (scheduler: Scheduler.Scheduler<JobType>)
     (e: EventArgs.MessageCreateEventArgs)
     (msg: BirthdayMsg)
     (state: Birthday.UsersBirthday) =
@@ -88,13 +132,14 @@ let birthdayReduce
 
     match msg with
     | SetBirthday dayMonth ->
-        match Map.tryFind e.Author.Id state with
+        let authorId = e.Author.Id
+
+        match Map.tryFind authorId state with
         | None ->
-            let birthday = Birthday.insert (e.Author.Id, dayMonth)
+            let birthday = Birthday.insert (authorId, dayMonth)
+            let state = Map.add authorId birthday state
 
-            Scheduler.add dayMonth
-
-            let state = Map.add e.Author.Id birthday state
+            addJob scheduler dayMonth authorId
 
             awaiti (replyMessage.ModifyAsync (Entities.Optional "Done!"))
             state
@@ -106,10 +151,10 @@ let birthdayReduce
                 }
 
             Birthday.replace oldData
-            let state = Map.add e.Author.Id oldData state
+            let state = Map.add authorId oldData state
 
-            Scheduler.remove oldData.Date
-            Scheduler.add dayMonth
+            removeJob scheduler oldData.Date authorId
+            addJob scheduler dayMonth authorId
 
             awaiti (replyMessage.ModifyAsync (Entities.Optional "Done!"))
             state
@@ -120,21 +165,39 @@ type State =
         Birthdays: Birthday.UsersBirthday
     }
 
-let reduce (e, msg) state =
-    match msg with
-    | SettingReq msg ->
-        { state with
-            BirthdaySetting =
-                settingReduce e msg state.BirthdaySetting
-        }
+type InternalReq =
+    | GetGuilds of AsyncReplyChannel<BirthdaySetting.GuildBirthdaySetting>
 
-    | BirthdayReq msg ->
-        { state with
-            Birthdays =
-                birthdayReduce e msg state.Birthdays
-        }
+type Req =
+    | UsersReq of EventArgs.MessageCreateEventArgs * Request
+    | InternalReq of InternalReq
 
-let m =
+let reduce (scheduler: Scheduler.Scheduler<JobType>) req state =
+    match req with
+    | UsersReq (e, msg) ->
+        match msg with
+        | SettingReq msg ->
+            { state with
+                BirthdaySetting =
+                    settingReduce e msg state.BirthdaySetting
+            }
+
+        | BirthdayReq msg ->
+            { state with
+                Birthdays =
+                    birthdayReduce scheduler e msg state.Birthdays
+            }
+    | InternalReq req ->
+        match req with
+        | GetGuilds r ->
+            r.Reply state.BirthdaySetting
+
+            state
+
+
+let scheduler = new Scheduler.Scheduler<JobType>(Scheduler.State.Empty)
+
+let m: MailboxProcessor<Req> =
     let init = {
         BirthdaySetting = BirthdaySetting.getAll ()
         Birthdays = Birthday.getAll ()
@@ -146,7 +209,7 @@ let m =
                 let! msg = mail.Receive()
                 let state =
                     try
-                        reduce msg state
+                        reduce scheduler msg state
                     with e ->
                         printfn "%A" e
                         state
@@ -157,4 +220,20 @@ let m =
     )
 
 let exec e msg =
-    m.Post(e, msg)
+    m.Post(UsersReq (e, msg))
+
+let startAsync (client: DiscordClient) =
+    Scheduler.startAsync scheduler 500 (fun job ->
+        let tasks = job.Type
+        let guilds = m.PostAndReply(fun r -> InternalReq (GetGuilds r))
+        guilds
+        |> Seq.iter (fun (KeyValue(guildId, v)) ->
+
+            let guild = await (client.GetGuildAsync guildId)
+            // TODO: tasks.Birthdays
+            tasks.Birthdays
+            guild.GetMemberAsync
+            ()
+        )
+        // TODO: tasks.RemoveBirthdayRoles
+    )

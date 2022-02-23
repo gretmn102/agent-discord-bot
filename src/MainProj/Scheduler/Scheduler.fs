@@ -2,35 +2,33 @@ module Scheduler
 
 type JobId = System.DateTime
 
-type JobType =
-    | MakeCoffee
-    | CongratulateWithCelebration
-
-type Job =
+type Job<'JobType> =
     {
         Time: System.DateTime
-        Type: JobType
+        Type: 'JobType
     }
 
-type State =
+type State<'JobType> =
     {
-        Jobs: Map<JobId, Job>
+        Jobs: Map<JobId, Job<'JobType>>
     }
     static member Empty =
         {
-            Jobs = Map.empty
+            Jobs = (Map.empty: Map<JobId, Job<'JobType>>)
         }
 
-type Req =
-    | AddJob of Job
+type Req<'JobType> =
+    | AddJob of Job<'JobType>
     | RemoveJob of JobId
     | PeekJob
+    | GetJob of JobId
 
-type Resp =
+type Resp<'JobType> =
     | Done
-    | EarlyJob of Job option
+    | EarlyJob of Job<'JobType> option
+    | TakenJob of Job<'JobType> option
 
-let reduce (cmd: Req) (state: State) =
+let reduce (cmd: 'JobType Req) (state: 'JobType State) =
     match cmd with
     | PeekJob ->
         let firstJob = Seq.tryHead state.Jobs |> Option.map (fun x -> x.Value)
@@ -41,6 +39,9 @@ let reduce (cmd: Req) (state: State) =
                 Jobs = Map.add job.Time job state.Jobs // TODO: What if it overwrites an existing job?
             }
         Done, state
+    | GetJob job ->
+        let res = Map.tryFind job state.Jobs
+        TakenJob res, state
     | RemoveJob job ->
         let state =
             { state with
@@ -48,71 +49,55 @@ let reduce (cmd: Req) (state: State) =
             }
         Done, state
 
-let tests () =
-    let state = State.Empty
 
-    let firstJob = { Time = System.DateTime.Now; Type = MakeCoffee }
+type Scheduler<'JobType>(state) =
+    let m =
+        MailboxProcessor.Start(fun mail ->
+            let rec f st =
+                async {
+                    let! (reply: AsyncReplyChannel<_>, msg) = mail.Receive()
+                    let (rep: Resp<'JobType>), state = reduce msg st
+                    reply.Reply rep
 
-    let _, state =
-        reduce (AddJob firstJob) state
-    let _, state =
-        reduce (AddJob { Time = System.DateTime.Now.AddDays 1.; Type = CongratulateWithCelebration }) state
+                    return! f state
+                }
+            f state
+        )
 
-    let res, _ = reduce PeekJob state
-    match res with
-    | EarlyJob(Some job) -> job = firstJob
-    | x -> failwithf "expected EarlyJob(Some job) but %A" x
+    member __.AddJob job =
+        m.PostAndReply(fun r -> r, AddJob job)
+        |> ignore
 
-// tests ()
+    member __.RemoveJob jobId =
+        m.PostAndReply(fun r -> r, RemoveJob jobId)
+        |> ignore
 
-let m =
-    MailboxProcessor.Start(fun mail ->
-        let rec f st =
-            async {
-                let! (reply: AsyncReplyChannel<_>, msg) = mail.Receive()
-                let rep, state = reduce msg st
-                reply.Reply rep
+    member __.PeekJob () =
+        match m.PostAndReply(fun r -> r, PeekJob) with
+        | EarlyJob x -> x
+        | x -> failwithf "Internal error: expected EarlyJob in PeekJob but %A" x
 
-                return! f state
-            }
-        f State.Empty
-    )
+    member __.GetJob jobId =
+        match m.PostAndReply(fun r -> r, GetJob jobId) with
+        | TakenJob x -> x
+        | x -> failwithf "Internal error: expected TakenJob in GetJob but %A" x
 
-let addJob job =
-    m.PostAndReply(fun r -> r, AddJob job)
-
-let removeJob jobId =
-    m.PostAndReply(fun r -> r, RemoveJob jobId)
-
-let peekJob () =
-    m.PostAndReply(fun r -> r, PeekJob)
-
-let startAsync (msTimeout: int) =
+let startAsync (scheduler: Scheduler<'JobType>) (msTimeout: int) exec =
     let cancelToken = ref false
 
     async {
         while not !cancelToken do
-            match peekJob () with
-            | EarlyJob job ->
-                match job with
-                | Some job ->
-                    if System.DateTime.Now >= job.Time then
-                        match job.Type with
-                        | MakeCoffee ->
-                            printfn "MakeCoffee!"
-                        | CongratulateWithCelebration ->
-                            printfn "Congratulation!"
+            match scheduler.PeekJob () with
+            | Some job ->
+                if System.DateTime.Now >= job.Time then
+                    exec job
 
-                        ignore <| removeJob job.Time
+                    ignore <| scheduler.RemoveJob job.Time
 
-                | None -> ()
-            | x -> failwithf "%A" x
+            | None -> ()
 
             System.Threading.Thread.Sleep msTimeout
     }
     |> Async.Start
 
     cancelToken
-
-// let cancelToken = startAsync 200
-// addJob { Time = System.DateTime.Now.AddMinutes 2.; Type = MakeCoffee }
