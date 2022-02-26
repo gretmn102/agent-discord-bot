@@ -27,7 +27,7 @@ module Parser =
                 (skipString "```")
                 (manyStrings (
                     many1Satisfy ((<>) '`')
-                    <|> (notFollowedByString "```" >>. preturn "`"))
+                    <|> (notFollowedByString "```" >>. charReturn '`' "`"))
                 )
         pcodeBlock <|> manySatisfy (fun _ -> true)
 
