@@ -80,7 +80,7 @@ let settingReduce
 
 
 type JobType = {
-    RemoveBirthdayRoles: UserId Set
+    RemoveBirthdayRoles: Map<GuildId, UserId Set>
     Birthdays: UserId Set
 }
 
@@ -92,7 +92,7 @@ let addJob (scheduler: Scheduler.Scheduler<JobType>) (dayMonth: Birthday.DayMont
         | None ->
             {
                 Birthdays = Set.singleton userId
-                RemoveBirthdayRoles = Set.empty
+                RemoveBirthdayRoles = Map.empty
             }
         | Some x ->
             { x.Type with
@@ -226,14 +226,90 @@ let startAsync (client: DiscordClient) =
     Scheduler.startAsync scheduler 500 (fun job ->
         let tasks = job.Type
         let guilds = m.PostAndReply(fun r -> InternalReq (GetGuilds r))
-        guilds
-        |> Seq.iter (fun (KeyValue(guildId, v)) ->
 
-            let guild = await (client.GetGuildAsync guildId)
-            // TODO: tasks.Birthdays
-            tasks.Birthdays
-            guild.GetMemberAsync
-            ()
-        )
+        let guildUserIds =
+            guilds
+            |> Seq.choose (fun (KeyValue(guildId, v)) ->
+                match await (client.GetGuildAsync guildId) with
+                | null -> None // TODO: make sure it works
+                | guild ->
+                    match guild.GetRole v.RoleId with
+                    | null -> None
+                    | role ->
+                        let userIds =
+                            tasks.Birthdays
+                            |> Seq.choose (fun userId ->
+                                match await (guild.GetMemberAsync userId) with
+                                | null -> None
+                                | currentMember ->
+                                    try
+                                        (currentMember.GrantRoleAsync role).GetAwaiter().GetResult()
+                                        Some userId
+                                    with e ->
+                                        None
+                            )
+                            |> List.ofSeq
+
+                        if List.isEmpty userIds then None
+                        else Some(guildId, userIds)
+            )
+
+        let nextDay = job.Time.AddDays 1.
+        match scheduler.GetJob nextDay with
+        | None ->
+            {
+                Scheduler.Time = nextDay
+                Scheduler.Type =
+                    {
+                        RemoveBirthdayRoles =
+                            guildUserIds
+                            |> Seq.map (fun (guildId, userIds) ->
+                                guildId, Set.ofList userIds
+                            )
+                            |> Map.ofSeq
+                        Birthdays = Set.empty
+                    }
+            }
+        | Some job ->
+            { job with
+                Type =
+                    { job.Type with
+                        RemoveBirthdayRoles =
+                            guildUserIds
+                            |> Seq.fold
+                                (fun st (guildId, userIds) ->
+                                    st
+                                    |> Map.addOrModWith
+                                        guildId
+                                        (fun () -> Set.ofList userIds)
+                                        (fun st ->
+                                            userIds |> List.fold (flip Set.add) st
+                                        )
+                                )
+                                job.Type.RemoveBirthdayRoles
+                    }
+            }
+        |> scheduler.AddJob
+
+        // transfered to the next year
+        let nextYearDate = job.Time.AddYears 1
+        let value =
+            match scheduler.GetJob nextYearDate with
+            | None ->
+                {
+                    RemoveBirthdayRoles = Map.empty
+                    Birthdays = job.Type.Birthdays
+                }
+            | Some x ->
+                { x.Type with
+                    Birthdays =
+                        job.Type.Birthdays |> Set.fold (flip Set.add) x.Type.Birthdays
+                }
+
+        scheduler.AddJob {
+            Time = nextYearDate
+            Type = value
+        }
+
         // TODO: tasks.RemoveBirthdayRoles
     )
