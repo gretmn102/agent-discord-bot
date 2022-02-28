@@ -22,13 +22,6 @@ module Parser =
     type 'Result Parser = Primitives.Parser<'Result, unit>
 
     let pmessage: _ Parser =
-        let pcodeBlock: _ Parser =
-            between (skipString "```" .>> skipManySatisfy ((<>) '\n') .>> skipChar '\n')
-                (skipString "```")
-                (manyStrings (
-                    many1Satisfy ((<>) '`')
-                    <|> (notFollowedByString "```" >>. charReturn '`' "`"))
-                )
         pcodeBlock <|> manySatisfy (fun _ -> true)
 
     let psendMessage: _ Parser =

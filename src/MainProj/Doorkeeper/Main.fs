@@ -19,9 +19,15 @@ type Template =
         | UserName -> sprintf "<@%s>" Template.UserNameName
         | UserMention -> sprintf "<@%s>" Template.UserMentionName
 
+type PassMsg =
+    | Pass of UserId
+    | SetPassSetting of Either<string, NewcomersRoles.PassSettings>
+    | GetPassSetting
+
 type NewcomersRolesMsg =
     | SetNewcomersRoles of RoleId list
     | GetNewcomersRoles
+    | PassMsg of PassMsg
 
 type WelcomeSettingMsg =
     | SetWelcomeSetting of ChannelId * Template list
@@ -63,11 +69,33 @@ module Parser =
                 ptemplateMessage
 
     let start: _ Parser =
+        let ppassCommand =
+            let ppass: _ Parser =
+                skipStringCI "pass" >>. spaces
+                >>. puserMention
+
+            let psetPassSetting: _ Parser =
+                skipStringCI "setPassSettings" >>. spaces
+                >>. (pcodeBlock <|> manySatisfy (fun _ -> true))
+                |>> (fun str ->
+                    try
+                        let passSettings: NewcomersRoles.PassSettings = Json.des str
+                        Right(passSettings)
+                    with e ->
+                        Left e.Message
+                )
+
+            choice [
+                psetPassSetting |>> SetPassSetting
+                skipStringCI "getPassSettings" >>% GetPassSetting
+                ppass |>> Pass
+            ]
+
         let p =
             choice [
                 psetNewcomersRoles |>> SetNewcomersRoles
                 pgetNewcomersRoles >>% GetNewcomersRoles
-
+                ppassCommand |>> PassMsg
             ]
         choice [
             p |>> NewcomersRolesReq
@@ -90,6 +118,169 @@ let newcomersRolesReduce
     (guildNewcomersRoles: NewcomersRoles.GuildNewcomersRoles): NewcomersRoles.GuildNewcomersRoles =
 
     match msg with
+    | PassMsg msg ->
+        match msg with
+        | Pass targetUserId ->
+            let guild = e.Guild
+            let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+            let replyMessage =
+                await (e.Channel.SendMessageAsync("Processing..."))
+
+            match Map.tryFind e.Guild.Id guildNewcomersRoles with
+            | Some newcomersRoles ->
+                match newcomersRoles.PassSettings with
+                | Some passSetting ->
+                    let permittedRoles = passSetting.PermittedRoles
+                    let isAllowed =
+                        currentMember.Roles
+                        |> Seq.exists (fun x ->
+                            Set.contains x.Id permittedRoles)
+                    if isAllowed then
+                        match await (guild.GetMemberAsync targetUserId) with
+                        | null ->
+                            let msg =
+                                sprintf "User <@!%d> is not a member of this guild" targetUserId
+
+                            awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
+                        | targetUser ->
+                            newcomersRoles.RoleIds
+                            |> Set.iter (fun roleId ->
+                                match guild.GetRole roleId with
+                                | null -> ()
+                                | role ->
+                                    try
+                                        targetUser.RevokeRoleAsync(role).GetAwaiter().GetResult()
+                                    with e ->
+                                        printfn "%A" e
+                            )
+
+                            // send welcome message to main channel
+                            match guild.GetChannel passSetting.MainChannelId with
+                            | null ->
+                                let msg =
+                                    sprintf "Channel %d not found" passSetting.MainChannelId
+
+                                awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
+
+                            | mainChannel ->
+                                FParsecUtils.runEither Parser.ptemplateMessage passSetting.WelcomeMessage
+                                |> Either.map (
+                                    List.map (function
+                                        | Text x -> x
+                                        | UserMention -> targetUser.Mention
+                                        | UserName -> targetUser.Username
+                                    )
+                                    >> System.String.Concat
+                                )
+                                |> Either.iter (fun msg ->
+                                    awaiti <| mainChannel.SendMessageAsync msg
+                                )
+
+                            awaiti (replyMessage.ModifyAsync (Entities.Optional "Done"))
+                    else
+                        let embed = Entities.DiscordEmbedBuilder()
+                        embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                        embed.Description <-
+                            sprintf
+                                "This command is only allowed for users who have these roles: %s"
+                                (permittedRoles |> Seq.map string |> String.concat ", ")
+
+                        let b = Entities.DiscordMessageBuilder()
+                        b.Embed <- embed.Build()
+
+                        // let msg =
+                        //     Entities.Optional (embed.Build())
+                        // awaiti (replyMessage.ModifyAsync (Entities.Optional.FromNoValue<string>(), msg))
+                        awaiti (replyMessage.ModifyAsync b)
+                | None ->
+                    let msg =
+                        sprintf "settings for the pass command are not configured."
+
+                    awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
+            | None ->
+                let msg =
+                    sprintf "settings for the pass command are not configured."
+
+                awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
+
+            guildNewcomersRoles
+        | SetPassSetting passSettings ->
+            let guild = e.Guild
+            let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+            let replyMessage =
+                await (e.Channel.SendMessageAsync("Processing..."))
+
+            match passSettings with
+            | Right passSettings ->
+                if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+                    let guildNewcomersRoles =
+                        match Map.tryFind e.Guild.Id guildNewcomersRoles with
+                        | Some newcomersRoles ->
+
+                            let newcomersRoles =
+                                { newcomersRoles with
+                                    PassSettings = Some passSettings }
+
+                            NewcomersRoles.replace newcomersRoles
+
+                            Map.add guild.Id newcomersRoles guildNewcomersRoles
+                        | None ->
+                            let x = NewcomersRoles.insert (guild.Id, Set.empty, Some passSettings)
+                            Map.add guild.Id x guildNewcomersRoles
+
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional("Pass settings has been set")))
+
+                    guildNewcomersRoles
+                else
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+
+                    guildNewcomersRoles
+            | Left errMsg ->
+                awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
+
+                guildNewcomersRoles
+
+        | GetPassSetting ->
+            let message =
+                let sendErrorMessage () =
+                    let b = Entities.DiscordMessageBuilder()
+                    let embed = Entities.DiscordEmbedBuilder()
+                    embed.Description <-
+                        [
+                            "This server doesn't yet have pass settings. To set them, use the command:"
+                            "```"
+                            ".setPassSettings"
+                            NewcomersRoles.PassSettings.SampleJson
+                            "```"
+                        ] |> String.concat "\n"
+                    b.Embed <- embed.Build()
+                    b
+
+                match Map.tryFind e.Guild.Id guildNewcomersRoles with
+                | Some newcomersRoles->
+                    match newcomersRoles.PassSettings with
+                    | Some passSettings ->
+                        let b = Entities.DiscordMessageBuilder()
+                        let embed = Entities.DiscordEmbedBuilder()
+                        embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                        embed.Description <-
+                            [
+                                "```"
+                                Json.ser passSettings
+                                "```"
+                            ] |> String.concat "\n"
+
+                        b.Embed <- embed.Build()
+                        b
+                    | None ->
+                        sendErrorMessage ()
+                | None ->
+                    sendErrorMessage ()
+
+            awaiti (e.Channel.SendMessageAsync (message))
+
+            guildNewcomersRoles
+
     | SetNewcomersRoles roleIds ->
         let guild = e.Guild
         let currentMember = await (guild.GetMemberAsync(e.Author.Id))
@@ -109,7 +300,7 @@ let newcomersRolesReduce
 
                     Map.add guild.Id newcomersRoles guildNewcomersRoles
                 | None ->
-                    let x = NewcomersRoles.insert (guild.Id, Set.ofList roleIds)
+                    let x = NewcomersRoles.insert (guild.Id, Set.ofList roleIds, None)
                     Map.add guild.Id x guildNewcomersRoles
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Roles has been set")))

@@ -8,17 +8,35 @@ open Types
 type Settings = Map<GuildId, RoleId []>
 
 module NewcomersRoles =
+    type PassSettings =
+        {
+            PermittedRoles: RoleId Set
+            MainChannelId: ChannelId
+            WelcomeMessage: string
+        }
+        static member SampleJson =
+            {
+                PermittedRoles = Set [ 12345678UL ]
+                MainChannelId = 124576UL
+                WelcomeMessage = "<@userName>, welcome to the club!"
+            }
+            |> Json.ser
+
     type NewcomersRolesData =
         {
             mutable Id: ObjectId
             mutable GuildId: GuildId
             mutable RoleIds: RoleId Set
+
+            mutable PassSettings: PassSettings option
         }
-        static member Init(guildId: GuildId, roleIds: RoleId Set) =
+        static member Init(guildId: GuildId, roleIds: RoleId Set, passSettings) =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
                 RoleIds = roleIds
+
+                PassSettings = passSettings
             }
 
     let permissiveRoles = Db.database.GetCollection<NewcomersRolesData>("newcomersRoles")
@@ -37,8 +55,8 @@ module NewcomersRoles =
         permissiveRoles.ReplaceOne((fun x -> x.Id = newData.Id), newData)
         |> ignore
 
-    let insert (guildId: GuildId, roleIds: RoleId Set) =
-        let x = NewcomersRolesData.Init(guildId, roleIds)
+    let insert (guildId: GuildId, roleIds: RoleId Set, passSettings) =
+        let x = NewcomersRolesData.Init(guildId, roleIds, passSettings)
         permissiveRoles.InsertOne(x)
         x
 

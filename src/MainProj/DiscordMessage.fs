@@ -70,3 +70,11 @@ module Parser =
 
     let pemoji<'u> : Parser<_, 'u> =
         pcustomEmoji |>> CustomEmoji <|> (many1Satisfy ((<>) ' ') |>> UnicodeEmoji)
+
+    let pcodeBlock<'u> : Parser<_, 'u> =
+        between (skipString "```" .>> skipManySatisfy ((<>) '\n') .>> skipChar '\n')
+            (skipString "```")
+            (manyStrings (
+                many1Satisfy ((<>) '`')
+                <|> (notFollowedByString "```" >>. charReturn '`' "`"))
+            )
