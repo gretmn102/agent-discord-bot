@@ -117,6 +117,15 @@ let newcomersRolesReduce
     (msg: NewcomersRolesMsg)
     (guildNewcomersRoles: NewcomersRoles.GuildNewcomersRoles): NewcomersRoles.GuildNewcomersRoles =
 
+    let passErrorMsg =
+        [
+            "This server doesn't yet have pass settings. To set them, use the command:"
+            "```"
+            ".setPassSettings"
+            NewcomersRoles.PassSettings.SampleJson
+            "```"
+        ] |> String.concat "\n"
+
     match msg with
     | PassMsg msg ->
         match msg with
@@ -125,6 +134,9 @@ let newcomersRolesReduce
             let currentMember = await (guild.GetMemberAsync(e.Author.Id))
             let replyMessage =
                 await (e.Channel.SendMessageAsync("Processing..."))
+
+            let sendErrorMessage () =
+                awaiti (replyMessage.ModifyAsync (Entities.Optional passErrorMsg))
 
             match Map.tryFind e.Guild.Id guildNewcomersRoles with
             | Some newcomersRoles ->
@@ -183,7 +195,7 @@ let newcomersRolesReduce
                         embed.Description <-
                             sprintf
                                 "This command is only allowed for users who have these roles: %s"
-                                (permittedRoles |> Seq.map string |> String.concat ", ")
+                                (permittedRoles |> Seq.map (sprintf "<@&%d>") |> String.concat ", ")
 
                         let b = Entities.DiscordMessageBuilder()
                         b.Embed <- embed.Build()
@@ -193,15 +205,10 @@ let newcomersRolesReduce
                         // awaiti (replyMessage.ModifyAsync (Entities.Optional.FromNoValue<string>(), msg))
                         awaiti (replyMessage.ModifyAsync b)
                 | None ->
-                    let msg =
-                        sprintf "settings for the pass command are not configured."
+                    sendErrorMessage ()
 
-                    awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
             | None ->
-                let msg =
-                    sprintf "settings for the pass command are not configured."
-
-                awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
+                sendErrorMessage ()
 
             guildNewcomersRoles
         | SetPassSetting passSettings ->
@@ -245,14 +252,7 @@ let newcomersRolesReduce
                 let sendErrorMessage () =
                     let b = Entities.DiscordMessageBuilder()
                     let embed = Entities.DiscordEmbedBuilder()
-                    embed.Description <-
-                        [
-                            "This server doesn't yet have pass settings. To set them, use the command:"
-                            "```"
-                            ".setPassSettings"
-                            NewcomersRoles.PassSettings.SampleJson
-                            "```"
-                        ] |> String.concat "\n"
+                    embed.Description <- passErrorMsg
                     b.Embed <- embed.Build()
                     b
 
