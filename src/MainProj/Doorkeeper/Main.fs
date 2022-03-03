@@ -20,7 +20,7 @@ type Template =
         | UserMention -> sprintf "<@%s>" Template.UserMentionName
 
 type PassMsg =
-    | Pass of UserId
+    | Pass of UserId * string list
     | SetPassSetting of Either<string, NewcomersRoles.PassSettings>
     | GetPassSetting
 
@@ -72,7 +72,9 @@ module Parser =
         let ppassCommand =
             let ppass: _ Parser =
                 skipStringCI "pass" >>. spaces
-                >>. puserMention
+                >>. tuple2
+                        (puserMention .>> spaces)
+                        (many (many1Satisfy (fun _ -> true)))
 
             let psetPassSetting: _ Parser =
                 skipStringCI "setPassSettings" >>. spaces
@@ -129,7 +131,7 @@ let newcomersRolesReduce
     match msg with
     | PassMsg msg ->
         match msg with
-        | Pass targetUserId ->
+        | Pass (targetUserId, roleKeys) ->
             let guild = e.Guild
             let currentMember = await (guild.GetMemberAsync(e.Author.Id))
             let replyMessage =
@@ -148,47 +150,88 @@ let newcomersRolesReduce
                         |> Seq.exists (fun x ->
                             Set.contains x.Id permittedRoles)
                     if isAllowed then
-                        match await (guild.GetMemberAsync targetUserId) with
-                        | null ->
-                            let msg =
-                                sprintf "User <@!%d> is not a member of this guild" targetUserId
+                        let roleKeys =
+                            let rec f acc = function
+                                | x::xs ->
+                                    let res =
+                                        passSetting.IssuedRoleIds
+                                        |> Array.tryFind (fun (key', _) -> key' = x)
+                                    match res with
+                                    | Some roleId -> f (roleId::acc) xs
+                                    | None -> Left x
+                                | [] -> Right acc
+                            f [] roleKeys
 
-                            awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
-                        | targetUser ->
-                            newcomersRoles.RoleIds
-                            |> Set.iter (fun roleId ->
-                                match guild.GetRole roleId with
-                                | null -> ()
-                                | role ->
-                                    try
-                                        targetUser.RevokeRoleAsync(role).GetAwaiter().GetResult()
-                                    with e ->
-                                        printfn "%A" e
-                            )
+                        match roleKeys with
+                        | Left notFoundKey ->
+                            let embed = Entities.DiscordEmbedBuilder()
+                            embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                            embed.Description <-
+                                sprintf
+                                    "Not found \"%s\" key. Available next keys:\n%s"
+                                    notFoundKey
+                                    (passSetting.IssuedRoleIds
+                                     |> Seq.map (fun (k, roleId) ->
+                                        sprintf "* %s <@&%d>" k roleId)
+                                     |> String.concat "\n")
 
-                            // send welcome message to main channel
-                            match guild.GetChannel passSetting.MainChannelId with
+                            let b = Entities.DiscordMessageBuilder()
+                            b.Embed <- embed.Build()
+
+                            awaiti (replyMessage.ModifyAsync b)
+                        | Right roleKeys ->
+                            match await (guild.GetMemberAsync targetUserId) with
                             | null ->
                                 let msg =
-                                    sprintf "Channel %d not found" passSetting.MainChannelId
+                                    sprintf "User <@!%d> is not a member of this guild" targetUserId
 
                                 awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
+                            | targetUser ->
+                                newcomersRoles.RoleIds
+                                |> Set.iter (fun roleId ->
+                                    match guild.GetRole roleId with
+                                    | null -> ()
+                                    | role ->
+                                        try
+                                            targetUser.RevokeRoleAsync(role).GetAwaiter().GetResult()
+                                        with e ->
+                                            printfn "%A" e
+                                )
 
-                            | mainChannel ->
-                                FParsecUtils.runEither Parser.ptemplateMessage passSetting.WelcomeMessage
-                                |> Either.map (
-                                    List.map (function
-                                        | Text x -> x
-                                        | UserMention -> targetUser.Mention
-                                        | UserName -> targetUser.Username
+                                roleKeys
+                                |> List.iter (fun (_, roleId) ->
+                                    match guild.GetRole roleId with
+                                    | null -> ()
+                                    | role ->
+                                        try
+                                            targetUser.GrantRoleAsync(role).GetAwaiter().GetResult()
+                                        with e ->
+                                            printfn "%A" e
+                                )
+
+                                // send welcome message to main channel
+                                match guild.GetChannel passSetting.MainChannelId with
+                                | null ->
+                                    let msg =
+                                        sprintf "Channel %d not found" passSetting.MainChannelId
+
+                                    awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
+
+                                | mainChannel ->
+                                    FParsecUtils.runEither Parser.ptemplateMessage passSetting.WelcomeMessage
+                                    |> Either.map (
+                                        List.map (function
+                                            | Text x -> x
+                                            | UserMention -> targetUser.Mention
+                                            | UserName -> targetUser.Username
+                                        )
+                                        >> System.String.Concat
                                     )
-                                    >> System.String.Concat
-                                )
-                                |> Either.iter (fun msg ->
-                                    awaiti <| mainChannel.SendMessageAsync msg
-                                )
+                                    |> Either.iter (fun msg ->
+                                        awaiti <| mainChannel.SendMessageAsync msg
+                                    )
 
-                            awaiti (replyMessage.ModifyAsync (Entities.Optional "Done"))
+                                awaiti (replyMessage.ModifyAsync (Entities.Optional "Done"))
                     else
                         let embed = Entities.DiscordEmbedBuilder()
                         embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))

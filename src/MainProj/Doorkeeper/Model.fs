@@ -13,12 +13,18 @@ module NewcomersRoles =
             PermittedRoles: RoleId Set
             MainChannelId: ChannelId
             WelcomeMessage: string
+            /// dictionary key is the role name that is specified in the pass command
+            IssuedRoleIds: (string * RoleId) []
         }
         static member SampleJson =
             {
                 PermittedRoles = Set [ 12345678UL ]
                 MainChannelId = 124576UL
                 WelcomeMessage = "<@userName>, welcome to the club!"
+                IssuedRoleIds = [|
+                    "first", 12345678UL
+                    "second", 123456789UL
+                |]
             }
             |> Json.ser
 
