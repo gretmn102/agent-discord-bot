@@ -330,6 +330,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.BirthdayCmd msg ->
                 Birthday.Main.exec e msg
 
+            | CommandParser.EventsCmd msg ->
+                Events.Main.exec e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -427,6 +430,8 @@ let main argv =
 
         client.add_MessageCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             Ranking.Main.handle e
+            Events.Main.handle e
+
             cmd client e
 
             Task.CompletedTask

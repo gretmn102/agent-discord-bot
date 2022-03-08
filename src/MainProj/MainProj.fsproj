@@ -60,6 +60,8 @@
     <Compile Include="ReactionEvent\Main.fs" />
     <Compile Include="Birthday\Model.fs" />
     <Compile Include="Birthday\Main.fs" />
+    <Compile Include="Events\Model.fs" />
+    <Compile Include="Events\Main.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />
