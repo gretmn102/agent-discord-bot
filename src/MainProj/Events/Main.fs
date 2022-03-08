@@ -31,7 +31,7 @@ module Parser =
     let psetEvent: _ Parser =
         pstringCI "setEvent" >>. spaces
         >>. tuple2
-                (pmentionRole .>> spaces)
+                (puint64 <|> pmentionRole .>> spaces)
                 ((pstringCI "true" >>% true) <|> (pstring "false" >>% false))
 
     let start: _ Parser =
