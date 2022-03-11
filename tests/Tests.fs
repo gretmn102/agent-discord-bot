@@ -16,32 +16,26 @@ let commandParserTests =
             let botId = 0UL
             Assert.Equal("msg1", Right Pass, start botId "")
             Assert.Equal("msg2", Right Unknown, start botId (sprintf "<@%d>" botId))
-            Assert.Equal("msg3", Right (Act (Take, None)), start botId ".take")
+            Assert.Equal("msg3", Right (CustomCommandCmd (CustomCommand.Main.Take, None)), start botId ".take")
 
             let whom = 1UL
-            Assert.Equal("msg4", Right (Act (Take, Some whom)), start botId (sprintf ".take <@%d>" whom))
+            Assert.Equal("msg4", Right (CustomCommandCmd (CustomCommand.Main.Take, Some whom)), start botId (sprintf ".take <@%d>" whom))
             Assert.Equal("msg5", Right Pass, start botId ".unknown")
 
-            let act =
+            let exp =
                 [
                     "Error in Ln: 1 Col: 7"
                     sprintf "<@%d> .unknown" botId
                     "      ^"
-                    "Expecting: 'admire', 'ballotBox', 'battery', 'bully', 'catail', 'cyoa',"
-                    "'fairytail', 'quiz', 'quizPizza', 'quizWithMultiChoices', 'ship',"
-                    "'someGirlsQuiz', 'take', 'addPermissiveRole' (case-insensitive), 'angry'"
-                    "(case-insensitive), 'catch' (case-insensitive), 'emojiFont' (case-insensitive),"
-                    "'massShip' (case-insensitive), 'newcomersRoles' (case-insensitive),"
-                    "'numberToWords' (case-insensitive), 'permissiveRoles' (case-insensitive),"
-                    "'removePermissiveRole' (case-insensitive), 'removeUserRole' (case-insensitive),"
-                    "'role' (case-insensitive), 'setNewcomersRoles' (case-insensitive),"
-                    "'setTemplateRole' (case-insensitive), 'setVoiceNotificationOutput'"
-                    "(case-insensitive), 'setVoiceNotificationTemplateMsg' (case-insensitive),"
-                    "'updateUserRolesPermissions' (case-insensitive) or 'userRoles'"
-                    "(case-insensitive)"
-                    ""
+                    "Expecting:"
                 ] |> String.concat "\r\n"
-            Assert.Equal("msg6", Left act, start botId (sprintf "<@%d> .unknown" botId))
+
+            match start botId (sprintf "<@%d> .unknown" botId) with
+            | Left errMsg ->
+                Assert.StringContains("msg6", exp, errMsg)
+            | Right _ as act ->
+                failwithf "Expected:\n%A\nActual:\n%A" (Left exp) act
+
             Assert.Equal("not mention bot", Right Pass, start botId "<@1234567> .unknown")
             Assert.Equal("not mention bang bot", Right Pass, start botId "<@!1234567> .unknown")
         )
@@ -49,15 +43,17 @@ let commandParserTests =
 
 [<Tests>]
 let pshipTests =
+    let pship = Ship.Main.Parser.pship
+
     testList "pshipTests" [
         testCase "pshipTestsShipRand" (fun _ ->
-            Assert.Equal("", Right Rand, FParsecUtils.runEither pship "shipRand")
+            Assert.Equal("", Right Ship.Main.Rand, FParsecUtils.runEither pship "shipRand")
         )
         testCase "pshipTestsShip0" (fun _ ->
-            Assert.Equal("", Right (Target 0), FParsecUtils.runEither pship "ship0")
+            Assert.Equal("", Right (Ship.Main.Target 0), FParsecUtils.runEither pship "ship0")
         )
         testCase "pshipTestsShip100" (fun _ ->
-            Assert.Equal("", Right (Target 100), FParsecUtils.runEither pship "ship100")
+            Assert.Equal("", Right (Ship.Main.Target 100), FParsecUtils.runEither pship "ship100")
         )
         testCase "pshipTestsErr" (fun _ ->
             let exp =

@@ -8,18 +8,9 @@ open DiscordMessage
 open DiscordMessage.Parser
 
 type 'a Parser = Parser<'a, unit>
-type Act =
-    | Take
-    | Fairytail
-    | Catail
-    | Bully
-    | Admire
-    | Battery
-    | Catch
-    | Angry
 
 type Cmd =
-    | Act of Act * UserId option
+    | CustomCommandCmd of CustomCommand.Main.Msg
     | Cyoa of AppsHub.Hub.CyoaT
     | SomeQuiz
     | Unknown
@@ -63,20 +54,10 @@ let pballotBox =
     .>>. many1 (many1Satisfy ((<>) '\n') .>> spaces)
     |>> BallotBox
 
-let pcommand =
-    let cmd =
-        choice [
-            skipString "take" >>% Take
-            skipString "fairytail" >>% Fairytail
-            skipString "catail" >>% Catail
-            skipString "bully" >>. optional (skipString "ing") >>% Bully
-            skipString "admire" >>% Admire
-            skipString "battery" >>% Battery
-            skipStringCI "catch" >>% Catch
-            skipStringCI "angry" >>% Angry
-        ]
+let pcommand: _ Parser =
     choice [
-        cmd .>> spaces .>>. opt puserMention |>> Act
+        CustomCommand.Main.Parser.start |>> CustomCommandCmd
+
         stringReturn "someGirlsQuiz" (Cyoa AppsHub.Hub.SomeGirlsQuiz)
         stringReturn "cyoa" (Cyoa AppsHub.Hub.SomeCyoa)
         stringReturn "quizWithMultiChoices" (Cyoa AppsHub.Hub.QuizWithMultiChoices)
