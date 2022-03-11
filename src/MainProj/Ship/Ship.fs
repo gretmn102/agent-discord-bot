@@ -1,4 +1,4 @@
-module Ship
+module Ship.Core
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open Types

@@ -74,76 +74,6 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
     let authorId = e.Author.Id
     let botId = client.CurrentUser.Id
 
-    let cmdBuilder2 (opt:CommandParser.ShipOption) usersIds (whomAuthorPhrase:string) (whomBotPhrase:string) =
-        let send (whoId:UserId) (whomId:UserId) =
-            // let who = e.Guild.Members.[whoId] // fired "The given key '...' was not present in the dictionary."
-            // let whom = e.Guild.Members.[whomId]
-            let who = await (e.Guild.GetMemberAsync whoId)
-            let whom = await (e.Guild.GetMemberAsync whomId)
-
-            let fileName = "heart.png"
-
-            let b = DSharpPlus.Entities.DiscordMessageBuilder()
-
-            let perc =
-                match opt with
-                | CommandParser.Target x -> x
-                | CommandParser.Rand -> r.Next(0, 101)
-
-            let embed = DSharpPlus.Entities.DiscordEmbedBuilder()
-            embed.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
-            embed.Description <-
-                let nickOrName (user:DSharpPlus.Entities.DiscordMember) =
-                    match user.Nickname with
-                    | null -> user.Username
-                    | nick -> nick
-
-                if perc < 50 then
-                    sprintf "Между %s и %s..." (nickOrName who) (nickOrName whom)
-                else
-                    sprintf "Между %s и %s что-то есть!" (nickOrName who) (nickOrName whom)
-
-            embed.WithImageUrl (sprintf "attachment://%s" fileName) |> ignore
-            b.Embed <- embed.Build()
-
-            let user1Avatar = WebClientDownloader.getData [] who.AvatarUrl
-            let user2Avatar = WebClientDownloader.getData [] whom.AvatarUrl
-
-            use m = new System.IO.MemoryStream()
-            Ship.img user1Avatar user2Avatar perc m
-            m.Position <- 0L
-            b.WithFile(fileName, m) |> ignore
-
-            awaiti (client.SendMessageAsync (e.Channel, b))
-        match usersIds with
-        | [] ->
-            match e.Message.ReferencedMessage with
-            | null ->
-                awaiti (client.SendMessageAsync (e.Channel, "Нужно указать пользователя"))
-            | referencedMessage ->
-                let whomId = referencedMessage.Author.Id
-                if whomId = authorId then
-                    awaiti (client.SendMessageAsync (e.Channel, whomAuthorPhrase))
-                elif whomId = botId then
-                    awaiti (client.SendMessageAsync (e.Channel, whomBotPhrase))
-                else
-                    send e.Author.Id whomId
-        | [whomId] ->
-            if whomId = authorId then
-                awaiti (client.SendMessageAsync (e.Channel, whomAuthorPhrase))
-            elif whomId = botId then
-                awaiti (client.SendMessageAsync (e.Channel, whomBotPhrase))
-            else
-                send authorId whomId
-        | whoId::whomId::_ ->
-            if whomId = whoId then
-                awaiti (client.SendMessageAsync (e.Channel, whomAuthorPhrase))
-            elif whoId = botId || whomId = botId then
-                awaiti (client.SendMessageAsync (e.Channel, whomBotPhrase))
-            else
-                send whoId whomId
-
-
     let cmdBuilder whomId (gifs: string []) content (whomAuthorPhrase:string) (whomBotPhrase:string) =
         let send whomId =
             let whom =
@@ -222,12 +152,6 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         (sprintf "**%s** поет \"Батарейку\" **%s**")
                         "Самому нельзя петь \"Батерей\"!"
                         "Мне нельзя петь \"Батарейку\". Я этого не вынесу :scream_cat: "
-                | CommandParser.Ship opt ->
-                    cmdBuilder2
-                        opt
-                        [ match whomId with Some x -> x | None -> () ]
-                        "Нельзя с самим собой шипериться!"
-                        "Нельзя со мной шипериться! :scream_cat: "
                 | CommandParser.Catch ->
                     cmdBuilder
                         whomId
@@ -248,50 +172,6 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 AppsHub.start AppsHub.Hub.InitQuiz client e
             | CommandParser.BallotBox(description, choices) ->
                 AppsHub.start (AppsHub.Hub.InitBallotBox(description, choices)) client e
-            | CommandParser.MassShip usersIds ->
-                let f (msg:DSharpPlus.Entities.DiscordMessage) =
-                    async {
-                        let usersAvatars =
-                            usersIds
-                            |> Seq.map (fun userId ->
-                                let user = await (e.Guild.GetMemberAsync userId)
-                                WebClientDownloader.getData [] user.AvatarUrl
-                            )
-                            |> Seq.map (function
-                                | Right xs -> xs
-                                | Left _ -> [||]
-                            )
-                            |> Array.ofSeq
-
-                        let b = DSharpPlus.Entities.DiscordMessageBuilder()
-                        // let embed = DSharpPlus.Entities.DiscordEmbedBuilder()
-                        // embed.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
-                        // embed.Description <-
-                        //     let nickOrName (user:DSharpPlus.Entities.DiscordMember) =
-                        //         match user.Nickname with
-                        //         | null -> user.Username
-                        //         | nick -> nick
-
-                        //     if perc < 50 then
-                        //         sprintf "Между %s и %s..." (nickOrName who) (nickOrName whom)
-                        //     else
-                        //         sprintf "Между %s и %s что-то есть!" (nickOrName who) (nickOrName whom)
-                        let fileName = "massShip.png"
-                        // embed.WithImageUrl (sprintf "attachment://%s" fileName) |> ignore
-
-                        // b.Embed <- embed.Build()
-
-                        use m = new System.IO.MemoryStream()
-                        Ship.massShip usersAvatars m
-                        m.Position <- 0L
-                        b.WithFile(fileName, m) |> ignore
-                        let! _ = Async.AwaitTask (msg.ModifyAsync(b))
-                        ()
-                    }
-
-                let msg = await (client.SendMessageAsync (e.Channel, "Processing..."))
-                Async.Start (f msg)
-
             | CommandParser.Role r ->
                 Role.Main.giveOrChangeRole e r
             | CommandParser.AddPermissiveRole r ->
@@ -332,6 +212,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
 
             | CommandParser.EventsCmd msg ->
                 Events.Main.exec e msg
+
+            | CommandParser.ShipCmd msg ->
+                Ship.Main.exec e client.CurrentUser.Id msg
 
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()

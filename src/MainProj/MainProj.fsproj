@@ -52,6 +52,7 @@
     <Compile Include="Ranking\Main.fs" />
     <Compile Include="Music\Main.fs" />
     <Compile Include="Ship\Ship.fs" />
+    <Compile Include="Ship\Main.fs" />
     <Compile Include="EmojiFont\EmojiFont.fs" />
     <Compile Include="BallotBox.fs" />
     <Compile Include="Quiz\Quiz.fs" />

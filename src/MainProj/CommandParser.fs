@@ -8,11 +8,6 @@ open DiscordMessage
 open DiscordMessage.Parser
 
 type 'a Parser = Parser<'a, unit>
-
-type ShipOption =
-    | Rand
-    | Target of int
-
 type Act =
     | Take
     | Fairytail
@@ -20,13 +15,11 @@ type Act =
     | Bully
     | Admire
     | Battery
-    | Ship of ShipOption
     | Catch
     | Angry
 
 type Cmd =
     | Act of Act * UserId option
-    | MassShip of UserId list
     | Cyoa of AppsHub.Hub.CyoaT
     | SomeQuiz
     | Unknown
@@ -60,6 +53,8 @@ type Cmd =
 
     | EventsCmd of Events.Main.SettingMsg
 
+    | ShipCmd of Ship.Main.Msg
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -67,24 +62,6 @@ let pballotBox =
     >>. many1Satisfy ((=) ' ') >>. many1Satisfy ((<>) '\n') .>> spaces
     .>>. many1 (many1Satisfy ((<>) '\n') .>> spaces)
     |>> BallotBox
-
-let pship : _ Parser =
-    let ptarget =
-        pint32
-        >>= fun x ->
-           if 0 <= x && x <= 100 then
-               preturn x
-           else
-               fail "Значение должно быть от 0 до 100 включительно"
-
-    skipString "ship"
-    >>? ((ptarget |>> Target) <|> (skipStringCI "rand" >>% Rand))
-
-let pmassShip =
-    pipe2
-        (skipStringCI "massShip" .>> spaces)
-        (many (puserMention .>> spaces))
-        (fun cmd usersIds -> MassShip usersIds)
 
 let pcommand =
     let cmd =
@@ -97,7 +74,6 @@ let pcommand =
             skipString "battery" >>% Battery
             skipStringCI "catch" >>% Catch
             skipStringCI "angry" >>% Angry
-            pship |>> Ship
         ]
     choice [
         cmd .>> spaces .>>. opt puserMention |>> Act
@@ -134,7 +110,8 @@ let pcommand =
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox
-        pmassShip
+
+        Ship.Main.Parser.start |>> ShipCmd
 
         skipStringCI "emojiFont" >>. spaces
         >>. (pemoji .>> spaces)
