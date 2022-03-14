@@ -46,6 +46,8 @@ type Cmd =
 
     | ShipCmd of Ship.Main.Msg
 
+    | ChatVoiceCmd of ChatVoice.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -88,6 +90,8 @@ let pcommand: _ Parser =
         Birthday.Main.Parser.start |>> BirthdayCmd
 
         Events.Main.Parser.start |>> EventsCmd
+
+        ChatVoice.Main.Parser.start |>> ChatVoiceCmd
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

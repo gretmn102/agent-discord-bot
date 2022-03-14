@@ -71,6 +71,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.ShipCmd msg ->
                 Ship.Main.exec e client.CurrentUser.Id msg
 
+            | CommandParser.ChatVoiceCmd msg ->
+                ChatVoice.Main.exec e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-

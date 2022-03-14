@@ -1,8 +1,23 @@
 module ChatVoice.Main
 open FsharpMyExtension
+open FsharpMyExtension.Either
+open DSharpPlus
 
 open Types
 open Model
+
+type Request =
+    | MentionInVoice
+
+module Parser =
+    open FParsec
+
+    open DiscordMessage.Parser
+
+    type 'a Parser = Parser<'a, unit>
+
+    let start: _ Parser =
+        skipStringCI "inVoice" >>% MentionInVoice
 
 let settings: Settings =
     [
@@ -65,3 +80,38 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                             printfn "channel.AddOverwriteAsync: %A" e.Message
                     | None -> ()
     | None -> ()
+
+let reduce (e: DSharpPlus.EventArgs.MessageCreateEventArgs) msg =
+    match msg with
+    | MentionInVoice ->
+        let guildMember = await (e.Guild.GetMemberAsync e.Author.Id)
+        let errorMessage =
+            "This command is available only if you are in the voice channel of this guild."
+        match guildMember.VoiceState with
+        | null ->
+            awaiti (e.Channel.SendMessageAsync errorMessage)
+        | vs ->
+            match vs.Channel with
+            | null ->
+                awaiti (e.Channel.SendMessageAsync errorMessage)
+            | channel ->
+                if vs.Guild.Id = e.Guild.Id then
+                    let users =
+                        channel.Users
+                        |> Seq.choose (fun x ->
+                            if x.Id = guildMember.Id then None
+                            else Some (sprintf "<@!%d>" x.Id)
+                        )
+                    let msg =
+                        if Seq.isEmpty users then
+                            "You are the only one in the voice channel."
+                        else
+                            users
+                            |> String.concat ", "
+
+                    awaiti (e.Channel.SendMessageAsync msg)
+                else
+                    awaiti (e.Channel.SendMessageAsync errorMessage)
+
+let exec (e: DSharpPlus.EventArgs.MessageCreateEventArgs) msg =
+    reduce e msg
