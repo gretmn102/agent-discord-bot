@@ -78,3 +78,12 @@ module Parser =
                 many1Satisfy ((<>) '`')
                 <|> (notFollowedByString "```" >>. charReturn '`' "`"))
             )
+
+    let pquote<'u> : Parser<_, 'u> =
+        between
+            (skipChar '"')
+            (skipChar '"')
+            (many1Strings (
+                many1Satisfy (isNoneOf "\"\\")
+                <|> (skipChar '\\' >>. ((pchar '"' |>> string) <|>% "\\"))
+            ))

@@ -538,15 +538,6 @@ module Parser =
 
     type 'Result Parser = Primitives.Parser<'Result, unit>
 
-    let pquote: _ Parser =
-        between
-            (skipChar '"')
-            (skipChar '"')
-            (many1Strings (
-                many1Satisfy (isNoneOf "\"\\")
-                <|> (skipChar '\\' >>. ((pchar '"' |>> string) <|>% "\\"))
-            ))
-
     let phexColor: _ Parser =
         pchar '#'
         >>. manyMinMaxSatisfy 1 6 isHex

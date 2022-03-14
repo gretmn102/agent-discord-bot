@@ -64,6 +64,7 @@
     <Compile Include="Events\Model.fs" />
     <Compile Include="Events\Main.fs" />
     <Compile Include="CustomCommand\Main.fs" />
+    <Compile Include="DiscordWebhook\Main.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />
