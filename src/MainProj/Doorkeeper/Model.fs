@@ -5,8 +5,6 @@ open MongoDB.Bson
 
 open Types
 
-type Settings = Map<GuildId, RoleId []>
-
 module NewcomersRoles =
     type PassSettings =
         {
