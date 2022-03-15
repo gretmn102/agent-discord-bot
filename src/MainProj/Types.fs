@@ -21,6 +21,7 @@ type ChannelId = uint64
 type MessageId = uint64
 type EmojiId = uint64
 type RoleId = uint64
+type WebhookId = uint64
 
 type MessagePath =
     {
