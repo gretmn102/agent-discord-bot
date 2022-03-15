@@ -69,7 +69,7 @@ module Characters =
             (fun st x ->
                 st
                 |> Map.addOrModWith
-                    x.UserId
+                    x.GuildId
                     (fun () -> Map.add x.UserId x Map.empty)
                     (fun st -> Map.add x.UserId x st)
             )
