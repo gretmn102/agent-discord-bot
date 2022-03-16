@@ -1,4 +1,4 @@
-module Role.Main
+module UserRole.Main
 open FsharpMyExtension
 open DSharpPlus
 

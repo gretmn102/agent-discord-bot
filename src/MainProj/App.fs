@@ -28,8 +28,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.BallotBox(description, choices) ->
                 AppsHub.start (AppsHub.Hub.InitBallotBox(description, choices)) client e
 
-            | CommandParser.RoleCmd msg ->
-                Role.Main.exec e msg
+            | CommandParser.UserRoleCmd msg ->
+                UserRole.Main.exec e msg
 
             | CommandParser.Doorkeeper newcomersRolesMsg ->
                 Doorkeeper.Main.execNewcomersRolesCmd e newcomersRolesMsg
@@ -169,7 +169,7 @@ let main argv =
         ))
 
         client.add_GuildRoleDeleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            Role.Main.guildRoleDeletedHandler e
+            UserRole.Main.guildRoleDeletedHandler e
 
             Task.CompletedTask
         ))

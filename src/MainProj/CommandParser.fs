@@ -19,7 +19,7 @@ type Cmd =
     | NumberToWords of bigint
     | EmojiFont of UnicodeOrCustomEmoji * string
 
-    | RoleCmd of Role.Main.Request
+    | UserRoleCmd of UserRole.Main.Request
 
     | Doorkeeper of Doorkeeper.Main.Request
 
@@ -61,7 +61,7 @@ let pcommand: _ Parser =
         stringReturn "quizPizza" (Cyoa AppsHub.Hub.QuizPizza)
         stringReturn "quiz" SomeQuiz
 
-        Role.Main.Parser.start |>> RoleCmd
+        UserRole.Main.Parser.start |>> UserRoleCmd
 
         Doorkeeper.Main.Parser.start |>> Doorkeeper
 

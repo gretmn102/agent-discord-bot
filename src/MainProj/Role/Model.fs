@@ -1,4 +1,4 @@
-module Role.Model
+module UserRole.Model
 open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
