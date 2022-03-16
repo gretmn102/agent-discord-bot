@@ -19,14 +19,7 @@ type Cmd =
     | NumberToWords of bigint
     | EmojiFont of UnicodeOrCustomEmoji * string
 
-    | Role of Role.Main.RoleEditModel
-    | AddPermissiveRole of RoleId
-    | RemovePermissiveRole of RoleId
-    | GetPermissiveRoles
-    | GetUserRoles
-    | RemoveUserRole of RoleId
-    | SetTemplateRole of RoleId
-    | UpdateUserRolesPermissions
+    | RoleCmd of Role.Main.Request
 
     | Doorkeeper of Doorkeeper.Main.Request
 
@@ -68,14 +61,7 @@ let pcommand: _ Parser =
         stringReturn "quizPizza" (Cyoa AppsHub.Hub.QuizPizza)
         stringReturn "quiz" SomeQuiz
 
-        Role.Main.Parser.pgiveOrChangeRole |>> Role
-        Role.Main.Parser.paddPermissiveRole |>> AddPermissiveRole
-        Role.Main.Parser.premovePermissiveRole |>> RemovePermissiveRole
-        Role.Main.Parser.pgetPermissiveRoles >>% GetPermissiveRoles
-        Role.Main.Parser.pgetUserRoles >>% GetUserRoles
-        Role.Main.Parser.premoveUserRole |>> RemoveUserRole
-        Role.Main.Parser.psetTemplateRole |>> SetTemplateRole
-        Role.Main.Parser.pupdateUserRolesPermissions >>% UpdateUserRolesPermissions
+        Role.Main.Parser.start |>> RoleCmd
 
         Doorkeeper.Main.Parser.start |>> Doorkeeper
 

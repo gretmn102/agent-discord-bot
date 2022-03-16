@@ -27,22 +27,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 AppsHub.start AppsHub.Hub.InitQuiz client e
             | CommandParser.BallotBox(description, choices) ->
                 AppsHub.start (AppsHub.Hub.InitBallotBox(description, choices)) client e
-            | CommandParser.Role r ->
-                Role.Main.giveOrChangeRole e r
-            | CommandParser.AddPermissiveRole r ->
-                Role.Main.addPermisiveRole e r
-            | CommandParser.RemovePermissiveRole r ->
-                Role.Main.removePermisiveRole e r
-            | CommandParser.GetPermissiveRoles ->
-                Role.Main.getPermisiveRole e
-            | CommandParser.GetUserRoles ->
-                Role.Main.getUserRoles e
-            | CommandParser.RemoveUserRole userRole ->
-                Role.Main.removeUserRole e userRole
-            | CommandParser.SetTemplateRole userRole ->
-                Role.Main.setTemplateRole e userRole
-            | CommandParser.UpdateUserRolesPermissions ->
-                Role.Main.updateRolesPermission e
+
+            | CommandParser.RoleCmd msg ->
+                Role.Main.exec e msg
 
             | CommandParser.Doorkeeper newcomersRolesMsg ->
                 Doorkeeper.Main.execNewcomersRolesCmd e newcomersRolesMsg

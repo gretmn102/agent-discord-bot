@@ -11,16 +11,19 @@ type RoleEditModel = {
     Color: Entities.DiscordColor
 }
 
+type Request =
+    | GiveOrChangeRole of RoleEditModel
+    | AddPermissiveRole of RoleId
+    | RemovePermissiveRole of RoleId
+    | GetPermissiveRoles
+    | GetUserRoles
+    | RemoveUserRole of RoleId
+    | UpdateRolesPermission
+    | SetTemplateRole of RoleId
+
 type Req =
-    | GiveOrChangeRole of EventArgs.MessageCreateEventArgs * RoleEditModel
-    | AddPermissiveRole of EventArgs.MessageCreateEventArgs * RoleId
-    | RemovePermissiveRole of EventArgs.MessageCreateEventArgs * RoleId
-    | GetPermissiveRoles of EventArgs.MessageCreateEventArgs
-    | GetUserRoles of EventArgs.MessageCreateEventArgs
-    | RemoveUserRole of EventArgs.MessageCreateEventArgs * RoleId
+    | Request of EventArgs.MessageCreateEventArgs * Request
     | GuildRoleDeletedHandler of EventArgs.GuildRoleDeleteEventArgs
-    | UpdateRolesPermission of EventArgs.MessageCreateEventArgs
-    | SetTemplateRole of EventArgs.MessageCreateEventArgs * RoleId
 
 type State =
     {
@@ -290,116 +293,6 @@ let reducer =
             async {
                 let! msg = mail.Receive()
                 match msg with
-                | GiveOrChangeRole (e, roleEditModel) ->
-                    let roles =
-                        try
-                            giveOrChangeRole e roleEditModel state
-                        with e ->
-                            printfn "%A" e
-                            state.GuildUserRoles
-
-                    return! loop { state with GuildUserRoles = roles }
-                | AddPermissiveRole (e, roleId) ->
-                    let guildPermissiveRoles = addPermisiveRole e roleId state.GuildPermissiveRoles
-
-                    return! loop { state with GuildPermissiveRoles = guildPermissiveRoles }
-                | RemovePermissiveRole (e, roleId) ->
-                    let guildPermissiveRoles = removePermisiveRoleCmd e roleId state.GuildPermissiveRoles
-
-                    return! loop { state with GuildPermissiveRoles = guildPermissiveRoles }
-                | GetPermissiveRoles e ->
-                    let message =
-                        match Map.tryFind e.Guild.Id state.GuildPermissiveRoles with
-                        | Some permissiveRoles ->
-                            let b = Entities.DiscordMessageBuilder()
-                            let embed = Entities.DiscordEmbedBuilder()
-                            embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
-                            embed.Description <-
-                                [
-                                    yield "Permissive roles: "
-                                    yield! permissiveRoles.RoleIds |> Set.map (sprintf "* <@&%d>")
-                                ] |> String.concat "\n"
-
-                            b.Embed <- embed.Build()
-                            b
-                        | None ->
-                            let b = Entities.DiscordMessageBuilder()
-                            let embed = Entities.DiscordEmbedBuilder()
-                            embed.Description <-
-                                [
-                                    "This server doesn't yet have permissive roles. To add them, use the command:"
-                                    "```"
-                                    ".addPermissiveRole <role_mention|role_id>"
-                                    "```"
-                                ] |> String.concat "\n"
-                            b.Embed <- embed.Build()
-                            b
-                    awaiti (e.Channel.SendMessageAsync (message))
-
-                    return! loop state
-                | GetUserRoles e ->
-                    let message =
-                        match Map.tryFind e.Guild.Id state.GuildUserRoles with
-                        | Some userRoles ->
-                            let b = Entities.DiscordMessageBuilder()
-                            let embed = Entities.DiscordEmbedBuilder()
-                            embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
-                            embed.Description <-
-                                [
-                                    yield "User roles: "
-                                    yield!
-                                        userRoles
-                                        |> Seq.map (fun (KeyValue(_, userRole)) ->
-                                            sprintf "* <@!%d> — <@&%d> (%d)" userRole.UserId userRole.RoleId userRole.RoleId
-                                        )
-                                ] |> String.concat "\n"
-
-                            b.Embed <- embed.Build()
-                            b
-                        | None ->
-                            let b = Entities.DiscordMessageBuilder()
-                            let embed = Entities.DiscordEmbedBuilder()
-                            embed.Description <-
-                                [
-                                    "This server doesn't yet have user roles. To add them, user must have a permissive role and use the command:"
-                                    "```"
-                                    ".role \"Role name\" #000000"
-                                    "```"
-                                ] |> String.concat "\n"
-                            b.Embed <- embed.Build()
-                            b
-                    awaiti (e.Channel.SendMessageAsync (message))
-
-                    return! loop state
-                | RemoveUserRole (e, userRoleId) ->
-                    let replyMessage =
-                        await (e.Channel.SendMessageAsync("Processing..."))
-
-                    let guild = e.Guild
-                    let guildMember = await (guild.GetMemberAsync(e.Author.Id))
-                    let guildUserRoles =
-                        if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
-                            state.GuildUserRoles
-                            |> removeUserRole
-                                guild.Id
-                                userRoleId
-                                (fun guildUserRoles ->
-                                    awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "%d role has been removed from DB" userRoleId)))
-                                    guildUserRoles
-                                )
-                                (fun () ->
-                                    awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "%d role doesn't exists in DB" userRoleId)))
-                                    state.GuildUserRoles
-                                )
-                                (fun () ->
-                                    awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have user roles")))
-                                    state.GuildUserRoles
-                                )
-                        else
-                            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
-                            state.GuildUserRoles
-
-                    return! loop { state with GuildUserRoles = guildUserRoles }
                 | GuildRoleDeletedHandler e ->
                     let guildId = e.Guild.Id
                     let roleId = e.Role.Id
@@ -424,75 +317,188 @@ let reducer =
                             (fun _ -> { state with GuildUserRoles = removeUserRole state.GuildUserRoles })
 
                     return! loop state
-                | SetTemplateRole (e, templateRoleId) ->
-                    let replyMessage =
-                        await (e.Channel.SendMessageAsync("Processing..."))
+                | Request(e, msg) ->
+                    match msg with
+                    | GiveOrChangeRole roleEditModel ->
+                        let roles =
+                            try
+                                giveOrChangeRole e roleEditModel state
+                            with e ->
+                                printfn "%A" e
+                                state.GuildUserRoles
 
-                    let guild = e.Guild
-                    let guildMember = await (guild.GetMemberAsync(e.Author.Id))
-                    let templateRoles =
+                        return! loop { state with GuildUserRoles = roles }
+                    | AddPermissiveRole roleId ->
+                        let guildPermissiveRoles = addPermisiveRole e roleId state.GuildPermissiveRoles
+
+                        return! loop { state with GuildPermissiveRoles = guildPermissiveRoles }
+                    | RemovePermissiveRole roleId ->
+                        let guildPermissiveRoles = removePermisiveRoleCmd e roleId state.GuildPermissiveRoles
+
+                        return! loop { state with GuildPermissiveRoles = guildPermissiveRoles }
+                    | GetPermissiveRoles ->
+                        let message =
+                            match Map.tryFind e.Guild.Id state.GuildPermissiveRoles with
+                            | Some permissiveRoles ->
+                                let b = Entities.DiscordMessageBuilder()
+                                let embed = Entities.DiscordEmbedBuilder()
+                                embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                                embed.Description <-
+                                    [
+                                        yield "Permissive roles: "
+                                        yield! permissiveRoles.RoleIds |> Set.map (sprintf "* <@&%d>")
+                                    ] |> String.concat "\n"
+
+                                b.Embed <- embed.Build()
+                                b
+                            | None ->
+                                let b = Entities.DiscordMessageBuilder()
+                                let embed = Entities.DiscordEmbedBuilder()
+                                embed.Description <-
+                                    [
+                                        "This server doesn't yet have permissive roles. To add them, use the command:"
+                                        "```"
+                                        ".addPermissiveRole <role_mention|role_id>"
+                                        "```"
+                                    ] |> String.concat "\n"
+                                b.Embed <- embed.Build()
+                                b
+                        awaiti (e.Channel.SendMessageAsync (message))
+
+                        return! loop state
+                    | GetUserRoles ->
+                        let message =
+                            match Map.tryFind e.Guild.Id state.GuildUserRoles with
+                            | Some userRoles ->
+                                let b = Entities.DiscordMessageBuilder()
+                                let embed = Entities.DiscordEmbedBuilder()
+                                embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                                embed.Description <-
+                                    [
+                                        yield "User roles: "
+                                        yield!
+                                            userRoles
+                                            |> Seq.map (fun (KeyValue(_, userRole)) ->
+                                                sprintf "* <@!%d> — <@&%d> (%d)" userRole.UserId userRole.RoleId userRole.RoleId
+                                            )
+                                    ] |> String.concat "\n"
+
+                                b.Embed <- embed.Build()
+                                b
+                            | None ->
+                                let b = Entities.DiscordMessageBuilder()
+                                let embed = Entities.DiscordEmbedBuilder()
+                                embed.Description <-
+                                    [
+                                        "This server doesn't yet have user roles. To add them, user must have a permissive role and use the command:"
+                                        "```"
+                                        ".role \"Role name\" #000000"
+                                        "```"
+                                    ] |> String.concat "\n"
+                                b.Embed <- embed.Build()
+                                b
+                        awaiti (e.Channel.SendMessageAsync (message))
+
+                        return! loop state
+                    | RemoveUserRole userRoleId ->
+                        let replyMessage =
+                            await (e.Channel.SendMessageAsync("Processing..."))
+
+                        let guild = e.Guild
+                        let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                        let guildUserRoles =
+                            if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
+                                state.GuildUserRoles
+                                |> removeUserRole
+                                    guild.Id
+                                    userRoleId
+                                    (fun guildUserRoles ->
+                                        awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "%d role has been removed from DB" userRoleId)))
+                                        guildUserRoles
+                                    )
+                                    (fun () ->
+                                        awaiti (replyMessage.ModifyAsync(Entities.Optional(sprintf "%d role doesn't exists in DB" userRoleId)))
+                                        state.GuildUserRoles
+                                    )
+                                    (fun () ->
+                                        awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have user roles")))
+                                        state.GuildUserRoles
+                                    )
+                            else
+                                awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+                                state.GuildUserRoles
+
+                        return! loop { state with GuildUserRoles = guildUserRoles }
+
+                    | SetTemplateRole templateRoleId ->
+                        let replyMessage =
+                            await (e.Channel.SendMessageAsync("Processing..."))
+
+                        let guild = e.Guild
+                        let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                        let templateRoles =
+                            if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
+                                let guildTemplateRoles = state.GuildTemplateRoles
+                                let guildPermissiveRoles =
+                                    match Map.tryFind guild.Id guildTemplateRoles with
+                                    | Some templateRoles ->
+                                        let templateRoles =
+                                            { templateRoles with
+                                                TemplateRoleId = templateRoleId }
+
+                                        TemplateRoles.replace templateRoles
+
+                                        Map.add guild.Id templateRoles guildTemplateRoles
+                                    | None ->
+                                        let x = TemplateRoles.insert (guild.Id, templateRoleId)
+                                        Map.add guild.Id x guildTemplateRoles
+
+                                awaiti (replyMessage.ModifyAsync(Entities.Optional("Template role has been set")))
+
+                                guildPermissiveRoles
+                            else
+                                awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+                                state.GuildTemplateRoles
+
+                        return! loop { state with GuildTemplateRoles = templateRoles }
+                    | UpdateRolesPermission ->
+                        let replyMessage =
+                            await (e.Channel.SendMessageAsync("Processing..."))
+
+                        let guild = e.Guild
+                        let guildMember = await (guild.GetMemberAsync(e.Author.Id))
                         if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
-                            let guildTemplateRoles = state.GuildTemplateRoles
-                            let guildPermissiveRoles =
-                                match Map.tryFind guild.Id guildTemplateRoles with
-                                | Some templateRoles ->
-                                    let templateRoles =
-                                        { templateRoles with
-                                            TemplateRoleId = templateRoleId }
+                            match Map.tryFind guild.Id state.GuildTemplateRoles with
+                            | Some templateRole ->
+                                let templateRole = guild.GetRole templateRole.TemplateRoleId
 
-                                    TemplateRoles.replace templateRoles
+                                if isNull templateRole then
+                                    awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner installed the template role, but it has been removed"))
+                                else
+                                    match Map.tryFind guild.Id state.GuildUserRoles with
+                                    | Some userRoles ->
+                                        userRoles
+                                        |> Seq.iter (fun (KeyValue(_, userRole)) ->
+                                            let userRole = guild.GetRole userRole.RoleId
+                                            if isNull userRole then ()
+                                            else
+                                                userRole.ModifyAsync(
+                                                    permissions = System.Nullable templateRole.Permissions
+                                                )
+                                                |> fun x -> x.GetAwaiter().GetResult()
 
-                                    Map.add guild.Id templateRoles guildTemplateRoles
-                                | None ->
-                                    let x = TemplateRoles.insert (guild.Id, templateRoleId)
-                                    Map.add guild.Id x guildTemplateRoles
+                                                System.Threading.Thread.Sleep 250
+                                        )
 
-                            awaiti (replyMessage.ModifyAsync(Entities.Optional("Template role has been set")))
-
-                            guildPermissiveRoles
+                                        awaiti (replyMessage.ModifyAsync(Entities.Optional("User roles has been updated")))
+                                    | None ->
+                                        awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have user roles")))
+                            | None ->
+                                awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner didn't set the template role"))
                         else
                             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
-                            state.GuildTemplateRoles
 
-                    return! loop { state with GuildTemplateRoles = templateRoles }
-                | UpdateRolesPermission e ->
-                    let replyMessage =
-                        await (e.Channel.SendMessageAsync("Processing..."))
-
-                    let guild = e.Guild
-                    let guildMember = await (guild.GetMemberAsync(e.Author.Id))
-                    if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
-                        match Map.tryFind guild.Id state.GuildTemplateRoles with
-                        | Some templateRole ->
-                            let templateRole = guild.GetRole templateRole.TemplateRoleId
-
-                            if isNull templateRole then
-                                awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner installed the template role, but it has been removed"))
-                            else
-                                match Map.tryFind guild.Id state.GuildUserRoles with
-                                | Some userRoles ->
-                                    userRoles
-                                    |> Seq.iter (fun (KeyValue(_, userRole)) ->
-                                        let userRole = guild.GetRole userRole.RoleId
-                                        if isNull userRole then ()
-                                        else
-                                            userRole.ModifyAsync(
-                                                permissions = System.Nullable templateRole.Permissions
-                                            )
-                                            |> fun x -> x.GetAwaiter().GetResult()
-
-                                            System.Threading.Thread.Sleep 250
-                                    )
-
-                                    awaiti (replyMessage.ModifyAsync(Entities.Optional("User roles has been updated")))
-                                | None ->
-                                    awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have user roles")))
-                        | None ->
-                            awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner didn't set the template role"))
-                    else
-                        awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
-
-                    return! loop state
+                        return! loop state
             }
 
         let init =
@@ -504,32 +510,11 @@ let reducer =
         loop init
     )
 
-let giveOrChangeRole e roleEditModel =
-    reducer.Post(GiveOrChangeRole(e, roleEditModel))
-
-let addPermisiveRole e roleId =
-    reducer.Post(AddPermissiveRole(e, roleId))
-
-let removePermisiveRole e roleId =
-    reducer.Post(RemovePermissiveRole(e, roleId))
-
-let getPermisiveRole e =
-    reducer.Post(GetPermissiveRoles e)
-
-let getUserRoles e =
-    reducer.Post(GetUserRoles e)
-
-let removeUserRole e roleId =
-    reducer.Post(RemoveUserRole(e, roleId))
-
 let guildRoleDeletedHandler (e: EventArgs.GuildRoleDeleteEventArgs) =
     reducer.Post(GuildRoleDeletedHandler e)
 
-let setTemplateRole e roleId =
-    reducer.Post(SetTemplateRole(e, roleId))
-
-let updateRolesPermission e =
-    reducer.Post(UpdateRolesPermission e)
+let exec e msg =
+    reducer.Post(Request (e, msg))
 
 module Parser =
     open FParsec
@@ -581,3 +566,15 @@ module Parser =
 
     let pupdateUserRolesPermissions: _ Parser =
         pstringCI "updateUserRolesPermissions" >>. spaces
+
+    let start: _ Parser =
+        choice [
+            pgiveOrChangeRole |>> GiveOrChangeRole
+            paddPermissiveRole |>> AddPermissiveRole
+            premovePermissiveRole |>> RemovePermissiveRole
+            pgetPermissiveRoles >>% GetPermissiveRoles
+            pgetUserRoles >>% GetUserRoles
+            premoveUserRole |>> RemoveUserRole
+            psetTemplateRole |>> SetTemplateRole
+            pupdateUserRolesPermissions >>% UpdateRolesPermission
+        ]
