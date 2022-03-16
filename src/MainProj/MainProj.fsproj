@@ -40,8 +40,8 @@
     <Compile Include="Scheduler\Scheduler.fs" />
     <Compile Include="Db.fs" />
     <Compile Include="NumberToWords.fs" />
-    <Compile Include="Role\Model.fs" />
-    <Compile Include="Role\Main.fs" />
+    <Compile Include="UserRole\Model.fs" />
+    <Compile Include="UserRole\Main.fs" />
     <Compile Include="ChatVoice\Model.fs" />
     <Compile Include="ChatVoice\Main.fs" />
     <Compile Include="VoiceChannelNotification\Model.fs" />
