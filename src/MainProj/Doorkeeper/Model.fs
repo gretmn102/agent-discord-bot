@@ -71,13 +71,17 @@ module WelcomeSetting =
             mutable GuildId: GuildId
             mutable OutputChannel: ChannelId option
             mutable TemplateMessage: string option
+            mutable OutputLogChannel: ChannelId option
+            mutable TemplateLogMessage: string option
         }
-        static member Init(guildId, outputChannel, roleIds) =
+        static member Init(guildId, outputChannel, templateMessage, outputLogChannel, templateLogMessage) =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
                 OutputChannel = outputChannel
-                TemplateMessage = roleIds
+                TemplateMessage = templateMessage
+                OutputLogChannel = outputLogChannel
+                TemplateLogMessage = templateLogMessage
             }
 
     let welcomeSetting = Db.database.GetCollection<WelcomeSettingData>("welcomeSetting")
@@ -96,7 +100,7 @@ module WelcomeSetting =
         welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
         |> ignore
 
-    let insert (guildId, outputChannel, roleIds) =
-        let x = WelcomeSettingData.Init(guildId, outputChannel, roleIds)
+    let insert (guildId, outputChannel, roleIds, outputLogChannel, templateLogMessage) =
+        let x = WelcomeSettingData.Init(guildId, outputChannel, roleIds, outputLogChannel, templateLogMessage)
         welcomeSetting.InsertOne(x)
         x
