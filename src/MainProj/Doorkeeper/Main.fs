@@ -32,6 +32,7 @@ type NewcomersRolesMsg =
 type WelcomeSettingMsg =
     | SetWelcomeSetting of ChannelId * Template list
     | SetWelcomeLogSetting of ChannelId * Template list
+    | SetWelcomeLeaveSetting of ChannelId * Template list
 
 type Request =
     | NewcomersRolesReq of NewcomersRolesMsg
@@ -104,6 +105,7 @@ module Parser =
             choice [
                 pchannelTemplateMessage "setWelcomeSetting" |>> SetWelcomeSetting
                 pchannelTemplateMessage "setWelcomeLogSetting" |>> SetWelcomeLogSetting
+                pchannelTemplateMessage "setWelcomeLeaveSetting" |>> SetWelcomeLeaveSetting
             ]
 
         choice [
@@ -114,6 +116,7 @@ module Parser =
 type Msg =
     | Request of EventArgs.MessageCreateEventArgs * Request
     | GuildMemberAddedHandle of EventArgs.GuildMemberAddEventArgs
+    | GuildMemberRemovedHandle of EventArgs.GuildMemberRemoveEventArgs
 
 type State =
     {
@@ -421,7 +424,7 @@ let welcomeSettingReduce
 
                     Map.add guild.Id newcomersRoles guildWelcomeSetting
                 | None ->
-                    let x = WelcomeSetting.insert (guild.Id, Some channelId, Some template, None, None)
+                    let x = WelcomeSetting.insert (guild.Id, Some channelId, Some template, None, None, None, None)
                     Map.add guild.Id x guildWelcomeSetting
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome setting has been set")))
@@ -454,10 +457,43 @@ let welcomeSettingReduce
 
                     Map.add guild.Id newcomersRoles guildWelcomeSetting
                 | None ->
-                    let x = WelcomeSetting.insert (guild.Id, None, None, Some channelId, Some template)
+                    let x = WelcomeSetting.insert (guild.Id, None, None, Some channelId, Some template, None, None)
                     Map.add guild.Id x guildWelcomeSetting
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome log setting has been set")))
+
+            guildWelcomeSetting
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+
+            guildWelcomeSetting
+
+    | SetWelcomeLeaveSetting(channelId, template) ->
+        let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync("Processing..."))
+
+        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+            let template = template |> List.map Template.ToString |> String.concat ""
+            let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
+                match Map.tryFind e.Guild.Id guildWelcomeSetting with
+                | Some welcomeSettingData ->
+                    let newcomersRoles =
+                        { welcomeSettingData with
+                            OutputLeaveChannel = Some channelId
+                            TemplateLeaveMessage =
+                                Some template
+                        }
+
+                    WelcomeSetting.replace newcomersRoles
+
+                    Map.add guild.Id newcomersRoles guildWelcomeSetting
+                | None ->
+                    let x = WelcomeSetting.insert (guild.Id, None, None, None, None, Some channelId, Some template)
+                    Map.add guild.Id x guildWelcomeSetting
+
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leave setting has been set")))
 
             guildWelcomeSetting
         else
@@ -514,6 +550,37 @@ let reduce (msg: Msg) (state: State): State =
 
         state
 
+    | GuildMemberRemovedHandle e ->
+        if not e.Member.IsBot then
+            let guildId = e.Guild.Id
+
+            match Map.tryFind guildId state.WelcomeSetting with
+            | Some data ->
+                let send = function
+                    | Some outputChannelId, Some templateMessage ->
+                        match e.Guild.GetChannel outputChannelId with
+                        | null -> ()
+                        | outputChannel ->
+                            FParsecUtils.runEither Parser.ptemplateMessage templateMessage
+                            |> Either.map (
+                                List.map (function
+                                    | Text x -> x
+                                    | UserMention -> e.Member.Mention
+                                    | UserName -> e.Member.Username
+                                )
+                                >> System.String.Concat
+                            )
+                            |> Either.iter (fun msg ->
+                                awaiti <| outputChannel.SendMessageAsync msg
+                            )
+                    | _ -> ()
+
+                send (data.OutputLeaveChannel, data.TemplateLeaveMessage)
+
+            | None -> ()
+
+        state
+
     | Request(e, cmd) ->
         match cmd with
         | NewcomersRolesReq cmd ->
@@ -549,8 +616,11 @@ let m =
         loop init
     )
 
-let handle (e: EventArgs.GuildMemberAddEventArgs) =
+let guildMemberAddHandle (e: EventArgs.GuildMemberAddEventArgs) =
     m.Post (GuildMemberAddedHandle e)
+
+let guildMemberRemoveHandle (e: EventArgs.GuildMemberRemoveEventArgs) =
+    m.Post (GuildMemberRemovedHandle e)
 
 let execNewcomersRolesCmd e msg =
     m.Post (Request (e, msg))
