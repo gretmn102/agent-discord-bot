@@ -241,6 +241,28 @@ let newcomersRolesReduce
                                         awaiti <| mainChannel.SendMessageAsync msg
                                     )
 
+                                match passSetting.PassLogMessage with
+                                | Some(channelId, message) ->
+                                    match guild.GetChannel channelId with
+                                    | null -> ()
+                                    | channel ->
+                                        FParsecUtils.runEither Parser.ptemplateMessage message
+                                        |> Either.map (
+                                            List.map (function
+                                                | Text x -> x
+                                                | UserMention -> targetUser.Mention
+                                                | UserName -> targetUser.Username
+                                            )
+                                            >> System.String.Concat
+                                        )
+                                        |> Either.iter (fun msg ->
+                                            try
+                                                awaiti <| channel.SendMessageAsync msg
+                                            with _ -> ()
+                                        )
+
+                                | None -> ()
+
                                 awaiti (replyMessage.ModifyAsync (Entities.Optional "Done"))
                     else
                         let embed = Entities.DiscordEmbedBuilder()
