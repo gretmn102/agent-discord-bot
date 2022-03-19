@@ -17,7 +17,7 @@ type Cmd =
     | Pass
     | BallotBox of description:string * choices:string list
     | NumberToWords of bigint
-    | EmojiFont of UnicodeOrCustomEmoji * string
+    | EmojiFontCmd of EmojiFont.Main.Request
 
     | UserRoleCmd of UserRole.Main.Request
 
@@ -88,10 +88,7 @@ let pcommand: _ Parser =
 
         Ship.Main.Parser.start |>> ShipCmd
 
-        skipStringCI "emojiFont" >>. spaces
-        >>. (pemoji .>> spaces)
-        .>>. manySatisfy (fun _ -> true)
-        |>> EmojiFont
+        EmojiFont.Main.Parser.start |>> EmojiFontCmd
     ]
 
 let start botId str =

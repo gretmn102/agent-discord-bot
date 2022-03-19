@@ -1,4 +1,4 @@
-module EmojiFont
+module EmojiFont.Core
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open SixLabors.ImageSharp

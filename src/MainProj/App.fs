@@ -93,34 +93,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         e.Message
                 b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
                 awaiti (client.SendMessageAsync (e.Channel, b.Build()))
-            | CommandParser.EmojiFont (emoji, str) ->
-                let emojiFont emojiImg =
-                    use m = new System.IO.MemoryStream()
-                    EmojiFont.drawText emojiImg str m
-                    m.Position <- 0L
+            | CommandParser.EmojiFontCmd msg ->
+                EmojiFont.Main.exec e msg
 
-                    let b = DSharpPlus.Entities.DiscordMessageBuilder()
-                    b.WithFile("image.png", m) |> ignore
-
-                    awaiti (client.SendMessageAsync (e.Channel, b))
-                let emojiImgWidth = 32
-                match emoji with
-                | DiscordMessage.CustomEmoji emoji ->
-                    let emojiSrc = sprintf "https://cdn.discordapp.com/emojis/%d.png?size=%d" emoji.Id emojiImgWidth
-                    let emojiImg = WebClientDownloader.getData [] emojiSrc
-                    emojiFont emojiImg
-                | DiscordMessage.UnicodeEmoji emoji ->
-                    match StandartDiscordEmoji.getEmojiSheet () with
-                    | Right emojiSheet ->
-                        use m = new System.IO.MemoryStream()
-                        if StandartDiscordEmoji.getEmoji emojiSheet emoji m then
-                            m.ToArray()
-                            |> Right
-                            |> emojiFont
-                        else
-                            awaiti (client.SendMessageAsync (e.Channel, sprintf "\"%s\" — этот emoji пока что не поддерживается." emoji))
-                    | Left errMsg ->
-                        emojiFont (Left errMsg)
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 
