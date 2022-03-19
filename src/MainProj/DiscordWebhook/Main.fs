@@ -6,12 +6,18 @@ open DSharpPlus
 open Types
 open Model
 
+type Profile = { Username: string; AvatarUrl: string }
+
 type SettingReq =
     | SetWebhookId of WebhookId
-    | SetCharacter of {| Username: string; AvatarUrl: string |}
+    | SetCharacter of Profile
+
+type ProfileMode =
+    | ManualProfile of Profile
+    | UserProfile of UserId
 
 type Request =
-    | Send of {| Username: string; AvatarUrl: string; Content: string |}
+    | Send of {| ChannelId: ChannelId; ProfileMode: ProfileMode; Content: string |}
     | SendByCharacter of content: string
     | SettingReq of SettingReq
 
@@ -29,13 +35,27 @@ module Parser =
             (sprintf "%s%s")
 
     let psend: _ Parser =
-        skipStringCI "sendHook" .>> spaces
-        >>. pipe3
+        let pmanualProfile =
+            pipe2
                 (pquote .>> spaces)
                 (purl .>> spaces)
+                (fun userName url ->
+                    { Username = userName; AvatarUrl = url }
+                )
+
+        skipStringCI "sendHook" .>> spaces
+        >>. pipe3
+                (pchannelMention .>> spaces)
+                ((pmanualProfile |>> ManualProfile)
+                 <|> ((puint64 <|> puserMention) |>> UserProfile))
                 (manySatisfy (fun _ -> true))
-                (fun userName url msg ->
-                    {| AvatarUrl = url; Username = userName; Content = msg |})
+                (fun channelId profile msg ->
+                    {|
+                        ChannelId = channelId
+                        ProfileMode = profile
+                        Content = msg
+                    |}
+                )
 
     let psendByCharacter: _ Parser =
         skipStringCI "say" .>> spaces
@@ -60,7 +80,7 @@ module Parser =
                     (pquote .>> spaces)
                     (purl .>> spaces)
                     (fun userName url ->
-                        {| AvatarUrl = url; Username = userName |})
+                        { AvatarUrl = url; Username = userName })
         choice [
            psetWebhook |>> SetWebhookId
            setCharacter |>> SetCharacter
@@ -82,15 +102,86 @@ type State =
 let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
     match msg with
     | Send opts ->
-        let webhooks = await (e.Guild.GetWebhooksAsync())
-        let webhook = webhooks.[0]
-        let b = Entities.DiscordWebhookBuilder()
+        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync "Processing...")
 
-        b.WithUsername opts.Username |> ignore
-        b.WithAvatarUrl opts.AvatarUrl |> ignore
-        b.WithContent opts.Content |> ignore
+        let msg =
+            match e.Guild.GetChannel opts.ChannelId with
+            | null ->
+                sprintf "Channel %d not found" opts.ChannelId
 
-        awaiti (webhook.ExecuteAsync b)
+            | channel ->
+                if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+                    let webhooks = await (channel.GetWebhooksAsync())
+
+                    let webhook =
+                        if webhooks.Count > 0 then
+                            Right webhooks.[0]
+                        else
+                            try
+                                await (channel.CreateWebhookAsync(sprintf "%d webhook" opts.ChannelId))
+                                |> Right
+                            with e ->
+                                [
+                                    "Error:"
+                                    "```"
+                                    e.Message
+                                    "```"
+                                ] |> String.concat "\n"
+                                |> Left
+
+                    match webhook with
+                    | Right webhook ->
+                        let profile =
+                            match opts.ProfileMode with
+                            | ManualProfile profile -> Right profile
+                            | UserProfile userId ->
+                                // let client: DiscordClient = ()
+                                // match await (client.GetUserAsync userId) with
+                                // | null ->
+                                //     Left (sprintf "User %d is not found" userId)
+                                // | user ->
+                                //     Right {| AvatarUrl = user.AvatarUrl; Username = user.Username |}
+
+                                match await (e.Guild.GetMemberAsync userId) with
+                                | null ->
+                                    Left (sprintf "Member %d is not found" userId)
+                                | user ->
+                                    let userName =
+                                        if System.String.IsNullOrWhiteSpace user.Nickname then
+                                            user.Username
+                                        else
+                                            user.Nickname
+                                    Right { AvatarUrl = user.AvatarUrl; Username = userName }
+
+                        match profile with
+                        | Right profile ->
+                            let b = Entities.DiscordWebhookBuilder()
+
+                            b.WithUsername profile.Username |> ignore
+                            b.WithAvatarUrl profile.AvatarUrl |> ignore
+
+                            b.WithContent opts.Content |> ignore
+
+                            try
+                                awaiti (webhook.ExecuteAsync b)
+
+                                "Done"
+                            with e ->
+                                [
+                                    "Error:"
+                                    "```"
+                                    e.Message
+                                    "```"
+                                ] |> String.concat "\n"
+                        | Left errMsg -> errMsg
+                    | Left errMsg -> errMsg
+
+                else
+                    "You don't have administration permission"
+
+        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
 
         state
     | SendByCharacter content ->
