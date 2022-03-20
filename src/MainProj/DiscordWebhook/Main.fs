@@ -6,11 +6,9 @@ open DSharpPlus
 open Types
 open Model
 
-type Profile = { Username: string; AvatarUrl: string }
-
 type SettingReq =
     | SetWebhookId of WebhookId
-    | SetCharacter of Profile
+    | SetCharacter of Key * Profile
 
 type ProfileMode =
     | ManualProfile of Profile
@@ -76,11 +74,13 @@ module Parser =
 
         let setCharacter =
             skipStringCI setCharacterName .>> spaces
-            >>. pipe2
+            >>. pipe3
+                    (many1Satisfy ((<>) ' ') .>> spaces)
                     (pquote .>> spaces)
                     (purl .>> spaces)
-                    (fun userName url ->
-                        { AvatarUrl = url; Username = userName })
+                    (fun key userName url ->
+                        key, { AvatarUrl = url; Username = userName })
+
         choice [
            psetWebhook |>> SetWebhookId
            setCharacter |>> SetCharacter
@@ -209,8 +209,8 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
                     | Some targetWebhook ->
                         let b = Entities.DiscordWebhookBuilder()
 
-                        b.WithUsername character.Username |> ignore
-                        b.WithAvatarUrl character.AvatarUrl |> ignore
+                        // b.WithUsername character.Username |> ignore
+                        // b.WithAvatarUrl character.AvatarUrl |> ignore
                         b.WithContent content |> ignore
 
                         awaiti (targetWebhook.ExecuteAsync b)
@@ -277,24 +277,43 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
 
                 state
 
-        | SetCharacter character ->
+        | SetCharacter (key, profile) ->
             let state =
                 match Map.tryFind e.Guild.Id state.Characters with
                 | Some guildCharacters ->
                     let character =
                         match Map.tryFind e.Author.Id guildCharacters with
-                        | Some characterData ->
+                        | Some userProfileData ->
+                            let profiles = userProfileData.Profiles
+                            let res =
+                                profiles
+                                |> Array.tryFindIndex (fun (key', _) -> key' = key)
+                            let profiles =
+                                match res with
+                                | Some i ->
+                                    let profiles = Array.copy profiles
+                                    profiles.[i] <- key, profile
+
+                                    profiles
+                                | None ->
+                                    let newProfiles = Array.zeroCreate (profiles.Length + 1)
+                                    Array.blit profiles 0 newProfiles 0 profiles.Length
+                                    newProfiles.[newProfiles.Length - 1] <- key, profile
+
+                                    newProfiles
+                                |> Array.sortByDescending fst
+
                             let character =
-                                { characterData with
-                                    AvatarUrl = character.AvatarUrl
-                                    Username = character.Username
+                                { userProfileData with
+                                    Profiles = profiles
                                 }
 
                             Characters.replace character
 
                             character
+
                         | None ->
-                            Characters.insert(e.Guild.Id, e.Author.Id, character.Username, character.AvatarUrl)
+                            Characters.insert(e.Guild.Id, e.Author.Id, [|key, profile|])
 
                     { state with
                         Characters =
@@ -303,7 +322,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
                     }
 
                 | None ->
-                    let character = Characters.insert(e.Guild.Id, e.Author.Id, character.Username, character.AvatarUrl)
+                    let character = Characters.insert(e.Guild.Id, e.Author.Id, [|key, profile|])
 
                     { state with
                         Characters =
@@ -315,8 +334,75 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
 
             state
 
+type Req =
+    | Request of EventArgs.MessageCreateEventArgs * Request
+    | Handle of EventArgs.MessageCreateEventArgs
 
-type Req = EventArgs.MessageCreateEventArgs * Request
+let mainReduce req state =
+    match req with
+    | Handle e ->
+        if not e.Author.IsBot then
+            match Map.tryFind e.Guild.Id state.Characters with
+            | Some guildCharacters ->
+                match Map.tryFind e.Author.Id guildCharacters with
+                | Some user ->
+                    let content = e.Message.Content
+
+                    let result =
+                        user.Profiles
+                        |> Array.tryFind (fun (key, _) ->
+                            content.StartsWith key)
+
+                    match result with
+                    | None -> ()
+                    | Some (key, profile) ->
+                        let content =
+                            // let content = "key   123"
+                            let rec calcContent i =
+                                if i < content.Length then
+                                    if System.Char.IsWhiteSpace content.[i] then
+                                        calcContent (i + 1)
+                                    else
+                                        i
+                                else
+                                    i
+                            // let key = "key"
+                            content.[calcContent key.Length..] // 123
+
+                        if content.Length > 0 then
+                            let channel = e.Channel
+
+                            let webhooks = await (channel.GetWebhooksAsync())
+
+                            let webhook =
+                                if webhooks.Count > 0 then
+                                    Some webhooks.[0]
+                                else
+                                    try
+                                        await (channel.CreateWebhookAsync(sprintf "%d webhook" channel.Id))
+                                        |> Some
+                                    with e -> None
+
+                            match webhook with
+                            | Some webhook ->
+                                let b = Entities.DiscordWebhookBuilder()
+
+                                b.WithUsername profile.Username |> ignore
+                                b.WithAvatarUrl profile.AvatarUrl |> ignore
+
+                                b.WithContent content |> ignore
+
+                                try
+                                    awaiti (webhook.ExecuteAsync b)
+                                with e -> ()
+
+                            | None -> ()
+
+                | None -> ()
+            | None -> ()
+
+        state
+    | Request (e, msg) -> reduce e msg state
 
 let m: MailboxProcessor<Req> =
     let init = {
@@ -327,10 +413,10 @@ let m: MailboxProcessor<Req> =
     MailboxProcessor.Start (fun mail ->
         let rec loop (state: State) =
             async {
-                let! (e, msg) = mail.Receive()
+                let! req = mail.Receive()
                 let state =
                     try
-                        reduce e msg state
+                        mainReduce req state
                     with e ->
                         printfn "%A" e
                         state
@@ -341,4 +427,7 @@ let m: MailboxProcessor<Req> =
     )
 
 let exec e msg =
-    m.Post(e, msg)
+    m.Post (Request(e, msg))
+
+let handle e =
+    m.Post (Handle e)

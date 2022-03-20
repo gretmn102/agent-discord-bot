@@ -40,23 +40,23 @@ module TargetWebhooks =
         targetWebhooks.InsertOne(x)
         x
 
+type Profile = { Username: string; AvatarUrl: string }
+type Key = string
+
 module Characters =
     type CharacterData =
         {
             mutable Id: ObjectId
             mutable GuildId: GuildId
             mutable UserId: UserId
-            mutable Username: string
-            mutable AvatarUrl: string
+            mutable Profiles: (Key * Profile) []
         }
-        static member Init(guildId, userId, passSettings, avatarUrl) =
+        static member Init(guildId, userId, characters) =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
                 UserId = userId
-
-                Username = passSettings
-                AvatarUrl = avatarUrl
+                Profiles = characters
             }
 
     let characters = Db.database.GetCollection<CharacterData>("characters")
@@ -79,7 +79,7 @@ module Characters =
         characters.ReplaceOne((fun x -> x.Id = newData.Id), newData)
         |> ignore
 
-    let insert (guildId, userId, username, avatarUrl) =
-        let x = CharacterData.Init(guildId, userId, username, avatarUrl)
+    let insert (guildId, userId, profiles) =
+        let x = CharacterData.Init(guildId, userId, profiles)
         characters.InsertOne(x)
         x

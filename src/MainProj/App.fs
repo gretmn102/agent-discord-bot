@@ -137,6 +137,7 @@ let main argv =
         client.add_MessageCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             Ranking.Main.handle e
             Events.Main.handle e
+            DiscordWebhook.Main.handle e
 
             cmd client e
 
