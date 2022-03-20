@@ -5,41 +5,6 @@ open MongoDB.Bson
 
 open Types
 
-module TargetWebhooks =
-    type TargetWebhookData =
-        {
-            mutable Id: ObjectId
-            mutable GuildId: GuildId
-            mutable WebhookId: WebhookId
-        }
-        static member Init(guildId, webhookId) =
-            {
-                Id = ObjectId.Empty
-                GuildId = guildId
-                WebhookId = webhookId
-            }
-
-    let targetWebhooks = Db.database.GetCollection<TargetWebhookData>("targetWebhooks")
-
-    type GuildTargetWebhook = Map<GuildId, TargetWebhookData>
-
-    let getAll (): GuildTargetWebhook =
-        targetWebhooks.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.GuildId x st
-            )
-            Map.empty
-
-    let replace (newData: TargetWebhookData) =
-        targetWebhooks.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
-
-    let insert (guildId, webhookId) =
-        let x = TargetWebhookData.Init(guildId, webhookId)
-        targetWebhooks.InsertOne(x)
-        x
-
 type Profile = { Username: string; AvatarUrl: string }
 type Key = string
 
