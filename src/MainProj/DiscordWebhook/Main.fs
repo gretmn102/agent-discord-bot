@@ -9,6 +9,7 @@ open Model
 type SettingReq =
     | SetCharacter of Key * Profile
     | GetCharacters
+    | RemoveCharacter of Key
 
 type ProfileMode =
     | ManualProfile of Profile
@@ -61,12 +62,14 @@ module Parser =
     let setWebhookName = "setWebhook"
     let setCharacterName = "setCharacter"
     let getCharactersName = "getCharacters"
+    let removeCharacterName = "removeCharacter"
 
     let psetting: _ Parser =
+        let pkey = many1Satisfy ((<>) ' ')
         let setCharacter =
             skipStringCI setCharacterName .>> spaces
             >>. pipe3
-                    (many1Satisfy ((<>) ' ') .>> spaces)
+                    (pkey .>> spaces)
                     (pquote .>> spaces)
                     (purl .>> spaces)
                     (fun key userName url ->
@@ -74,7 +77,8 @@ module Parser =
 
         choice [
             setCharacter |>> SetCharacter
-            pstringCI getCharactersName >>% GetCharacters
+            skipStringCI getCharactersName >>% GetCharacters
+            skipStringCI removeCharacterName >>. spaces >>. pkey |>> RemoveCharacter
         ]
 
     let start: _ Parser =
@@ -87,6 +91,37 @@ type State =
     {
         Characters: Characters.GuildCharacters
     }
+
+module Array =
+    let removeAt i (xs: _ []) =
+        let ys = Array.zeroCreate (xs.Length - 1)
+
+        Array.blit xs 0 ys 0 i
+        Array.blit xs (i + 1) ys i (xs.Length - i - 1)
+
+        ys
+
+    open Fuchu
+
+    [<Tests>]
+    let removeAtTests =
+        testList "removeAt" [
+            testCase "testCase1" (fun _ ->
+                let f (act, exp) = Assert.Equal("", act, exp)
+                let xs =
+                    [
+                        removeAt 0 [|0|], [||]
+                        removeAt 0 [|0..5|], [|1; 2; 3; 4; 5|]
+                        removeAt 2 [|0..5|], [|0; 1; 3; 4; 5|]
+                        removeAt 5 [|0..5|], [|0; 1; 2; 3; 4|]
+                    ]
+                xs
+                |> List.iteri (fun i (act, exp) ->
+                    Assert.Equal(string i, act, exp)
+                )
+            )
+        ]
+    // run removeAtTests
 
 let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
     match msg with
@@ -178,6 +213,19 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
+        let errMsg =
+            [
+
+                "You don't have characters yet. To add character, use this command:"
+                "```"
+                sprintf ".%s key \"Name of character\" <img_url>" Parser.setCharacterName
+                "```"
+                "For example:"
+                "```"
+                sprintf ".%s captain \"Captain Hook\" https://i2.wp.com/static4.wikia.nocookie.net/__cb20130519181351/disney/images/a/ac/Peter-pan-disneyscreencaps.com-7911.jpg" Parser.setCharacterName
+                "```"
+            ] |> String.concat "\n"
+
         match settingReq with
         | SetCharacter (key, profile) ->
             let state =
@@ -237,19 +285,6 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
             state
 
         | GetCharacters ->
-            let errMsg =
-                [
-
-                    "You don't have characters yet. To add character, use this command:"
-                    "```"
-                    sprintf ".%s key \"Name of character\" <img_url>" Parser.setCharacterName
-                    "```"
-                    "For example:"
-                    "```"
-                    sprintf ".%s captain \"Captain Hook\" https://i2.wp.com/static4.wikia.nocookie.net/__cb20130519181351/disney/images/a/ac/Peter-pan-disneyscreencaps.com-7911.jpg" Parser.setCharacterName
-                    "```"
-                ] |> String.concat "\n"
-
             match Map.tryFind e.Guild.Id state.Characters with
             | Some guildCharacters ->
                 match Map.tryFind e.Author.Id guildCharacters with
@@ -282,6 +317,51 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
             | None -> awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
 
             state
+
+        | RemoveCharacter key ->
+            match Map.tryFind e.Guild.Id state.Characters with
+            | Some guildCharacters ->
+                match Map.tryFind e.Author.Id guildCharacters with
+                | Some userProfileData ->
+                    let profiles = userProfileData.Profiles
+                    let res =
+                        profiles
+                        |> Array.tryFindIndex (fun (key', _) -> key' = key)
+
+                    match res with
+                    | Some i ->
+                        let profiles = Array.removeAt i profiles
+                        let character =
+                            { userProfileData with
+                                Profiles = profiles
+                            }
+
+                        Characters.replace character
+
+                        let state =
+                            { state with
+                                Characters =
+                                    let guildCharacters = Map.add e.Author.Id character guildCharacters
+                                    Map.add e.Guild.Id guildCharacters state.Characters
+                            }
+
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional "Done"))
+
+                        state
+                    | None ->
+                        let msg =
+                            sprintf "You don't have character with %s key" key
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+
+                        state
+                | None ->
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
+
+                    state
+            | None ->
+                awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
+
+                state
 
 type Req =
     | Request of EventArgs.MessageCreateEventArgs * Request
