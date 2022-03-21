@@ -8,6 +8,7 @@ open Model
 
 type SettingReq =
     | SetCharacter of Key * Profile
+    | GetCharacters
 
 type ProfileMode =
     | ManualProfile of Profile
@@ -59,6 +60,7 @@ module Parser =
 
     let setWebhookName = "setWebhook"
     let setCharacterName = "setCharacter"
+    let getCharactersName = "getCharacters"
 
     let psetting: _ Parser =
         let setCharacter =
@@ -70,7 +72,10 @@ module Parser =
                     (fun key userName url ->
                         key, { AvatarUrl = url; Username = userName })
 
-        setCharacter |>> SetCharacter
+        choice [
+            setCharacter |>> SetCharacter
+            pstringCI getCharactersName >>% GetCharacters
+        ]
 
     let start: _ Parser =
         choice [
@@ -170,7 +175,6 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
         state
 
     | SettingReq settingReq ->
-        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -229,6 +233,53 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
                     }
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional "Done!"))
+
+            state
+
+        | GetCharacters ->
+            let errMsg =
+                [
+
+                    "You don't have characters yet. To add character, use this command:"
+                    "```"
+                    sprintf ".%s key \"Name of character\" <img_url>" Parser.setCharacterName
+                    "```"
+                    "For example:"
+                    "```"
+                    sprintf ".%s captain \"Captain Hook\" https://i2.wp.com/static4.wikia.nocookie.net/__cb20130519181351/disney/images/a/ac/Peter-pan-disneyscreencaps.com-7911.jpg" Parser.setCharacterName
+                    "```"
+                ] |> String.concat "\n"
+
+            match Map.tryFind e.Guild.Id state.Characters with
+            | Some guildCharacters ->
+                match Map.tryFind e.Author.Id guildCharacters with
+                | Some userProfileData ->
+                    let profiles = userProfileData.Profiles
+
+                    let keys, names, avatars =
+                        let keys, names, avatars =
+                            Array.foldBack
+                                (fun (key, profile: Profile) (keys, names, avatars) ->
+                                    let avatarUrl = sprintf "[img](%s)" profile.AvatarUrl
+                                    key::keys, profile.Username::names, avatarUrl::avatars
+                                )
+                                profiles
+                                ([], [], [])
+                        let f xs = List.rev xs |> String.concat "\n"
+                        f keys, f names, f avatars
+
+                    let b = Entities.DiscordEmbedBuilder()
+
+                    b.AddField("Keys", keys, true) |> ignore
+                    b.AddField("Names", names, true) |> ignore
+                    b.AddField("Avatars", avatars, true) |> ignore
+
+                    let msg = b.Build ()
+
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional null, Entities.Optional msg))
+
+                | None -> awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
+            | None -> awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
 
             state
 
