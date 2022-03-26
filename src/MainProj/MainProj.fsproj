@@ -67,6 +67,8 @@
     <Compile Include="CustomCommand\Main.fs" />
     <Compile Include="DiscordWebhook\Model.fs" />
     <Compile Include="DiscordWebhook\Main.fs" />
+    <Compile Include="Boosters\Model.fs" />
+    <Compile Include="Boosters\Main.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />

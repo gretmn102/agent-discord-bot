@@ -64,6 +64,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.DiscordWebhookCmd msg ->
                 DiscordWebhook.Main.exec e msg
 
+            | CommandParser.BoostersCmd msg ->
+                Boosters.Main.exec e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -118,7 +121,11 @@ let main argv =
         config.set_Token token
         config.set_TokenType DSharpPlus.TokenType.Bot
         config.set_AutoReconnect true
-        config.set_Intents (DSharpPlus.DiscordIntents.AllUnprivileged ||| DSharpPlus.DiscordIntents.GuildMembers)
+        config.set_Intents (
+            DSharpPlus.DiscordIntents.AllUnprivileged
+            ||| DSharpPlus.DiscordIntents.GuildMembers
+            ||| DSharpPlus.DiscordIntents.GuildPresences
+        )
 
         let client = new DSharpPlus.DiscordClient(config)
 
@@ -177,6 +184,12 @@ let main argv =
 
         client.add_GuildMemberRemoved (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             Doorkeeper.Main.guildMemberRemoveHandle e
+
+            Task.CompletedTask
+        ))
+
+        client.add_GuildMemberUpdated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            Boosters.Main.handle e
 
             Task.CompletedTask
         ))

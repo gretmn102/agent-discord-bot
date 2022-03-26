@@ -43,6 +43,8 @@ type Cmd =
 
     | DiscordWebhookCmd of DiscordWebhook.Main.Request
 
+    | BoostersCmd of Boosters.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -82,6 +84,8 @@ let pcommand: _ Parser =
         ChatVoice.Main.Parser.start |>> ChatVoiceCmd
 
         DiscordWebhook.Main.Parser.start |>> DiscordWebhookCmd
+
+        Boosters.Main.Parser.start |>> BoostersCmd
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

@@ -113,6 +113,20 @@ module Parser =
             psettings |>> WelcomeSettingReq
         ]
 
+let templateBuild (targetUser: Entities.DiscordMember) message =
+    FParsecUtils.runEither Parser.ptemplateMessage message
+    |> Either.map (
+        List.map (function
+            | Text x -> x
+            | UserMention -> targetUser.Mention
+            | UserName -> targetUser.Username
+        )
+        >> System.String.Concat
+    )
+
+let templateToString template =
+    template |> List.map Template.ToString |> System.String.Concat
+
 type Msg =
     | Request of EventArgs.MessageCreateEventArgs * Request
     | GuildMemberAddedHandle of EventArgs.GuildMemberAddEventArgs
