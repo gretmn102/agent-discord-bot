@@ -95,13 +95,14 @@ let reduce (req: Req) (state: State) =
                 let newInvites = await (e.Guild.GetInvitesAsync())
                 let diff =
                     newInvites
-                    |> Seq.filter (fun newInvite ->
+                    |> Seq.choose (fun newInvite ->
                         match Map.tryFind newInvite.Code oldInvites with
                         | Some oldInvite ->
-                            newInvite.Uses <> oldInvite.Uses
+                            if newInvite.Uses <> oldInvite.Uses then
+                                Some newInvite
+                            else None
                         | None ->
-                            printfn "Something went wrong"
-                            false
+                            Some newInvite
                     )
                     |> List.ofSeq
 
