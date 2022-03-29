@@ -179,10 +179,13 @@ let mainReduce req (state: State) =
                     | channel ->
                         addedRoles
                         |> List.iter (fun role ->
-                            if role.Tags.IsPremiumSubscriber then
-                                try
-                                    awaiti (channel.SendMessageAsync msg)
-                                with _ -> ()
+                            match role.Tags with
+                            | null -> () // returns if the role is created while the bot is running
+                            | tags ->
+                                if tags.IsPremiumSubscriber then
+                                    try
+                                        awaiti (channel.SendMessageAsync msg)
+                                    with _ -> ()
                         )
                 )
             | None -> ()
