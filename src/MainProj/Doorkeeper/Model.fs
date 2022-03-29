@@ -110,3 +110,38 @@ module WelcomeSetting =
         let x = WelcomeSettingData.Init(guildId, outputChannel, roleIds, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage)
         welcomeSetting.InsertOne(x)
         x
+
+module InvitesSetting =
+    type SettingData =
+        {
+            mutable Id: ObjectId
+            mutable GuildId: GuildId
+            mutable OutputChannel: ChannelId
+        }
+        static member Init(guildId, outputChannel) =
+            {
+                Id = ObjectId.Empty
+                GuildId = guildId
+                OutputChannel = outputChannel
+            }
+
+    let welcomeSetting = Db.database.GetCollection<SettingData>("invitesSetting")
+
+    type GuildSetting = Map<GuildId, SettingData>
+
+    let getAll (): GuildSetting =
+        welcomeSetting.Find(fun x -> true).ToEnumerable()
+        |> Seq.fold
+            (fun st x ->
+                Map.add x.GuildId x st
+            )
+            Map.empty
+
+    let replace (newData: SettingData) =
+        welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+        |> ignore
+
+    let insert (guildId, outputChannel) =
+        let x = SettingData.Init(guildId, outputChannel)
+        welcomeSetting.InsertOne(x)
+        x

@@ -67,6 +67,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.BoostersCmd msg ->
                 Boosters.Main.exec e msg
 
+            | CommandParser.InvitesCmd msg ->
+                Doorkeeper.Invites.exec e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -138,6 +141,8 @@ let main argv =
         ))
 
         client.add_GuildAvailable(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            Doorkeeper.Invites.guildAvailableHandle e.Guild
+
             Task.CompletedTask
         ))
 
@@ -178,6 +183,7 @@ let main argv =
 
         client.add_GuildMemberAdded (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             Doorkeeper.Main.guildMemberAddHandle e
+            Doorkeeper.Invites.guildMemberAddedHandle e
 
             Task.CompletedTask
         ))
@@ -204,6 +210,18 @@ let main argv =
         client.add_MessageReactionRemoved (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             if client.CurrentUser.Id <> e.User.Id then
                 ReactionEvent.Main.handle (ReactionEvent.Main.RemovedEvent e)
+
+            Task.CompletedTask
+        ))
+
+        client.add_InviteCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            Doorkeeper.Invites.inviteCreatedHandle e
+
+            Task.CompletedTask
+        ))
+
+        client.add_InviteDeleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            Doorkeeper.Invites.inviteDeletedHandle e
 
             Task.CompletedTask
         ))
