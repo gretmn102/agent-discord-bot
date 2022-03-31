@@ -117,12 +117,15 @@ module InvitesSetting =
             mutable Id: ObjectId
             mutable GuildId: GuildId
             mutable OutputChannel: ChannelId
+            /// `invite_code * message`
+            mutable Associations: (string * string) []
         }
-        static member Init(guildId, outputChannel) =
+        static member Init(guildId, outputChannel, associations) =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
                 OutputChannel = outputChannel
+                Associations = associations
             }
 
     let welcomeSetting = Db.database.GetCollection<SettingData>("invitesSetting")
@@ -141,7 +144,7 @@ module InvitesSetting =
         welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
         |> ignore
 
-    let insert (guildId, outputChannel) =
-        let x = SettingData.Init(guildId, outputChannel)
+    let insert (guildId, outputChannel, associations) =
+        let x = SettingData.Init(guildId, outputChannel, associations)
         welcomeSetting.InsertOne(x)
         x

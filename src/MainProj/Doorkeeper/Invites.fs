@@ -13,8 +13,22 @@ type State =
         Setting: Model.InvitesSetting.GuildSetting
     }
 
+type Setting =
+    {
+        ChannelId: ChannelId
+        Associations: (string * string) []
+    }
+    static member Sample =
+        {
+            ChannelId = 12345UL
+            Associations = [|
+                "invite_code1", "came from the X"
+                "invite_code2", "came from the Y"
+            |]
+        }
+
 type Request =
-    | SetSetting of ChannelId
+    | SetSetting of Either<string, Setting>
     | GetSetting
 
 module Parser =
@@ -24,42 +38,68 @@ module Parser =
 
     type 'Result Parser = Primitives.Parser<'Result, unit>
 
-    let setChannelName = "setInviteChannel"
-    let getChannelName = "getInviteChannel"
+    let setSettingName = "setInviteSetting"
+    let getSettingName = "getInviteSetting"
 
     let start: _ Parser =
+        let psetSetting =
+            skipStringCI setSettingName >>. spaces
+             >>. spaces
+                >>. (pcodeBlock <|> manySatisfy (fun _ -> true))
+                |>> (fun str ->
+                    try
+                        let setting: Setting = Json.des str
+                        Right setting
+                    with e ->
+                        Left e.Message
+                )
+
         choice [
-            skipStringCI setChannelName >>. spaces >>. (puint64 <|> pchannelMention) |>> SetSetting
-            skipStringCI getChannelName >>% GetSetting
+            psetSetting |>> SetSetting
+            skipStringCI getSettingName >>% GetSetting
         ]
 
 let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: Model.InvitesSetting.GuildSetting) =
     match req with
-    | SetSetting channelId ->
+    | SetSetting newSetting ->
         let guild = e.Guild
         let currentMember = await (guild.GetMemberAsync e.Author.Id)
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 
         if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-            let state =
-                match Map.tryFind e.Guild.Id state with
-                | Some data ->
-                    let data =
-                        { data with
-                            OutputChannel = channelId
-                        }
+            match newSetting with
+            | Right newSetting ->
+                let state =
+                    match Map.tryFind e.Guild.Id state with
+                    | Some data ->
+                        let data =
+                            { data with
+                                OutputChannel = newSetting.ChannelId
+                                Associations = newSetting.Associations
+                            }
 
-                    Model.InvitesSetting.replace data
+                        Model.InvitesSetting.replace data
 
-                    Map.add guild.Id data state
-                | None ->
-                    let x = Model.InvitesSetting.insert (guild.Id, channelId)
-                    Map.add guild.Id x state
+                        Map.add guild.Id data state
+                    | None ->
+                        let x = Model.InvitesSetting.insert (guild.Id, newSetting.ChannelId, newSetting.Associations)
+                        Map.add guild.Id x state
 
-            awaiti (replyMessage.ModifyAsync(Entities.Optional "Setting has been set"))
+                awaiti (replyMessage.ModifyAsync(Entities.Optional "Setting has been set"))
 
-            state
+                state
+            | Left errMsg ->
+                let msg =
+                    [
+                        "```"
+                        errMsg
+                        "```"
+                    ] |> String.concat "\n"
+                awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+
+                state
+
         else
             awaiti (replyMessage.ModifyAsync(Entities.Optional "You don't have administrative permission"))
             state
@@ -70,7 +110,18 @@ let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: M
         match Map.tryFind e.Guild.Id state with
         | Some data ->
             let msg =
-                sprintf "<#%d>" data.OutputChannel
+                let setting =
+                    {
+                        ChannelId = data.OutputChannel
+                        Associations = data.Associations
+                    }
+                    |> Json.ser
+
+                [
+                    "```"
+                    setting
+                    "```"
+                ] |> String.concat "\n"
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
         | None ->
@@ -113,7 +164,11 @@ let reduce (req: Req) (state: State) =
                     | channel ->
                         let embed = Entities.DiscordEmbedBuilder()
                         embed.Description <-
-                            sprintf "%s пришел на сервер по [ссылке](https://discord.gg/%s), которую создал %s." e.Member.Mention invite.Code invite.Inviter.Mention
+                            match Array.tryFind (fun (code, _) -> code = invite.Code) setting.Associations with
+                            | None ->
+                                sprintf "%s пришел на сервер по [ссылке](https://discord.gg/%s), которую создал %s." e.Member.Mention invite.Code invite.Inviter.Mention
+                            | Some (_, message) ->
+                                sprintf "%s %s" e.Member.Mention message
 
                         let b = Entities.DiscordMessageBuilder()
                         b.Embed <- embed.Build ()
