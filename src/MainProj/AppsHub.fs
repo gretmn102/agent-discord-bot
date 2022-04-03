@@ -275,11 +275,15 @@ let m =
     )
 module DiscordMessage =
     let removeComponents (msg:DSharpPlus.Entities.DiscordMessage) =
-        let b = DSharpPlus.Entities.DiscordMessageBuilder()
-        // embed, по-идеи, остается. Здесь главное подавить .Components
-        b.Content <- msg.Content
+        // does not clean components:
+        // let content = DSharpPlus.Entities.Optional.FromValue ""
+        // awaiti (msg.ModifyAsync content)
 
-        awaiti (msg.ModifyAsync(b))
+        let b = DSharpPlus.Entities.DiscordMessageBuilder()
+        // necessary because throw `System.ArgumentException: You must specify content, an embed, a sticker, or at least one file.`
+        b.AddEmbeds msg.Embeds |> ignore
+        b.Content <- msg.Content
+        awaiti (msg.ModifyAsync b)
 
 let removeComponents (client:DSharpPlus.DiscordClient) channelId (messageId:MessageId) =
     let x = await (client.GetChannelAsync(channelId))
