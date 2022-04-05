@@ -32,6 +32,8 @@ type NewcomersRolesMsg =
 type WelcomeSettingMsg =
     | SetWelcomeSetting of ChannelId * Template list
     | SetWelcomeLogSetting of ChannelId * Template list
+    | SetWelcomeLeaverMessage of ChannelId * Template list
+    | SetWelcomeLeaverLogMessage of ChannelId * Template list
     | SetWelcomeLeaveSetting of ChannelId * Template list
 
 type Request =
@@ -105,6 +107,8 @@ module Parser =
             choice [
                 pchannelTemplateMessage "setWelcomeSetting" |>> SetWelcomeSetting
                 pchannelTemplateMessage "setWelcomeLogSetting" |>> SetWelcomeLogSetting
+                pchannelTemplateMessage "setWelcomeLeaverMessage" |>> SetWelcomeLeaverMessage
+                pchannelTemplateMessage "setWelcomeLeaverLogMessage" |>> SetWelcomeLeaverLogMessage
                 pchannelTemplateMessage "setWelcomeLeaveSetting" |>> SetWelcomeLeaveSetting
             ]
 
@@ -136,6 +140,7 @@ type State =
     {
         NewcomersRoles: NewcomersRoles.GuildNewcomersRoles
         WelcomeSetting: WelcomeSetting.GuildWelcomeSetting
+        Leavers: Leavers.GuildDatas
     }
 
 let newcomersRolesReduce
@@ -460,7 +465,7 @@ let welcomeSettingReduce
 
                     Map.add guild.Id newcomersRoles guildWelcomeSetting
                 | None ->
-                    let x = WelcomeSetting.insert (guild.Id, Some channelId, Some template, None, None, None, None)
+                    let x = WelcomeSetting.insert (guild.Id, Some channelId, Some template, None, None, None, None, None, None)
                     Map.add guild.Id x guildWelcomeSetting
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome setting has been set")))
@@ -493,7 +498,7 @@ let welcomeSettingReduce
 
                     Map.add guild.Id newcomersRoles guildWelcomeSetting
                 | None ->
-                    let x = WelcomeSetting.insert (guild.Id, None, None, Some channelId, Some template, None, None)
+                    let x = WelcomeSetting.insert (guild.Id, None, None, Some channelId, Some template, None, None, None, None)
                     Map.add guild.Id x guildWelcomeSetting
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome log setting has been set")))
@@ -526,10 +531,76 @@ let welcomeSettingReduce
 
                     Map.add guild.Id newcomersRoles guildWelcomeSetting
                 | None ->
-                    let x = WelcomeSetting.insert (guild.Id, None, None, None, None, Some channelId, Some template)
+                    let x = WelcomeSetting.insert (guild.Id, None, None, None, None, Some channelId, Some template, None, None)
                     Map.add guild.Id x guildWelcomeSetting
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leave setting has been set")))
+
+            guildWelcomeSetting
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+
+            guildWelcomeSetting
+    | SetWelcomeLeaverMessage(channelId, template) ->
+        let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync("Processing..."))
+
+        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+            let template = template |> List.map Template.ToString |> String.concat ""
+            let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
+                match Map.tryFind e.Guild.Id guildWelcomeSetting with
+                | Some welcomeSettingData ->
+                    let newcomersRoles =
+                        { welcomeSettingData with
+                            LeaversChannelMessage =
+                                WelcomeSetting.ChannelMessage.Init channelId template
+                                |> Some
+                        }
+
+                    WelcomeSetting.replace newcomersRoles
+
+                    Map.add guild.Id newcomersRoles guildWelcomeSetting
+                | None ->
+                    let channelMessage = WelcomeSetting.ChannelMessage.Init channelId template
+                    let x = WelcomeSetting.insert (guild.Id, None, None, None, None, None, None, Some channelMessage, None)
+                    Map.add guild.Id x guildWelcomeSetting
+
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leaver setting has been set")))
+
+            guildWelcomeSetting
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+
+            guildWelcomeSetting
+    | SetWelcomeLeaverLogMessage(channelId, template) ->
+        let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync("Processing..."))
+
+        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+            let template = template |> List.map Template.ToString |> String.concat ""
+            let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
+                match Map.tryFind e.Guild.Id guildWelcomeSetting with
+                | Some welcomeSettingData ->
+                    let newcomersRoles =
+                        { welcomeSettingData with
+                            LeaversLogChannelMessage =
+                                WelcomeSetting.ChannelMessage.Init channelId template
+                                |> Some
+                        }
+
+                    WelcomeSetting.replace newcomersRoles
+
+                    Map.add guild.Id newcomersRoles guildWelcomeSetting
+                | None ->
+                    let channelMessage = WelcomeSetting.ChannelMessage.Init channelId template
+                    let x = WelcomeSetting.insert (guild.Id, None, None, None, None, None, None, None, Some channelMessage)
+                    Map.add guild.Id x guildWelcomeSetting
+
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leaver log setting has been set")))
 
             guildWelcomeSetting
         else
@@ -543,9 +614,8 @@ let reduce (msg: Msg) (state: State): State =
         if not e.Member.IsBot then
             let guildId = e.Guild.Id
 
-            match Map.tryFind guildId state.NewcomersRoles with
-            | Some data ->
-                data.RoleIds
+            let grantRoles roles =
+                roles
                 |> Seq.iter (fun roleId ->
                     match e.Guild.Roles.[roleId] with
                     | null -> ()
@@ -556,35 +626,70 @@ let reduce (msg: Msg) (state: State): State =
                         with e ->
                             printfn "%A" e.Message
                 )
+
+            match Map.tryFind guildId state.NewcomersRoles with
+            | Some data ->
+                grantRoles data.RoleIds
             | None -> ()
 
             match Map.tryFind guildId state.WelcomeSetting with
             | Some data ->
-                let send = function
-                    | Some outputChannelId, Some templateMessage ->
-                        match e.Guild.GetChannel outputChannelId with
-                        | null -> ()
-                        | outputChannel ->
-                            FParsecUtils.runEither Parser.ptemplateMessage templateMessage
-                            |> Either.map (
-                                List.map (function
-                                    | Text x -> x
-                                    | UserMention -> e.Member.Mention
-                                    | UserName -> e.Member.Username
-                                )
-                                >> System.String.Concat
+                let send (channelMessage: WelcomeSetting.ChannelMessage) =
+                    match e.Guild.GetChannel channelMessage.ChannelId with
+                    | null -> ()
+                    | outputChannel ->
+                        FParsecUtils.runEither Parser.ptemplateMessage channelMessage.Message
+                        |> Either.map (
+                            List.map (function
+                                | Text x -> x
+                                | UserMention -> e.Member.Mention
+                                | UserName -> e.Member.Username
                             )
-                            |> Either.iter (fun msg ->
+                            >> System.String.Concat
+                        )
+                        |> Either.iter (fun msg ->
+                            try
                                 awaiti <| outputChannel.SendMessageAsync msg
-                            )
+                            with e ->
+                                printfn "%A" e
+                        )
+
+                let sendOption = function
+                    | Some outputChannelId, Some templateMessage ->
+                        send (WelcomeSetting.ChannelMessage.Init outputChannelId templateMessage)
                     | _ -> ()
 
-                send (data.OutputChannel, data.TemplateMessage)
-                send (data.OutputLogChannel, data.TemplateLogMessage)
+                match Map.tryFind guildId state.Leavers with
+                | Some users ->
+                    match Map.tryFind e.Member.Id users with
+                    | Some user ->
+                        data.LeaversChannelMessage |> Option.iter send
+                        data.LeaversLogChannelMessage |> Option.iter send
 
-            | None -> ()
+                        grantRoles user.RoleIds
 
-        state
+                        { state with
+                            Leavers =
+                                Leavers.remove user
+                                let datas = Map.remove e.Member.Id users
+                                Map.add guildId datas state.Leavers
+                        }
+                    | None ->
+                        sendOption (data.OutputChannel, data.TemplateMessage)
+                        sendOption (data.OutputLogChannel, data.TemplateLogMessage)
+
+                        state
+                | None ->
+                    sendOption (data.OutputChannel, data.TemplateMessage)
+                    sendOption (data.OutputLogChannel, data.TemplateLogMessage)
+
+                    state
+
+            | None ->
+                state
+
+        else
+            state
 
     | GuildMemberRemovedHandle e ->
         if not e.Member.IsBot then
@@ -607,15 +712,53 @@ let reduce (msg: Msg) (state: State): State =
                                 >> System.String.Concat
                             )
                             |> Either.iter (fun msg ->
-                                awaiti <| outputChannel.SendMessageAsync msg
+                                try
+                                    awaiti <| outputChannel.SendMessageAsync msg
+                                with e ->
+                                    printfn "%A" e
                             )
                     | _ -> ()
 
                 send (data.OutputLeaveChannel, data.TemplateLeaveMessage)
 
-            | None -> ()
+                { state with
+                    Leavers =
+                        let roleIds =
+                            e.Member.Roles
+                            |> Seq.map (fun role -> role.Id)
+                            |> Array.ofSeq
 
-        state
+                        state.Leavers
+                        |> Map.addOrModWith
+                            guildId
+                            (fun () ->
+                                let data = Leavers.insert (guildId, e.Member.Id, roleIds)
+
+                                Map.add e.Member.Id data Map.empty
+                            )
+                            (fun guild ->
+                                guild
+                                |> Map.addOrModWith
+                                    e.Member.Id
+                                    (fun () ->
+                                        Leavers.insert (guildId, e.Member.Id, roleIds)
+                                    )
+                                    (fun data ->
+                                        let data =
+                                            { data with
+                                                RoleIds = roleIds
+                                            }
+
+                                        Leavers.replace data
+
+                                        data
+                                    )
+                            )
+                }
+            | None ->
+                state
+        else
+            state
 
     | Request(e, cmd) ->
         match cmd with
@@ -634,6 +777,7 @@ let m =
     let init = {
         NewcomersRoles = NewcomersRoles.getAll ()
         WelcomeSetting = WelcomeSetting.getAll ()
+        Leavers = Leavers.getAll ()
     }
 
     MailboxProcessor.Start (fun mail ->

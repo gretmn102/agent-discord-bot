@@ -67,6 +67,14 @@ module NewcomersRoles =
         x
 
 module WelcomeSetting =
+    type ChannelMessage =
+        {
+            ChannelId: ChannelId
+            Message: string
+        }
+        static member Init channelId message =
+            { ChannelId = channelId; Message = message }
+
     type WelcomeSettingData =
         {
             mutable Id: ObjectId
@@ -77,8 +85,10 @@ module WelcomeSetting =
             mutable TemplateLogMessage: string option
             mutable OutputLeaveChannel: ChannelId option
             mutable TemplateLeaveMessage: string option
+            mutable LeaversChannelMessage: ChannelMessage option
+            mutable LeaversLogChannelMessage: ChannelMessage option
         }
-        static member Init(guildId, outputChannel, templateMessage, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage) =
+        static member Init(guildId, outputChannel, templateMessage, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage, leaversChannelMessage, leaversLogChannelMessage) =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
@@ -88,6 +98,8 @@ module WelcomeSetting =
                 TemplateLogMessage = templateLogMessage
                 OutputLeaveChannel = outputLeaveChannel
                 TemplateLeaveMessage = templateLeaveMessage
+                LeaversChannelMessage = leaversChannelMessage
+                LeaversLogChannelMessage = leaversLogChannelMessage
             }
 
     let welcomeSetting = Db.database.GetCollection<WelcomeSettingData>("welcomeSetting")
@@ -106,8 +118,8 @@ module WelcomeSetting =
         welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
         |> ignore
 
-    let insert (guildId, outputChannel, roleIds, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage) =
-        let x = WelcomeSettingData.Init(guildId, outputChannel, roleIds, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage)
+    let insert (guildId, outputChannel, roleIds, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage, leaversChannelMessage, leaversLogChannelMessage) =
+        let x = WelcomeSettingData.Init(guildId, outputChannel, roleIds, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage, leaversChannelMessage, leaversLogChannelMessage)
         welcomeSetting.InsertOne(x)
         x
 
@@ -148,3 +160,48 @@ module InvitesSetting =
         let x = SettingData.Init(guildId, outputChannel, associations)
         welcomeSetting.InsertOne(x)
         x
+
+module Leavers =
+    type Data =
+        {
+            mutable Id: ObjectId
+            mutable GuildId: GuildId
+            mutable UserId: UserId
+            mutable RoleIds: RoleId []
+        }
+        static member Init(guildId, userId, rolesId) =
+            {
+                Id = ObjectId.Empty
+                GuildId = guildId
+                UserId = userId
+                RoleIds = rolesId
+            }
+
+    let datas = Db.database.GetCollection<Data>("leavers")
+
+    type GuildDatas = Map<GuildId, Map<UserId, Data>>
+
+    let getAll (): GuildDatas =
+        datas.Find(fun x -> true).ToEnumerable()
+        |> Seq.fold
+            (fun st x ->
+                st
+                |> Map.addOrModWith
+                    x.GuildId
+                    (fun () -> Map.add x.UserId x Map.empty)
+                    (fun st -> Map.add x.UserId x st)
+            )
+            Map.empty
+
+    let replace (newRoleData: Data) =
+        datas.ReplaceOne((fun x -> x.Id = newRoleData.Id), newRoleData)
+        |> ignore
+
+    let insert (guildId, userId, rolesId) =
+        let x = Data.Init(guildId, userId, rolesId)
+        datas.InsertOne(x)
+        x
+
+    let remove (roleData: Data) =
+        datas.DeleteOne(fun x -> x.Id = roleData.Id)
+        |> ignore
