@@ -47,6 +47,8 @@ type Cmd =
 
     | InvitesCmd of Doorkeeper.Invites.Request
 
+    | UserInfoCmd of UserInfo.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -90,6 +92,8 @@ let pcommand: _ Parser =
         Boosters.Main.Parser.start |>> BoostersCmd
 
         Doorkeeper.Invites.Parser.start |>> InvitesCmd
+
+        UserInfo.Main.Parser.start |>> UserInfoCmd
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

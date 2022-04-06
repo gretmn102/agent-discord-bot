@@ -70,6 +70,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.InvitesCmd msg ->
                 Doorkeeper.Invites.exec e msg
 
+            | CommandParser.UserInfoCmd msg ->
+                UserInfo.Main.exec client e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -86,6 +89,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         "`.numberToWords <число>` — говорит число словами, например, `.numberToWords 21435` выдаст:"
                         "```"
                         "двадцать одна тысяча четыреста тридцать пять```"
+                        "`.avatar @user` — аватарка указанного пользователя"
                     ] |> String.concat "\n"
 
                 b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
