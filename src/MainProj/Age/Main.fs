@@ -41,6 +41,7 @@ type Req =
     /// `age * count`
     | GetAgeStatistics of AsyncReplyChannel<Map<int, int>> * GuildId
     | IsUserEnteredAge of AsyncReplyChannel<bool> * UserId
+    | RemoveGuildId of UserId * GuildId
 
 let reduce (msg: Req) (state: State) =
     match msg with
@@ -89,6 +90,23 @@ let reduce (msg: Req) (state: State) =
         |> r.Reply
 
         state
+
+    | RemoveGuildId(userId, guildId) ->
+        match Map.tryFind userId state.Users with
+        | None -> state
+        | Some userData ->
+            let userData =
+                { userData with
+                    GuildIds =
+                        Array.filter ((<>) guildId) userData.GuildIds
+                }
+
+            Model.Age.replace userData
+
+            { state with
+                Users =
+                    Map.add userId userData state.Users
+            }
 
     | Request(e, msg) ->
         match msg with
@@ -229,3 +247,6 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
         | _ -> false
     else
         false
+
+let guildMemberRemoveHandle (e: EventArgs.GuildMemberRemoveEventArgs) =
+    m.Post (RemoveGuildId (e.Member.Id, e.Guild.Id))
