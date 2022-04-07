@@ -49,6 +49,8 @@ type Cmd =
 
     | UserInfoCmd of UserInfo.Main.Request
 
+    | AgeCmd of Age.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -94,6 +96,8 @@ let pcommand: _ Parser =
         Doorkeeper.Invites.Parser.start |>> InvitesCmd
 
         UserInfo.Main.Parser.start |>> UserInfoCmd
+
+        Age.Main.Parser.start |>> AgeCmd
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox

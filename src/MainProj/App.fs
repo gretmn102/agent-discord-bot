@@ -73,6 +73,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.UserInfoCmd msg ->
                 UserInfo.Main.exec client e msg
 
+            | CommandParser.AgeCmd msg ->
+                Age.Main.exec e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -173,7 +176,10 @@ let main argv =
         ))
         client.add_ComponentInteractionCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             client.Logger.LogInformation(botEventId, "Component created", [||])
-            AppsHub.resp client e
+            let isHandled = Age.Main.componentInteractionCreateHandle client e
+
+            if not isHandled then
+                AppsHub.resp client e
 
             Task.CompletedTask
         ))
@@ -226,6 +232,12 @@ let main argv =
 
         client.add_InviteDeleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             Doorkeeper.Invites.inviteDeletedHandle e
+
+            Task.CompletedTask
+        ))
+
+        client.add_ModalSubmitted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            Age.Main.modalHandle e
 
             Task.CompletedTask
         ))

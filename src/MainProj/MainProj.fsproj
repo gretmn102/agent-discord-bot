@@ -71,6 +71,8 @@
     <Compile Include="Boosters\Model.fs" />
     <Compile Include="Boosters\Main.fs" />
     <Compile Include="UserInfo\Main.fs" />
+    <Compile Include="Age\Model.fs" />
+    <Compile Include="Age\Main.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />
