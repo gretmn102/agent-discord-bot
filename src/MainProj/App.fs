@@ -194,6 +194,7 @@ let main argv =
         client.add_GuildMemberAdded (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             Doorkeeper.Main.guildMemberAddHandle e
             Doorkeeper.Invites.guildMemberAddedHandle e
+            Age.Main.guildMemberAddedHandle e
 
             Task.CompletedTask
         ))

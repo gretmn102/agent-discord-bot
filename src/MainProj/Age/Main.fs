@@ -35,13 +35,16 @@ type State =
         Users: Model.Age.Users
     }
 
+[<Struct>]
+type AddOrRemove = Add | Remove
+
 type Req =
     | Request of EventArgs.MessageCreateEventArgs * Request
     | InputAge of UserId * GuildId * int
     /// `age * count`
     | GetAgeStatistics of AsyncReplyChannel<Map<int, int>> * GuildId
     | IsUserEnteredAge of AsyncReplyChannel<bool> * UserId
-    | RemoveGuildId of UserId * GuildId
+    | AddOrRemoveGuildId of AddOrRemove * UserId * GuildId
 
 let reduce (msg: Req) (state: State) =
     match msg with
@@ -89,14 +92,18 @@ let reduce (msg: Req) (state: State) =
 
         state
 
-    | RemoveGuildId(userId, guildId) ->
+    | AddOrRemoveGuildId(addOrRemove, userId, guildId) ->
         match Map.tryFind userId state.Users with
         | None -> state
         | Some userData ->
             let userData =
                 { userData with
                     GuildIds =
-                        Set.remove guildId userData.GuildIds
+                        match addOrRemove with
+                        | Remove ->
+                            Set.remove guildId userData.GuildIds
+                        | Add ->
+                            Set.add guildId userData.GuildIds
                 }
 
             Model.Age.replace userData
@@ -251,4 +258,7 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
         false
 
 let guildMemberRemoveHandle (e: EventArgs.GuildMemberRemoveEventArgs) =
-    m.Post (RemoveGuildId (e.Member.Id, e.Guild.Id))
+    m.Post (AddOrRemoveGuildId (Remove, e.Member.Id, e.Guild.Id))
+
+let guildMemberAddedHandle (e: EventArgs.GuildMemberAddEventArgs) =
+    m.Post (AddOrRemoveGuildId (Add, e.Member.Id, e.Guild.Id))
