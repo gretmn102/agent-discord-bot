@@ -1,18 +1,27 @@
 module Ranking.Main
+open FsharpMyExtension
 open DSharpPlus
 
 open Types
 open Model
 
-type SettingRequest =
+type RankingSettingRequest =
     | SetOutputChannel of ChannelId
     | SetLevelRoles of (ChannelId * int) list
     | GetLevelRoles
 
+type MostActiveSettingRequest =
+    | SetMostActiveRole of RoleId
+    | GetMostActiveRole
+
 type Request =
     | SetExp of UserId * uint64
     | GetRank of UserId option
-    | SettingRequest of SettingRequest
+    | SettingRequest of RankingSettingRequest
+
+    | MostActiveSettingRequest of MostActiveSettingRequest
+    | MostActiveActivate
+    | MostActiveLeaderboard
 
 type Msg =
     | NewMessageHandle of EventArgs.MessageCreateEventArgs
@@ -25,6 +34,7 @@ type State =
         Settings: RankingSettings.GuildRankingSettings
         Rankings: Rankings.GuildRankings
         CoolDowns: Map<UserId, Ticks>
+        MostActiveSettings: MostActiveSettings.GuildDatas
     }
 
 let lowerBoundExp, upperBoundExp = 15, 25
@@ -195,9 +205,9 @@ let updateExp
     | None ->
         exec Map.empty
 
-let settingReduce
+let rankingSettingReduce
     (e: EventArgs.MessageCreateEventArgs)
-    (msg: SettingRequest)
+    (msg: RankingSettingRequest)
     (state: State): State =
 
     match msg with
@@ -303,6 +313,69 @@ let settingReduce
 
         state
 
+let mostActiveSettingReduce
+    (e: EventArgs.MessageCreateEventArgs)
+    (msg: MostActiveSettingRequest)
+    (state: State): State =
+
+    match msg with
+    | SetMostActiveRole roleId ->
+        let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync "Processing...")
+
+        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+            let settings: MostActiveSettings.GuildDatas =
+                let settings = state.MostActiveSettings
+
+                match Map.tryFind e.Guild.Id settings with
+                | Some setting ->
+                    let setting =
+                        { setting with
+                            MostActiveRoleId = roleId
+                        }
+
+                    MostActiveSettings.replace setting
+
+                    Map.add guild.Id setting settings
+                | None ->
+                    let x = MostActiveSettings.insert (guild.Id, roleId, 0UL, System.DateTime.UtcNow)
+                    Map.add guild.Id x settings
+
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("Most active role has been set")))
+
+            { state with MostActiveSettings = settings }
+
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have administrative permission")))
+
+            state
+
+
+    | GetMostActiveRole ->
+        let guild = e.Guild
+        let replyMessage =
+            await (e.Channel.SendMessageAsync "Processing...")
+
+        match Map.tryFind guild.Id state.MostActiveSettings with
+        | Some setting ->
+            let b = Entities.DiscordMessageBuilder()
+
+            let embed =
+                Entities.DiscordEmbedBuilder()
+                    .WithDescription(sprintf "<@&%d>" setting.MostActiveRoleId)
+                    .WithColor(Entities.DiscordColor "#2f3136")
+                    .Build()
+
+            b.WithEmbed embed |> ignore
+
+            awaiti (replyMessage.ModifyAsync(b))
+        | None ->
+            awaiti (replyMessage.ModifyAsync(Entities.Optional "A most active role is not set"))
+
+        state
+
 let requestReduce
     (e: EventArgs.MessageCreateEventArgs)
     (msg: Request)
@@ -378,7 +451,156 @@ let requestReduce
             state
 
     | SettingRequest settingMsg ->
-        settingReduce e settingMsg state
+        rankingSettingReduce e settingMsg state
+
+    | MostActiveSettingRequest settingMsg ->
+        mostActiveSettingReduce e settingMsg state
+
+    | MostActiveActivate ->
+        let guild = e.Guild
+        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let replyMessage =
+            await (e.Channel.SendMessageAsync "Processing...")
+
+        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+            match Map.tryFind e.Guild.Id state.MostActiveSettings with
+            | Some mostActiveSetting ->
+                let state =
+                    let guildId = guild.Id
+                    match Map.tryFind guildId state.Rankings with
+                    | None -> state
+                    | Some rankings ->
+                        let mostActive =
+                            rankings
+                            |> Seq.fold
+                                (fun lastMostActive (KeyValue(userId, user)) ->
+                                    match lastMostActive with
+                                    | Some (lastMostActive: Rankings.RankingData) ->
+                                        if user.DayExp > lastMostActive.DayExp then
+                                            user
+                                        else
+                                            lastMostActive
+                                    | None -> user
+                                    |> Some
+                                )
+                                None
+
+                        match mostActive with
+                        | Some mostActiveUser ->
+                            let update mostActiveSetting =
+                                MostActiveSettings.replace mostActiveSetting
+
+                                let rankings =
+                                    rankings
+                                    |> Map.map (fun _ user ->
+                                        let user =
+                                            { user with DayExp = 0UL }
+
+                                        Rankings.replace user
+
+                                        user
+                                    )
+
+                                { state with
+                                    Rankings = Map.add guildId rankings state.Rankings
+                                    MostActiveSettings = Map.add guildId mostActiveSetting state.MostActiveSettings
+                                }
+
+                            if mostActiveUser.UserId = mostActiveSetting.LastMostActiveUserId then
+                                { mostActiveSetting with
+                                    LastUpdate = System.DateTime.UtcNow
+                                }
+                                |> update
+                            else
+                                match guild.GetRole mostActiveSetting.MostActiveRoleId with
+                                | null -> ()
+                                | mostActiveRole ->
+                                    let getMember userId =
+                                        // DSharpPlus.Exceptions.NotFoundException: Not found: 404
+                                        try await <| guild.GetMemberAsync userId |> Some with e -> None
+
+                                    match getMember mostActiveSetting.LastMostActiveUserId with
+                                    | Some guildMember ->
+                                        try
+                                            guildMember.RevokeRoleAsync(mostActiveRole).GetAwaiter().GetResult()
+                                        with _ -> ()
+                                    | None -> ()
+
+                                    match getMember mostActiveUser.UserId with
+                                    | Some guildMember ->
+                                        try
+                                            guildMember.GrantRoleAsync(mostActiveRole).GetAwaiter().GetResult()
+                                        with _ -> ()
+                                    | None -> ()
+
+                                { mostActiveSetting with
+                                    LastUpdate = System.DateTime.UtcNow
+                                    LastMostActiveUserId = mostActiveUser.UserId
+                                }
+                                |> update
+
+                        | None ->
+                            state
+
+                awaiti <| replyMessage.ModifyAsync(Entities.Optional "Done!")
+
+                state
+            | None ->
+                awaiti <| replyMessage.ModifyAsync(Entities.Optional "Most active settings not set!")
+
+                state
+        else
+            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission")))
+
+            state
+
+    | MostActiveLeaderboard ->
+        e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+
+        match Map.tryFind e.Guild.Id state.MostActiveSettings with
+        | Some mostActiveSetting ->
+            match Map.tryFind e.Guild.Id state.Rankings with
+            | Some ranking ->
+                if Map.isEmpty ranking then
+                    awaiti <| e.Channel.SendMessageAsync "Not found any rank"
+                else
+                    let limit = 20
+                    let indexes, users, dayExps =
+                        let f = List.rev >> String.concat "\n"
+                        ranking
+                        |> Seq.sortByDescending (fun x -> x.Value.DayExp)
+                        |> Seq.truncate limit
+                        |> Seq.fold
+                            (fun (i, (indexes, ages, counts)) (KeyValue(userId, count)) ->
+                                i + 1, (string i::indexes, sprintf "<@!%d>" userId::ages, string count.DayExp::counts)
+                            )
+                            (1, ([], [], []))
+                        |> fun (_, (indexes, users, dayExps)) -> f indexes, f users, f dayExps
+
+                    let embed =
+                        Entities.DiscordEmbedBuilder()
+                            .WithColor(Entities.DiscordColor "#2f3136")
+                            .WithDescription(
+                                sprintf "Первые %d флудеров с <t:%d:D>:"
+                                    limit
+                                    (DateTime.Unix.toSec mostActiveSetting.LastUpdate)
+                            )
+                            .AddField("#", indexes, true)
+                            .AddField("Users", users, true)
+                            .AddField("DayExps", dayExps, true)
+                            .Build()
+
+                    let b = Entities.DiscordMessageBuilder()
+
+                    b.WithEmbed embed |> ignore
+
+                    awaiti <| e.Channel.SendMessageAsync b
+            | None ->
+                awaiti <| e.Channel.SendMessageAsync "Not found any rank"
+        | None ->
+            awaiti <| e.Channel.SendMessageAsync "Most active settings not set!"
+
+        state
 
 let reduce (msg: Msg) (state: State): State =
     match msg with
@@ -406,6 +628,7 @@ let m =
         Settings = RankingSettings.getAll ()
         Rankings = Rankings.getAll ()
         CoolDowns = Map.empty
+        MostActiveSettings = MostActiveSettings.getAll ()
     }
 
     MailboxProcessor.Start (fun mail ->
@@ -463,15 +686,39 @@ module Parser =
         skipStringCI "rank" >>. spaces
         >>. opt (puserMention <|> puint64)
 
+    let pmostActiveSetRole: _ Parser =
+        skipStringCI "mostActiveSetRole" >>. spaces
+        >>. (pmentionRole <|> puint64)
+
+    let pmostActiveGetRole: _ Parser =
+        skipStringCI "mostActiveGetRole"
+
+    let pmostActiveActivate: _ Parser =
+        skipStringCI "mostActiveActivate"
+
+    let pmostActiveLeaderboard: _ Parser =
+        skipStringCI "mostActiveLeaderboard"
+
     let start: _ Parser =
-        let psetting =
+        let prankingSetting =
             choice [
                 psetOutputChannel |>> SetOutputChannel
                 psetLevelRoles |>> SetLevelRoles
                 pgetLevelRoles >>% GetLevelRoles
             ]
+
+        let pmostActiveSetting =
+            choice [
+                pmostActiveSetRole |>> SetMostActiveRole
+                pmostActiveGetRole >>% GetMostActiveRole
+            ]
+
         choice [
             pgetRank |>> GetRank
             psetExp |>> SetExp
-            psetting |>> SettingRequest
+            prankingSetting |>> SettingRequest
+
+            pmostActiveSetting |>> MostActiveSettingRequest
+            pmostActiveActivate >>% MostActiveActivate
+            pmostActiveLeaderboard >>% MostActiveLeaderboard
         ]

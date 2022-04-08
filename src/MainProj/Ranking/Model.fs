@@ -89,3 +89,42 @@ module Rankings =
         let x = RankingData.Init(guildId, userId, exp)
         guildRankings.InsertOne(x)
         x
+
+module MostActiveSettings =
+    type Data =
+        {
+            mutable Id: ObjectId
+            mutable GuildId: GuildId
+            mutable MostActiveRoleId: RoleId
+            mutable LastMostActiveUserId: UserId
+            mutable LastUpdate: System.DateTime
+        }
+        static member Init(guildId, mostActiveRoleId, lastMostActiveUserId, lastUpdate): Data =
+            {
+                Id = ObjectId.Empty
+                GuildId = guildId
+                MostActiveRoleId = mostActiveRoleId
+                LastMostActiveUserId = lastMostActiveUserId
+                LastUpdate = lastUpdate
+            }
+
+    let collection = Db.database.GetCollection<Data>("mostActiveSettings")
+
+    type GuildDatas = Map<GuildId, Data>
+
+    let getAll (): GuildDatas =
+        collection.Find(fun x -> true).ToEnumerable()
+        |> Seq.fold
+            (fun st x ->
+                Map.add x.GuildId x st
+            )
+            Map.empty
+
+    let replace (newData: Data) =
+        collection.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+        |> ignore
+
+    let insert (guildId, mostActiveRoleId, lastMostActiveUserId, lastUpdate) =
+        let x = Data.Init(guildId, mostActiveRoleId, lastMostActiveUserId, lastUpdate)
+        collection.InsertOne(x)
+        x
