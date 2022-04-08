@@ -142,7 +142,10 @@ let updateExp
                 | None -> ()
 
             let newRank =
-                { rank with Exp = newExp }
+                { rank with
+                    Exp = newExp
+                    DayExp = (newExp - rank.Exp) + rank.DayExp
+                }
 
             Rankings.replace newRank
 

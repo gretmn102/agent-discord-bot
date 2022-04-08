@@ -54,6 +54,7 @@ module Rankings =
             mutable GuildId: GuildId
             mutable UserId: UserId
             mutable Exp: Exp
+            mutable DayExp: Exp
         }
         static member Init(guildId, userId, exp): RankingData =
             {
@@ -61,6 +62,7 @@ module Rankings =
                 GuildId = guildId
                 UserId = userId
                 Exp = exp
+                DayExp = 0UL
             }
 
     let guildRankings = Db.database.GetCollection<RankingData>("guildRankings")
