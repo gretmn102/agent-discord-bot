@@ -26,6 +26,7 @@ type Request =
 type Msg =
     | NewMessageHandle of EventArgs.MessageCreateEventArgs
     | Request of EventArgs.MessageCreateEventArgs * Request
+    | MostActiveActivateAll of DiscordClient
 
 type Ticks = int64
 
@@ -376,6 +377,83 @@ let mostActiveSettingReduce
 
         state
 
+let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostActiveSettings.Data) state =
+    let guildId = guild.Id
+    match Map.tryFind guildId state.Rankings with
+    | None -> state
+    | Some rankings ->
+        let mostActive =
+            rankings
+            |> Seq.fold
+                (fun lastMostActive (KeyValue(userId, user)) ->
+                    match lastMostActive with
+                    | Some (lastMostActive: Rankings.RankingData) ->
+                        if user.DayExp > lastMostActive.DayExp then
+                            user
+                        else
+                            lastMostActive
+                    | None -> user
+                    |> Some
+                )
+                None
+
+        match mostActive with
+        | Some mostActiveUser ->
+            let update mostActiveSetting =
+                MostActiveSettings.replace mostActiveSetting
+
+                let rankings =
+                    rankings
+                    |> Map.map (fun _ user ->
+                        let user =
+                            { user with DayExp = 0UL }
+
+                        Rankings.replace user
+
+                        user
+                    )
+
+                { state with
+                    Rankings = Map.add guildId rankings state.Rankings
+                    MostActiveSettings = Map.add guildId mostActiveSetting state.MostActiveSettings
+                }
+
+            if mostActiveUser.UserId = mostActiveSetting.LastMostActiveUserId then
+                { mostActiveSetting with
+                    LastUpdate = System.DateTime.UtcNow
+                }
+                |> update
+            else
+                match guild.GetRole mostActiveSetting.MostActiveRoleId with
+                | null -> ()
+                | mostActiveRole ->
+                    let getMember userId =
+                        // DSharpPlus.Exceptions.NotFoundException: Not found: 404
+                        try await <| guild.GetMemberAsync userId |> Some with e -> None
+
+                    match getMember mostActiveSetting.LastMostActiveUserId with
+                    | Some guildMember ->
+                        try
+                            guildMember.RevokeRoleAsync(mostActiveRole).GetAwaiter().GetResult()
+                        with _ -> ()
+                    | None -> ()
+
+                    match getMember mostActiveUser.UserId with
+                    | Some guildMember ->
+                        try
+                            guildMember.GrantRoleAsync(mostActiveRole).GetAwaiter().GetResult()
+                        with _ -> ()
+                    | None -> ()
+
+                { mostActiveSetting with
+                    LastUpdate = System.DateTime.UtcNow
+                    LastMostActiveUserId = mostActiveUser.UserId
+                }
+                |> update
+
+        | None ->
+            state
+
 let requestReduce
     (e: EventArgs.MessageCreateEventArgs)
     (msg: Request)
@@ -466,81 +544,7 @@ let requestReduce
             match Map.tryFind e.Guild.Id state.MostActiveSettings with
             | Some mostActiveSetting ->
                 let state =
-                    let guildId = guild.Id
-                    match Map.tryFind guildId state.Rankings with
-                    | None -> state
-                    | Some rankings ->
-                        let mostActive =
-                            rankings
-                            |> Seq.fold
-                                (fun lastMostActive (KeyValue(userId, user)) ->
-                                    match lastMostActive with
-                                    | Some (lastMostActive: Rankings.RankingData) ->
-                                        if user.DayExp > lastMostActive.DayExp then
-                                            user
-                                        else
-                                            lastMostActive
-                                    | None -> user
-                                    |> Some
-                                )
-                                None
-
-                        match mostActive with
-                        | Some mostActiveUser ->
-                            let update mostActiveSetting =
-                                MostActiveSettings.replace mostActiveSetting
-
-                                let rankings =
-                                    rankings
-                                    |> Map.map (fun _ user ->
-                                        let user =
-                                            { user with DayExp = 0UL }
-
-                                        Rankings.replace user
-
-                                        user
-                                    )
-
-                                { state with
-                                    Rankings = Map.add guildId rankings state.Rankings
-                                    MostActiveSettings = Map.add guildId mostActiveSetting state.MostActiveSettings
-                                }
-
-                            if mostActiveUser.UserId = mostActiveSetting.LastMostActiveUserId then
-                                { mostActiveSetting with
-                                    LastUpdate = System.DateTime.UtcNow
-                                }
-                                |> update
-                            else
-                                match guild.GetRole mostActiveSetting.MostActiveRoleId with
-                                | null -> ()
-                                | mostActiveRole ->
-                                    let getMember userId =
-                                        // DSharpPlus.Exceptions.NotFoundException: Not found: 404
-                                        try await <| guild.GetMemberAsync userId |> Some with e -> None
-
-                                    match getMember mostActiveSetting.LastMostActiveUserId with
-                                    | Some guildMember ->
-                                        try
-                                            guildMember.RevokeRoleAsync(mostActiveRole).GetAwaiter().GetResult()
-                                        with _ -> ()
-                                    | None -> ()
-
-                                    match getMember mostActiveUser.UserId with
-                                    | Some guildMember ->
-                                        try
-                                            guildMember.GrantRoleAsync(mostActiveRole).GetAwaiter().GetResult()
-                                        with _ -> ()
-                                    | None -> ()
-
-                                { mostActiveSetting with
-                                    LastUpdate = System.DateTime.UtcNow
-                                    LastMostActiveUserId = mostActiveUser.UserId
-                                }
-                                |> update
-
-                        | None ->
-                            state
+                    mostActiveActivate guild mostActiveSetting state
 
                 awaiti <| replyMessage.ModifyAsync(Entities.Optional "Done!")
 
@@ -622,6 +626,23 @@ let reduce (msg: Msg) (state: State): State =
 
     | Request (e, msg) ->
         requestReduce e msg state
+
+    | MostActiveActivateAll client ->
+        state.MostActiveSettings
+        |> Map.fold
+            (fun state guildId mostActiveSetting ->
+                let guild =
+                    try
+                        await <| client.GetGuildAsync guildId
+                        |> Some
+                    with e -> None
+
+                match guild with
+                | Some guild ->
+                    mostActiveActivate guild mostActiveSetting state
+                | None -> state
+            )
+            state
 
 let m =
     let init = {
@@ -722,3 +743,18 @@ module Parser =
             pmostActiveActivate >>% MostActiveActivate
             pmostActiveLeaderboard >>% MostActiveLeaderboard
         ]
+
+let mostActiveTimerStart (client: DiscordClient) =
+    let scheduler = new Scheduler.Scheduler<unit>(Scheduler.State.Empty)
+
+    let nextDay (now: System.DateTime) =
+        System.DateTime(now.Year, now.Month, now.Day + 1, 0, 0, 0)
+
+    scheduler.AddJob { Time = nextDay System.DateTime.Now; Type = () }
+
+    Scheduler.startAsync scheduler 100 (fun job ->
+        m.Post (MostActiveActivateAll client)
+
+        scheduler.AddJob { Time = nextDay job.Time; Type = () }
+    )
+    |> ignore

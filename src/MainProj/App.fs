@@ -244,6 +244,8 @@ let main argv =
             Task.CompletedTask
         ))
 
+        Ranking.Main.mostActiveTimerStart client
+
         client.ConnectAsync().GetAwaiter().GetResult()
 
         (Task.Delay -1).GetAwaiter().GetResult()
