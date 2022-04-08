@@ -11,7 +11,7 @@ module Age =
             mutable Id: ObjectId
             mutable UserId: UserId
             mutable Age: int
-            mutable GuildIds: GuildId []
+            mutable GuildIds: GuildId Set
         }
         static member Init(userId, date, guildIds) =
             {

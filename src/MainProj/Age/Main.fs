@@ -52,15 +52,13 @@ let reduce (msg: Req) (state: State) =
                 let userData =
                     { userData with
                         Age = age
-                        GuildIds =
-                            Array.append [| guildId |] userData.GuildIds
-                            |> Array.distinct
+                        GuildIds = Set.add guildId userData.GuildIds
                     }
                 Model.Age.replace userData
 
                 userData
             | None ->
-                Model.Age.insert(userId, age, [| guildId |])
+                Model.Age.insert(userId, age, Set.singleton guildId)
 
         { state with
             Users =
@@ -71,7 +69,7 @@ let reduce (msg: Req) (state: State) =
         state.Users
         |> Map.fold
             (fun st userId user ->
-                if Array.contains guildId user.GuildIds then
+                if Set.contains guildId user.GuildIds then
                     st
                     |> Map.addOrModWith
                         user.Age
@@ -98,7 +96,7 @@ let reduce (msg: Req) (state: State) =
             let userData =
                 { userData with
                     GuildIds =
-                        Array.filter ((<>) guildId) userData.GuildIds
+                        Set.remove guildId userData.GuildIds
                 }
 
             Model.Age.replace userData
