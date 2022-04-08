@@ -168,22 +168,26 @@ let exec e msg =
     m.Post (Request (e, msg))
 
 let createAgeStatisticEmbed guildId =
-    let ages, counts =
-        let ageStatistic = m.PostAndReply(fun r -> GetAgeStatistics(r, guildId))
+    let ageStatistic = m.PostAndReply(fun r -> GetAgeStatistics(r, guildId))
 
-        let f = List.rev >> String.concat "\n"
-        ageStatistic
-        |> Seq.fold
-            (fun (ages, counts) (KeyValue(age, count)) -> string age::ages, string count::counts)
-            ([], [])
-        |> fun (ages, counts) -> f ages, f counts
+    if Map.isEmpty ageStatistic then
+        Entities.DiscordEmbedBuilder()
+            .WithDescription("Пока что никто на этом сервере не прошел опрос.")
+            .Build()
+    else
+        let ages, counts =
+            let f = List.rev >> String.concat "\n"
+            ageStatistic
+            |> Seq.fold
+                (fun (ages, counts) (KeyValue(age, count)) -> string age::ages, string count::counts)
+                ([], [])
+            |> fun (ages, counts) -> f ages, f counts
 
-
-    Entities.DiscordEmbedBuilder()
-        .WithDescription("Статистика сервера такова:")
-        .AddField("Возраст", ages, true)
-        .AddField("Кол-во", counts, true)
-        .Build()
+        Entities.DiscordEmbedBuilder()
+            .WithDescription("Статистика сервера такова:")
+            .AddField("Возраст", ages, true)
+            .AddField("Кол-во", counts, true)
+            .Build()
 
 let modalHandle (e: EventArgs.ModalSubmitEventArgs) =
     let interaction = e.Interaction
