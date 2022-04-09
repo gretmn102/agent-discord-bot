@@ -23,11 +23,6 @@ type Request =
     | MostActiveActivate
     | MostActiveLeaderboard
 
-type Msg =
-    | NewMessageHandle of EventArgs.MessageCreateEventArgs
-    | Request of EventArgs.MessageCreateEventArgs * Request
-    | MostActiveActivateAll of DiscordClient
-
 type Ticks = int64
 
 type State =
@@ -37,6 +32,12 @@ type State =
         CoolDowns: Map<UserId, Ticks>
         MostActiveSettings: MostActiveSettings.GuildDatas
     }
+
+type Msg =
+    | NewMessageHandle of EventArgs.MessageCreateEventArgs
+    | Request of EventArgs.MessageCreateEventArgs * Request
+    | MostActiveActivateAll of DiscordClient
+    | GetState of AsyncReplyChannel<State>
 
 let lowerBoundExp, upperBoundExp = 15, 25
 
@@ -454,6 +455,9 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
         | None ->
             state
 
+[<Literal>]
+let MostActiveLeaderboardRefreshButtonId = "MostActiveLeaderboardRefreshButtonId"
+
 let requestReduce
     (e: EventArgs.MessageCreateEventArgs)
     (msg: Request)
@@ -596,6 +600,15 @@ let requestReduce
 
                     let b = Entities.DiscordMessageBuilder()
 
+                    b.AddComponents (
+                        Entities.DiscordButtonComponent(
+                            ButtonStyle.Secondary,
+                            MostActiveLeaderboardRefreshButtonId,
+                            "",
+                            emoji = Entities.DiscordComponentEmoji(Name = "🔄") // :arrows_counterclockwise:
+                        )
+                    ) |> ignore
+
                     b.WithEmbed embed |> ignore
 
                     awaiti <| e.Channel.SendMessageAsync b
@@ -643,7 +656,10 @@ let reduce (msg: Msg) (state: State): State =
                 | None -> state
             )
             state
+    | GetState r ->
+        r.Reply state
 
+        state
 let m =
     let init = {
         Settings = RankingSettings.getAll ()
@@ -673,6 +689,70 @@ let handle (e: EventArgs.MessageCreateEventArgs) =
 
 let execSettingCmd e msg =
     m.Post (Request (e, msg))
+
+let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
+    if e.Message.Author.Id = client.CurrentUser.Id then
+        match e.Id with
+        | MostActiveLeaderboardRefreshButtonId ->
+            let state = m.PostAndReply GetState
+
+            let b = Entities.DiscordInteractionResponseBuilder()
+
+            match Map.tryFind e.Guild.Id state.MostActiveSettings with
+            | Some mostActiveSetting ->
+                match Map.tryFind e.Guild.Id state.Rankings with
+                | Some ranking ->
+                    if Map.isEmpty ranking then
+                        b.Content <- "Not found any rank"
+                    else
+                        let limit = 20
+                        let indexes, users, dayExps =
+                            let f = List.rev >> String.concat "\n"
+                            ranking
+                            |> Seq.sortByDescending (fun x -> x.Value.DayExp)
+                            |> Seq.truncate limit
+                            |> Seq.fold
+                                (fun (i, (indexes, ages, counts)) (KeyValue(userId, count)) ->
+                                    i + 1, (string i::indexes, sprintf "<@!%d>" userId::ages, string count.DayExp::counts)
+                                )
+                                (1, ([], [], []))
+                            |> fun (_, (indexes, users, dayExps)) -> f indexes, f users, f dayExps
+
+                        let embed =
+                            Entities.DiscordEmbedBuilder()
+                                .WithColor(Entities.DiscordColor "#2f3136")
+                                .WithDescription(
+                                    sprintf "Первые %d флудеров с <t:%d:D>:"
+                                        limit
+                                        (DateTime.Unix.toSec mostActiveSetting.LastUpdate)
+                                )
+                                .AddField("#", indexes, true)
+                                .AddField("Users", users, true)
+                                .AddField("DayExps", dayExps, true)
+                                .Build()
+
+                        b.AddComponents (
+                            Entities.DiscordButtonComponent(
+                                ButtonStyle.Secondary,
+                                MostActiveLeaderboardRefreshButtonId,
+                                "",
+                                emoji = Entities.DiscordComponentEmoji(Name = "🔄") // :arrows_counterclockwise:
+                            )
+                        ) |> ignore
+
+                        b.AddEmbed embed |> ignore
+                | None ->
+                    b.Content <-  "Not found any rank"
+            | None ->
+                b.Content <-  "Most active settings not set!"
+
+            e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b).GetAwaiter().GetResult()
+
+            true
+        | _ -> false
+
+    else
+        false
 
 module Parser =
     open FParsec

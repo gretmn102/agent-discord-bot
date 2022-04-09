@@ -176,7 +176,10 @@ let main argv =
         ))
         client.add_ComponentInteractionCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             client.Logger.LogInformation(botEventId, "Component created", [||])
-            let isHandled = Age.Main.componentInteractionCreateHandle client e
+            let isHandled =
+                if Age.Main.componentInteractionCreateHandle client e then true
+                else
+                    Ranking.Main.componentInteractionCreateHandle client e
 
             if not isHandled then
                 AppsHub.resp client e
