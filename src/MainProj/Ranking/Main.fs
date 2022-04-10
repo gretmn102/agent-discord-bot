@@ -458,6 +458,55 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
 [<Literal>]
 let MostActiveLeaderboardRefreshButtonId = "MostActiveLeaderboardRefreshButtonId"
 
+let createMostActiveLeaderboard guildId setContent addComponents addEmbed state =
+    match Map.tryFind guildId state.MostActiveSettings with
+    | Some mostActiveSetting ->
+        match Map.tryFind guildId state.Rankings with
+        | Some ranking ->
+            if Map.isEmpty ranking then
+                setContent "Not found any rank"
+            else
+                let limit = 20
+                let indexes, users, dayExps =
+                    let f = List.rev >> String.concat "\n"
+                    ranking
+                    |> Seq.sortByDescending (fun x -> x.Value.DayExp)
+                    |> Seq.truncate limit
+                    |> Seq.fold
+                        (fun (i, (indexes, ages, counts)) (KeyValue(userId, count)) ->
+                            i + 1, (string i::indexes, sprintf "<@!%d>" userId::ages, string count.DayExp::counts)
+                        )
+                        (1, ([], [], []))
+                    |> fun (_, (indexes, users, dayExps)) -> f indexes, f users, f dayExps
+
+                let embed =
+                    Entities.DiscordEmbedBuilder()
+                        .WithColor(Entities.DiscordColor "#2f3136")
+                        .WithDescription(
+                            sprintf "Первые %d флудеров с <t:%d:D>:"
+                                limit
+                                (DateTime.Unix.toSec mostActiveSetting.LastUpdate)
+                        )
+                        .AddField("#", indexes, true)
+                        .AddField("Users", users, true)
+                        .AddField("DayExps", dayExps, true)
+                        .Build()
+
+                addComponents (
+                    Entities.DiscordButtonComponent(
+                        ButtonStyle.Secondary,
+                        MostActiveLeaderboardRefreshButtonId,
+                        "",
+                        emoji = Entities.DiscordComponentEmoji(Name = "🔄") // :arrows_counterclockwise:
+                    )
+                ) |> ignore
+
+                addEmbed embed |> ignore
+        | None ->
+            setContent "Not found any rank"
+    | None ->
+        setContent "Most active settings not set!"
+
 let requestReduce
     (e: EventArgs.MessageCreateEventArgs)
     (msg: Request)
@@ -565,57 +614,11 @@ let requestReduce
     | MostActiveLeaderboard ->
         e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
 
-        match Map.tryFind e.Guild.Id state.MostActiveSettings with
-        | Some mostActiveSetting ->
-            match Map.tryFind e.Guild.Id state.Rankings with
-            | Some ranking ->
-                if Map.isEmpty ranking then
-                    awaiti <| e.Channel.SendMessageAsync "Not found any rank"
-                else
-                    let limit = 20
-                    let indexes, users, dayExps =
-                        let f = List.rev >> String.concat "\n"
-                        ranking
-                        |> Seq.sortByDescending (fun x -> x.Value.DayExp)
-                        |> Seq.truncate limit
-                        |> Seq.fold
-                            (fun (i, (indexes, ages, counts)) (KeyValue(userId, count)) ->
-                                i + 1, (string i::indexes, sprintf "<@!%d>" userId::ages, string count.DayExp::counts)
-                            )
-                            (1, ([], [], []))
-                        |> fun (_, (indexes, users, dayExps)) -> f indexes, f users, f dayExps
+        let b = Entities.DiscordMessageBuilder()
 
-                    let embed =
-                        Entities.DiscordEmbedBuilder()
-                            .WithColor(Entities.DiscordColor "#2f3136")
-                            .WithDescription(
-                                sprintf "Первые %d флудеров с <t:%d:D>:"
-                                    limit
-                                    (DateTime.Unix.toSec mostActiveSetting.LastUpdate)
-                            )
-                            .AddField("#", indexes, true)
-                            .AddField("Users", users, true)
-                            .AddField("DayExps", dayExps, true)
-                            .Build()
+        createMostActiveLeaderboard e.Guild.Id (fun content -> b.Content <- content) b.AddComponents b.AddEmbed state
 
-                    let b = Entities.DiscordMessageBuilder()
-
-                    b.AddComponents (
-                        Entities.DiscordButtonComponent(
-                            ButtonStyle.Secondary,
-                            MostActiveLeaderboardRefreshButtonId,
-                            "",
-                            emoji = Entities.DiscordComponentEmoji(Name = "🔄") // :arrows_counterclockwise:
-                        )
-                    ) |> ignore
-
-                    b.WithEmbed embed |> ignore
-
-                    awaiti <| e.Channel.SendMessageAsync b
-            | None ->
-                awaiti <| e.Channel.SendMessageAsync "Not found any rank"
-        | None ->
-            awaiti <| e.Channel.SendMessageAsync "Most active settings not set!"
+        awaiti <| e.Channel.SendMessageAsync b
 
         state
 
@@ -698,53 +701,7 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
 
             let b = Entities.DiscordInteractionResponseBuilder()
 
-            match Map.tryFind e.Guild.Id state.MostActiveSettings with
-            | Some mostActiveSetting ->
-                match Map.tryFind e.Guild.Id state.Rankings with
-                | Some ranking ->
-                    if Map.isEmpty ranking then
-                        b.Content <- "Not found any rank"
-                    else
-                        let limit = 20
-                        let indexes, users, dayExps =
-                            let f = List.rev >> String.concat "\n"
-                            ranking
-                            |> Seq.sortByDescending (fun x -> x.Value.DayExp)
-                            |> Seq.truncate limit
-                            |> Seq.fold
-                                (fun (i, (indexes, ages, counts)) (KeyValue(userId, count)) ->
-                                    i + 1, (string i::indexes, sprintf "<@!%d>" userId::ages, string count.DayExp::counts)
-                                )
-                                (1, ([], [], []))
-                            |> fun (_, (indexes, users, dayExps)) -> f indexes, f users, f dayExps
-
-                        let embed =
-                            Entities.DiscordEmbedBuilder()
-                                .WithColor(Entities.DiscordColor "#2f3136")
-                                .WithDescription(
-                                    sprintf "Первые %d флудеров с <t:%d:D>:"
-                                        limit
-                                        (DateTime.Unix.toSec mostActiveSetting.LastUpdate)
-                                )
-                                .AddField("#", indexes, true)
-                                .AddField("Users", users, true)
-                                .AddField("DayExps", dayExps, true)
-                                .Build()
-
-                        b.AddComponents (
-                            Entities.DiscordButtonComponent(
-                                ButtonStyle.Secondary,
-                                MostActiveLeaderboardRefreshButtonId,
-                                "",
-                                emoji = Entities.DiscordComponentEmoji(Name = "🔄") // :arrows_counterclockwise:
-                            )
-                        ) |> ignore
-
-                        b.AddEmbed embed |> ignore
-                | None ->
-                    b.Content <-  "Not found any rank"
-            | None ->
-                b.Content <-  "Most active settings not set!"
+            createMostActiveLeaderboard e.Guild.Id (fun content -> b.Content <- content) b.AddComponents b.AddEmbed state
 
             e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b).GetAwaiter().GetResult()
 
