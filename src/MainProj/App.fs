@@ -163,6 +163,12 @@ let main argv =
             Task.CompletedTask
         ))
 
+        client.add_MessageDeleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+            ReactionEvent.Main.messageDeletedHandle e
+
+            Task.CompletedTask
+        ))
+
         client.add_GuildRoleDeleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             UserRole.Main.guildRoleDeletedHandler e
 

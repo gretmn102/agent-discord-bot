@@ -31,32 +31,47 @@ module ReactionEvents =
             }
 
     let reactionEvents = Db.database.GetCollection<ReactionEventData>("reactionEvents")
-    type Key =
+
+    type MessagePath =
         {
             ChannelId: ChannelId
             MessageId: MessageId
+        }
+
+    type Emoji =
+        {
             // if 0UL then it is a standard emoji
             EmojiId: uint64
             EmojiName: string
         }
-    type GuildReactionEvent = Map<GuildId, Map<Key, ReactionEventData>>
+
+    type GuildReactionEvent = Map<GuildId, Map<MessagePath, Map<Emoji, ReactionEventData>>>
 
     let getAll (): GuildReactionEvent =
         reactionEvents.Find(fun x -> true).ToEnumerable()
         |> Seq.fold
             (fun st x ->
-                let key = {
+                let messagePath = {
                     ChannelId = x.ChannelId
                     MessageId = x.MessageId
+                }
+
+                let emoji = {
                     EmojiId = x.EmojiId
                     EmojiName = x.EmojiName
                 }
 
+                let add =
+                    Map.addOrModWith
+                        messagePath
+                        (fun () -> Map.add emoji x Map.empty)
+                        (Map.add emoji x)
+
                 st
                 |> Map.addOrModWith
                     x.GuildId
-                    (fun () -> Map.add key x Map.empty)
-                    (fun m -> Map.add key x m)
+                    (fun () -> add Map.empty)
+                    add
             )
             Map.empty
 
@@ -68,3 +83,7 @@ module ReactionEvents =
         let x = ReactionEventData.Init(guildId, channelId, messageId, emojiId, emojiName, roleIds)
         reactionEvents.InsertOne(x)
         x
+
+    let remove (newData: ReactionEventData) =
+        reactionEvents.DeleteOne (fun x -> x.Id = newData.Id)
+        |> ignore

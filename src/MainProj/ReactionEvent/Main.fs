@@ -37,6 +37,7 @@ type ChangedEvent =
 type Msg =
     | GuildReactionHandle of ChangedEvent
     | Request of EventArgs.MessageCreateEventArgs * Request
+    | MessageDeletedHandle of EventArgs.MessageDeleteEventArgs
 
 type State = {
     ReactionEvents: Model.ReactionEvents.GuildReactionEvent
@@ -52,48 +53,55 @@ let reduce (msg: Msg) (state: State) =
                     Changed = Added
                     Guild = e.Guild
                     User = e.User
-                    Key = ({
+                    MessagePath = ({
                         ChannelId = e.Channel.Id
                         MessageId = e.Message.Id
+                    } : Model.ReactionEvents.MessagePath)
+                    Emoji = ({
                         EmojiId = e.Emoji.Id
                         EmojiName = e.Emoji.Name
-                    } : Model.ReactionEvents.Key)
+                    } : Model.ReactionEvents.Emoji)
                 |}
             | RemovedEvent e ->
                 {|
                     Changed = Removed
                     Guild = e.Guild
                     User = e.User
-                    Key = ({
+                    MessagePath = ({
                         ChannelId = e.Channel.Id
                         MessageId = e.Message.Id
+                    } : Model.ReactionEvents.MessagePath)
+                    Emoji = ({
                         EmojiId = e.Emoji.Id
                         EmojiName = e.Emoji.Name
-                    } : Model.ReactionEvents.Key)
+                    } : Model.ReactionEvents.Emoji)
                 |}
 
         match Map.tryFind x.Guild.Id state.ReactionEvents with
         | None -> ()
         | Some reactionEvents ->
-            match Map.tryFind x.Key reactionEvents with
+            match Map.tryFind x.MessagePath reactionEvents with
             | None -> ()
             | Some data ->
-                let guildMember = await (x.Guild.GetMemberAsync(x.User.Id))
-                let grantOrRevokeRole =
-                    match x.Changed with
-                    | Added -> guildMember.GrantRoleAsync
-                    | Removed -> guildMember.RevokeRoleAsync
+                match Map.tryFind x.Emoji data with
+                | None -> ()
+                | Some data ->
+                    let guildMember = await (x.Guild.GetMemberAsync(x.User.Id))
+                    let grantOrRevokeRole =
+                        match x.Changed with
+                        | Added -> guildMember.GrantRoleAsync
+                        | Removed -> guildMember.RevokeRoleAsync
 
-                data.RoleIds
-                |> Set.iter (fun roleId ->
-                    match x.Guild.GetRole roleId with
-                    | null -> ()
-                    | role ->
-                        try
-                            (grantOrRevokeRole role).GetAwaiter().GetResult()
-                        with e ->
-                            ()
-                )
+                    data.RoleIds
+                    |> Set.iter (fun roleId ->
+                        match x.Guild.GetRole roleId with
+                        | null -> ()
+                        | role ->
+                            try
+                                (grantOrRevokeRole role).GetAwaiter().GetResult()
+                            with e ->
+                                ()
+                    )
 
         state
     | Request(e, req) ->
@@ -104,9 +112,12 @@ let reduce (msg: Msg) (state: State) =
                 await (e.Channel.SendMessageAsync("Processing..."))
 
             if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-                let key: Model.ReactionEvents.Key = {
+                let messagePath: Model.ReactionEvents.MessagePath = {
                     ChannelId = messagePath.ChannelId
                     MessageId = messagePath.MessageId
+                }
+
+                let emoji: Model.ReactionEvents.Emoji = {
                     EmojiId =
                         match emoji with
                         | DiscordMessage.CustomEmoji e -> e.Id
@@ -119,20 +130,22 @@ let reduce (msg: Msg) (state: State) =
 
                 let data =
                     Model.ReactionEvents.insert
-                        (e.Guild.Id, key.ChannelId, key.MessageId, key.EmojiId, key.EmojiName, Set.ofList roleIds)
+                        (e.Guild.Id, messagePath.ChannelId, messagePath.MessageId, emoji.EmojiId, emoji.EmojiName, Set.ofList roleIds)
 
                 let state =
+                    let add =
+                        Map.addOrModWith
+                            messagePath
+                            (fun () -> Map.add emoji data Map.empty)
+                            (Map.add emoji data)
+
                     { state with
                         ReactionEvents =
                             state.ReactionEvents
                             |> Map.addOrModWith
                                 e.Guild.Id
-                                (fun () ->
-                                    Map.add key data Map.empty
-                                )
-                                (fun m ->
-                                    Map.add key data m
-                                )
+                                (fun () -> add Map.empty)
+                                add
                     }
 
                 let msg = "Done"
@@ -144,6 +157,27 @@ let reduce (msg: Msg) (state: State) =
                 awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
 
                 state
+    | MessageDeletedHandle e ->
+        match Map.tryFind e.Guild.Id state.ReactionEvents with
+        | None -> state
+        | Some reactionEvents ->
+            let messagePath = ({
+                ChannelId = e.Channel.Id
+                MessageId = e.Message.Id
+            } : Model.ReactionEvents.MessagePath)
+
+            match Map.tryFind messagePath reactionEvents with
+            | None -> state
+            | Some data ->
+                data
+                |> Map.iter (fun _ data ->
+                    Model.ReactionEvents.remove data
+                )
+
+                { state with
+                    ReactionEvents =
+                        let m = Map.remove messagePath reactionEvents
+                        Map.add e.Guild.Id m state.ReactionEvents }
 
 let m =
     let init = {
@@ -171,3 +205,6 @@ let handle e =
 
 let exec e msg =
     m.Post (Request (e, msg))
+
+let messageDeletedHandle e =
+    m.Post (MessageDeletedHandle e)
