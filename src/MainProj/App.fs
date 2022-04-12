@@ -183,9 +183,9 @@ let main argv =
         client.add_ComponentInteractionCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             client.Logger.LogInformation(botEventId, "Component created", [||])
             let isHandled =
-                if Age.Main.componentInteractionCreateHandle client e then true
-                else
-                    Ranking.Main.componentInteractionCreateHandle client e
+                Age.Main.componentInteractionCreateHandle client e
+                || UserRole.Main.componentInteractionCreateHandle client e
+                || Ranking.Main.componentInteractionCreateHandle client e
 
             if not isHandled then
                 AppsHub.resp client e
@@ -249,6 +249,7 @@ let main argv =
 
         client.add_ModalSubmitted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             Age.Main.modalHandle e
+            UserRole.Main.modalHandle e
 
             Task.CompletedTask
         ))

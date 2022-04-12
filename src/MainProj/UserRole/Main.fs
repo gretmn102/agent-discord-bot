@@ -1,5 +1,6 @@
 module UserRole.Main
 open FsharpMyExtension
+open FsharpMyExtension.Either
 open DSharpPlus
 
 open Types
@@ -12,7 +13,7 @@ type RoleEditModel = {
 }
 
 type Request =
-    | GiveOrChangeRole of RoleEditModel
+    | GiveOrChangeRole of RoleEditModel option
     | AddPermissiveRole of RoleId
     | RemovePermissiveRole of RoleId
     | GetPermissiveRoles
@@ -24,6 +25,8 @@ type Request =
 type Req =
     | Request of EventArgs.MessageCreateEventArgs * Request
     | GuildRoleDeletedHandler of EventArgs.GuildRoleDeleteEventArgs
+    | ModalHandle of EventArgs.ModalSubmitEventArgs
+    | ComponentInteractionCreateHandle of AsyncReplyChannel<bool> * DiscordClient * EventArgs.ComponentInteractionCreateEventArgs
 
 type State =
     {
@@ -32,136 +35,451 @@ type State =
         GuildTemplateRoles: TemplateRoles.GuildTemplateRoles
     }
 
-let reducer =
+module Parser =
+    open FParsec
+
+    open DiscordMessage.Parser
+
+    type 'Result Parser = Primitives.Parser<'Result, unit>
+
+    let phexColor: _ Parser =
+        pchar '#'
+        >>. manyMinMaxSatisfy 1 6 isHex
+        |>> fun hex ->
+            System.Convert.ToInt32(hex, 16)
+            |> Entities.DiscordColor
+
+    let phexOrDecColor: _ Parser =
+        phexColor <|> (pint32 |>> Entities.DiscordColor)
+
+    let roleNameCmd = "role"
+
+    let pgiveOrChangeRole: _ Parser =
+        let pargs =
+            pipe2
+                (pquote .>> spaces)
+                phexColor
+                (fun name color ->
+                    {
+                        Name = name
+                        Color = color
+                    }
+                )
+
+        pstringCI roleNameCmd >>. spaces
+        >>. opt pargs
+
+    let paddPermissiveRole: RoleId Parser =
+        pstringCI "addPermissiveRole" >>. spaces
+        >>. (pmentionRole <|> puint64)
+
+    let premovePermissiveRole: RoleId Parser =
+        pstringCI "removePermissiveRole" >>. spaces
+        >>. (pmentionRole <|> puint64)
+
+    let pgetPermissiveRoles: _ Parser =
+        pstringCI "permissiveRoles"
+
+    let pgetUserRoles: _ Parser =
+        pstringCI "userRoles"
+
+    let premoveUserRole: _ Parser =
+        pstringCI "removeUserRole" >>. spaces
+        >>. (pmentionRole <|> puint64)
+
+    let psetTemplateRole: _ Parser =
+        pstringCI "setTemplateRole" >>. spaces
+        >>. (pmentionRole <|> puint64)
+
+    let pupdateUserRolesPermissions: _ Parser =
+        pstringCI "updateUserRolesPermissions" >>. spaces
+
+    let start: _ Parser =
+        choice [
+            pgiveOrChangeRole |>> GiveOrChangeRole
+            paddPermissiveRole |>> AddPermissiveRole
+            premovePermissiveRole |>> RemovePermissiveRole
+            pgetPermissiveRoles >>% GetPermissiveRoles
+            pgetUserRoles >>% GetUserRoles
+            premoveUserRole |>> RemoveUserRole
+            psetTemplateRole |>> SetTemplateRole
+            pupdateUserRolesPermissions >>% UpdateRolesPermission
+        ]
+
+
+module UserRoleForm =
+    [<Literal>]
+    let GiveOrChangeRoleButtonId = "GiveOrChangeRoleButtonId"
+
+    [<Literal>]
+    let UserRoleFormModalId = "UserRoleFormModalId"
+
+    [<Literal>]
+    let UserRoleFormModalRoleNameId = "UserRoleFormModalRoleNameId"
+
+    [<Literal>]
+    let UserRoleFormModalColorId = "UserRoleFormModalColorId"
+
+    let createUI
+        (addComponents: Entities.DiscordComponent [] -> unit)
+        addEmbed
+        (guildMember: Entities.DiscordMember)
+        (userRole: UserId option) =
+
+        let content =
+            match userRole with
+            | Some userRole -> sprintf "%s, <@&%d> — твоя пользовательская роль." guildMember.Mention userRole
+            | None -> sprintf "%s, у тебя пока что нет пользовательской роли." guildMember.Mention
+
+        let embed =
+            Entities.DiscordEmbedBuilder()
+                .WithAuthor(sprintf "Пользовательская роль", iconUrl = "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/120/google/313/performing-arts_1f3ad.png")
+                .WithColor(Entities.DiscordColor "#2f3136")
+                .WithDescription(content)
+                // .WithFooter(sprintf "OwnerId: %d" guildMember.Id)
+                .Build()
+
+        addEmbed embed
+
+        addComponents [|
+            Entities.DiscordButtonComponent(
+                ButtonStyle.Secondary,
+                sprintf "%s%d" GiveOrChangeRoleButtonId guildMember.Id,
+                (match userRole with None -> "Создать роль" | Some _ -> "Изменить роль"),
+                emoji = Entities.DiscordComponentEmoji(Name = "🎭")
+            )
+        |]
+
+    let componentInteractionCreateHandle getRoleByUser (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
+        if e.Message.Author.Id = client.CurrentUser.Id then
+            if e.Id.StartsWith GiveOrChangeRoleButtonId then
+                let ownerId = uint64 e.Id.[GiveOrChangeRoleButtonId.Length..]
+                if e.User.Id = ownerId then
+                    let existRole: RoleEditModel option = getRoleByUser e.User.Id
+
+                    let b =
+                        Entities.DiscordInteractionResponseBuilder()
+                            .WithTitle("Пользовательская роль")
+                            .WithCustomId(UserRoleFormModalId)
+                            .WithContent("Цвет роли должен быть в шестнадцатеричном формате (например, `#ffa500` даст оранжевый цвет). Его можно выбрать на [W3Schools](https://www.w3schools.com/colors/colors_picker.asp), например, или еще где-нибудь.")
+                            .AddComponents([|
+                                Entities.TextInputComponent(
+                                    "Название роли",
+                                    UserRoleFormModalRoleNameId,
+                                    required = true,
+                                    placeholder = "Главная роль!",
+                                    style = TextInputStyle.Short,
+                                    value = (match existRole with None -> "" | Some role -> role.Name)
+                                )
+
+                            |]: Entities.DiscordComponent [])
+                            .AddComponents(
+                                Entities.TextInputComponent(
+                                    "Цвет роли",
+                                    UserRoleFormModalColorId,
+                                    required = true,
+                                    placeholder = "#ffa500",
+                                    style = TextInputStyle.Short,
+                                    value = (match existRole with None -> "" | Some role -> sprintf "#%x" role.Color.Value)
+                                )
+                            )
+
+                    e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b).GetAwaiter().GetResult()
+                else
+                    let b =
+                        Entities.DiscordInteractionResponseBuilder()
+
+                    b.IsEphemeral <- true
+                    b.Content <- sprintf "Этот интерфейс принадлежит <@!%d>. Создайте себе свой командой `.%s`" ownerId Parser.roleNameCmd
+
+                    e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                        .GetAwaiter().GetResult()
+
+                true
+            else
+                false
+        else
+            false
+
     let giveOrChangeRole
-        (e:EventArgs.MessageCreateEventArgs)
-        (roleEditModel: RoleEditModel)
+        userId
+        (guild: Entities.DiscordGuild)
+        setContent
+        (addComponents: Entities.DiscordComponent [] -> unit)
+        addEmbed
+        sendMessage
+        roleGranted
+        (roleEditModel: RoleEditModel option)
         (state: State) =
 
         let guildPermissiveRoles, guildUserRoles = state.GuildPermissiveRoles, state.GuildUserRoles
 
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-        let guild = e.Guild
-        let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+        let guildMember = await (guild.GetMemberAsync userId)
 
-        let hasPermissiveRole =
-            match Map.tryFind guild.Id guildPermissiveRoles with
-            | Some permissiveRoles ->
+        match Map.tryFind guild.Id guildPermissiveRoles with
+        | Some permissiveRoles ->
+            let hasPermissiveRole =
                 guildMember.Roles
                 |> Seq.exists (fun role ->
                     Set.contains role.Id permissiveRoles.RoleIds)
-            | None -> false
 
-        let createAndGrantRole () =
+            if hasPermissiveRole then
+                let createAndGrantRole () =
+                    match Map.tryFind guild.Id state.GuildTemplateRoles with
+                    | Some templateRole ->
+                        let templateRole = guild.GetRole templateRole.TemplateRoleId
 
-            match Map.tryFind guild.Id state.GuildTemplateRoles with
-            | Some templateRole ->
-                let templateRole = guild.GetRole templateRole.TemplateRoleId
+                        if isNull templateRole then
+                            setContent "The guild owner installed the template role, but it has been removed"
 
-                if isNull templateRole then
-                    awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner installed the template role, but it has been removed"))
-                    guildUserRoles
-                else
-                    if guild.Roles.Count < 250 then
-                        let role =
-                            guild.CreateRoleAsync (
-                                name = roleEditModel.Name,
-                                color = System.Nullable roleEditModel.Color,
-                                permissions = System.Nullable templateRole.Permissions
-                            )
-                            |> await
-
-                        try
-                            role.ModifyPositionAsync(templateRole.Position - 1)
-                            |> fun x -> x.GetAwaiter().GetResult()
-                        with
-                            ex ->
-                                let jsonMessage =
-                                    match ex with
-                                    | :? Exceptions.BadRequestException as x ->
-                                        x.JsonMessage
-                                    | :? Exceptions.UnauthorizedException as x ->
-                                        x.JsonMessage
-                                    | x -> x.Message
-
-                                let b = Entities.DiscordMessageBuilder()
-                                let embed = Entities.DiscordEmbedBuilder()
-                                embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
-                                embed.Description <-
-                                    [
-                                        "Error:"
-                                        "```"
-                                        sprintf "%s" jsonMessage
-                                        "```"
-                                        sprintf "The bot role must be higher than <@&%d>, or move the role yourself" templateRole.Id
-                                    ] |> String.concat "\n"
-
-                                b.Embed <- embed.Build()
-
-                                awaiti <| e.Channel.SendMessageAsync(b)
-
-                        guildMember.GrantRoleAsync role
-                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
-
-                        awaiti <| replyMessage.ModifyAsync(Entities.Optional("Role granted"))
-
-                        let x = Roles.insert (guild.Id, guildMember.Id, role.Id)
-
-                        guildUserRoles
-                        |> Map.addOrModWith
-                            x.GuildId
-                            (fun () -> Map.add x.UserId x Map.empty)
-                            (fun st -> Map.add x.UserId x st)
-                    else
-                        awaiti <| replyMessage.ModifyAsync(Entities.Optional("The number of roles exceeds 250"))
-
-                        guildUserRoles
-            | None ->
-                awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner didn't set the template role"))
-
-                guildUserRoles
-        if hasPermissiveRole then
-            match Map.tryFind guild.Id guildUserRoles with
-            | Some userRoles ->
-                match Map.tryFind guildMember.Id userRoles with
-                | Some roleData ->
-                    let userRole = guild.GetRole(roleData.RoleId)
-                    if isNull userRole then
-                        createAndGrantRole ()
-                    else
-                        userRole.ModifyAsync (
-                            name = roleEditModel.Name,
-                            color = System.Nullable(roleEditModel.Color)
-                        )
-                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
-
-                        let roleGranded =
-                            guildMember.Roles
-                            |> Seq.exists (fun x -> x.Id = userRole.Id)
-
-                        if roleGranded then
-                            awaiti <| replyMessage.ModifyAsync(Entities.Optional("Role has been changed"))
+                            guildUserRoles
                         else
-                            try
-                                guildMember.GrantRoleAsync userRole
+                            if guild.Roles.Count < 250 then
+                                match roleEditModel with
+                                | None ->
+                                    createUI addComponents addEmbed guildMember None
+
+                                    guildUserRoles
+                                | Some roleEditModel ->
+                                    let role =
+                                        guild.CreateRoleAsync (
+                                            name = roleEditModel.Name,
+                                            color = System.Nullable roleEditModel.Color,
+                                            permissions = System.Nullable templateRole.Permissions
+                                        )
+                                        |> await
+
+                                    try
+                                        role.ModifyPositionAsync(templateRole.Position - 1)
+                                        |> fun x -> x.GetAwaiter().GetResult()
+                                    with
+                                        ex ->
+                                            let jsonMessage =
+                                                match ex with
+                                                | :? Exceptions.BadRequestException as x ->
+                                                    x.JsonMessage
+                                                | :? Exceptions.UnauthorizedException as x ->
+                                                    x.JsonMessage
+                                                | x -> x.Message
+
+                                            let embed =
+                                                Entities.DiscordEmbedBuilder()
+                                                    .WithColor(Entities.DiscordColor "#2f3136")
+                                                    .WithDescription(
+                                                        [
+                                                            "Error:"
+                                                            "```"
+                                                            sprintf "%s" jsonMessage
+                                                            "```"
+                                                            sprintf "The bot role must be higher than <@&%d>, or move the role yourself" templateRole.Id
+                                                        ] |> String.concat "\n"
+                                                    ).Build()
+
+                                            sendMessage embed
+
+                                    guildMember.GrantRoleAsync role
+                                    |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                    roleGranted role.Id
+                                    setContent "Role has been granted"
+
+                                    let x = Roles.insert (guild.Id, guildMember.Id, role.Id)
+
+                                    guildUserRoles
+                                    |> Map.addOrModWith
+                                        x.GuildId
+                                        (fun () -> Map.add x.UserId x Map.empty)
+                                        (fun st -> Map.add x.UserId x st)
+                            else
+                                setContent "The number of roles exceeds 250"
+
+                                guildUserRoles
+                    | None ->
+                        setContent "The guild owner didn't set the template role"
+
+                        guildUserRoles
+
+                match Map.tryFind guild.Id guildUserRoles with
+                | Some userRoles ->
+                    match Map.tryFind guildMember.Id userRoles with
+                    | Some roleData ->
+                        match guild.GetRole roleData.RoleId with
+                        | null ->
+                            createAndGrantRole ()
+                        | userRole ->
+                            match roleEditModel with
+                            | None ->
+                                createUI addComponents addEmbed guildMember (Some userRole.Id)
+
+                                guildUserRoles
+                            | Some roleEditModel ->
+                                userRole.ModifyAsync (
+                                    name = roleEditModel.Name,
+                                    color = System.Nullable(roleEditModel.Color)
+                                )
                                 |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
 
-                                awaiti <| replyMessage.ModifyAsync(Entities.Optional("Role has been changed and returned to user"))
-                            with e ->
-                                let errMsg = sprintf "An error occurred when returning the role to the user:\n%s" e.Message
-                                awaiti <| replyMessage.ModifyAsync(Entities.Optional(errMsg))
+                                let roleGranded =
+                                    guildMember.Roles
+                                    |> Seq.exists (fun x -> x.Id = userRole.Id)
 
-                        guildUserRoles
+                                if roleGranded then
+                                    setContent "Role has been changed"
+                                else
+                                    try
+                                        guildMember.GrantRoleAsync userRole
+                                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                        setContent "Role has been changed and returned to user"
+                                    with e ->
+                                        let errMsg = sprintf "An error occurred when returning the role to the user:\n%s" e.Message
+                                        setContent errMsg
+
+                                guildUserRoles
+                    | None ->
+                        createAndGrantRole ()
                 | None ->
                     createAndGrantRole ()
-            | None ->
-                createAndGrantRole ()
-        else
-            awaiti <| replyMessage.ModifyAsync(Entities.Optional("You don't have permissive role"))
+
+            else
+                let embed =
+                    Entities.DiscordEmbedBuilder()
+                        .WithColor(Entities.DiscordColor "#2f3136")
+                        .WithDescription(
+                            sprintf "%s, you do not have these permissive roles: %s."
+                                guildMember.Mention
+                                (permissiveRoles.RoleIds |> Seq.map (sprintf "<@&%d>") |> String.concat ", ")
+                            )
+                        .Build()
+
+                addEmbed embed
+
+                guildUserRoles
+
+        | None ->
+            let embed =
+                Entities.DiscordEmbedBuilder()
+                    .WithColor(Entities.DiscordColor "#2f3136")
+                    .WithDescription(
+                        [
+                            "This server doesn't yet have permissive roles. To add them, use the command:"
+                            "```"
+                            ".addPermissiveRole <role_mention|role_id>"
+                            "```"
+                        ] |> String.concat "\n")
+                    .Build()
+
+            addEmbed embed
 
             guildUserRoles
 
+    let modalHandle (e: EventArgs.ModalSubmitEventArgs) (state: State) =
+        let interaction = e.Interaction
+        if interaction.Data.CustomId = UserRoleFormModalId then
+            let name =
+                match e.Values.TryGetValue UserRoleFormModalRoleNameId with
+                | true, roleName ->
+                    if System.String.IsNullOrWhiteSpace roleName then
+                        Left "Название роли не должно быть пустым или состоять из пробелов"
+                    else Right roleName
+                | false, _ -> Left (sprintf "Internal error: %s not found" UserRoleFormModalRoleNameId)
+
+            let color =
+                match e.Values.TryGetValue UserRoleFormModalColorId with
+                | true, hexOrDecColorStr ->
+                    match FParsecUtils.runEither Parser.phexOrDecColor hexOrDecColorStr  with
+                    | Left errMsg ->
+                        sprintf "Пожалуйста, введите цвет в шестнадцатеричном формате (например, `#ffa500` даст оранжевый цвет), а не `%s`. Цвет можно выбрать на [W3Schools](https://www.w3schools.com/colors/colors_picker.asp), например."
+                            hexOrDecColorStr
+                        |> Left
+
+                    | Right color -> Right color
+
+                | false, _ -> Left (sprintf "Internal error: %s not found" UserRoleFormModalColorId)
+
+            match name, color with
+            | Right name, Right color ->
+                let b = Entities.DiscordInteractionResponseBuilder()
+                b.IsEphemeral <- true
+
+                let changed = ref false
+
+                let guildUserRoles =
+                    giveOrChangeRole
+                        e.Interaction.User.Id
+                        e.Interaction.Guild
+                        (fun content -> b.Content <- content)
+                        (b.AddComponents >> ignore)
+                        (b.AddEmbed >> ignore)
+                        (fun embed ->
+                            let b =
+                                Entities.DiscordInteractionResponseBuilder()
+                                    .AsEphemeral(true)
+                                    .AddEmbed(embed)
+
+                            interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                                .GetAwaiter().GetResult()
+                        )
+                        (fun userRoleId ->
+                            let b = Entities.DiscordInteractionResponseBuilder()
+
+                            let guildMember = await <| e.Interaction.Guild.GetMemberAsync e.Interaction.User.Id
+
+                            createUI (b.AddComponents >> ignore) (b.AddEmbed >> ignore) guildMember (Some userRoleId)
+                            interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+                                .GetAwaiter().GetResult()
+
+                            changed := true
+                        )
+                        (Some {
+                            Name = name
+                            Color = color
+                        })
+                        state
+
+                if !changed then
+                    let b =
+                        Entities.DiscordFollowupMessageBuilder()
+                            .AsEphemeral(true)
+                            .WithContent(b.Content)
+                            .AddComponents(b.Components)
+                            .AddEmbeds(b.Embeds)
+
+                    interaction.CreateFollowupMessageAsync(b)
+                        .GetAwaiter().GetResult()
+                    |> ignore
+                else
+                    interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                        .GetAwaiter().GetResult()
+
+                { state with
+                    GuildUserRoles = guildUserRoles
+                }
+            | _ ->
+                let f = function Left errMsg -> Some errMsg | Right _ -> None
+
+                let embed =
+                    Entities.DiscordEmbedBuilder()
+                        .WithColor(Entities.DiscordColor "#2f3136")
+                        .WithDescription(
+                            [f name; f color]
+                            |> List.choose id
+                            |> String.concat "\n"
+                        ).Build()
+
+                let b =
+                    Entities.DiscordInteractionResponseBuilder()
+                        .AsEphemeral(true)
+                        .AddEmbed(embed)
+
+                interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                    .GetAwaiter().GetResult()
+
+                state
+        else
+            state
+
+let reducer =
     let addPermisiveRole
         (e:EventArgs.MessageCreateEventArgs)
         (roleId: RoleId)
@@ -317,9 +635,30 @@ let reducer =
         | Request(e, msg) ->
             match msg with
             | GiveOrChangeRole roleEditModel ->
+                let giveOrChangeRole roleEditModel state =
+                    e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+
+                    let b = Entities.DiscordMessageBuilder()
+
+                    let state =
+                        UserRoleForm.giveOrChangeRole
+                            e.Author.Id
+                            e.Guild
+                            (fun content -> b.Content <- content)
+                            (b.AddComponents >> ignore)
+                            (b.AddEmbed >> ignore)
+                            (fun content -> awaiti <| e.Channel.SendMessageAsync content)
+                            (fun roleGrantedId -> ())
+                            roleEditModel
+                            state
+
+                    awaiti <| e.Channel.SendMessageAsync b
+
+                    state
+
                 let roles =
                     try
-                        giveOrChangeRole e roleEditModel state
+                        giveOrChangeRole roleEditModel state
                     with e ->
                         printfn "%A" e
                         state.GuildUserRoles
@@ -497,6 +836,26 @@ let reducer =
 
                 state
 
+        | ModalHandle e ->
+            UserRoleForm.modalHandle e state
+
+        | ComponentInteractionCreateHandle(r, client, e) ->
+            let getRoleByUserId userId =
+                Map.tryFind e.Guild.Id state.GuildUserRoles
+                |> Option.bind (fun x ->
+                    Map.tryFind userId x
+                    |> Option.bind (fun x ->
+                        match e.Guild.GetRole x.RoleId with
+                        | null -> None
+                        | role ->
+                            Some { Name = role.Name; Color = role.Color }
+                    )
+                )
+
+            r.Reply <| UserRoleForm.componentInteractionCreateHandle getRoleByUserId client e
+
+            state
+
     MailboxProcessor.Start (fun mail ->
         let rec loop (state: State) =
             async {
@@ -526,65 +885,8 @@ let guildRoleDeletedHandler (e: EventArgs.GuildRoleDeleteEventArgs) =
 let exec e msg =
     reducer.Post(Request (e, msg))
 
-module Parser =
-    open FParsec
+let modalHandle (e: EventArgs.ModalSubmitEventArgs) =
+    reducer.Post (ModalHandle e)
 
-    open DiscordMessage.Parser
-
-    type 'Result Parser = Primitives.Parser<'Result, unit>
-
-    let phexColor: _ Parser =
-        pchar '#'
-        >>. manyMinMaxSatisfy 1 6 isHex
-        |>> fun hex ->
-            System.Convert.ToInt32(hex, 16)
-            |> Entities.DiscordColor
-
-    let pgiveOrChangeRole: _ Parser =
-        pstringCI "role" >>. spaces
-        >>. pipe2
-            (pquote .>> spaces)
-            phexColor
-            (fun name color ->
-                {
-                    Name = name
-                    Color = color
-                }
-            )
-
-    let paddPermissiveRole: RoleId Parser =
-        pstringCI "addPermissiveRole" >>. spaces
-        >>. (pmentionRole <|> puint64)
-
-    let premovePermissiveRole: RoleId Parser =
-        pstringCI "removePermissiveRole" >>. spaces
-        >>. (pmentionRole <|> puint64)
-
-    let pgetPermissiveRoles: _ Parser =
-        pstringCI "permissiveRoles"
-
-    let pgetUserRoles: _ Parser =
-        pstringCI "userRoles"
-
-    let premoveUserRole: _ Parser =
-        pstringCI "removeUserRole" >>. spaces
-        >>. (pmentionRole <|> puint64)
-
-    let psetTemplateRole: _ Parser =
-        pstringCI "setTemplateRole" >>. spaces
-        >>. (pmentionRole <|> puint64)
-
-    let pupdateUserRolesPermissions: _ Parser =
-        pstringCI "updateUserRolesPermissions" >>. spaces
-
-    let start: _ Parser =
-        choice [
-            pgiveOrChangeRole |>> GiveOrChangeRole
-            paddPermissiveRole |>> AddPermissiveRole
-            premovePermissiveRole |>> RemovePermissiveRole
-            pgetPermissiveRoles >>% GetPermissiveRoles
-            pgetUserRoles >>% GetUserRoles
-            premoveUserRole |>> RemoveUserRole
-            psetTemplateRole |>> SetTemplateRole
-            pupdateUserRolesPermissions >>% UpdateRolesPermission
-        ]
+let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
+    reducer.PostAndReply (fun r -> ComponentInteractionCreateHandle (r, client, e))
