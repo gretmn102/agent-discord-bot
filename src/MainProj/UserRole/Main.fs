@@ -860,8 +860,11 @@ let reducer =
 
                             state
                         | role ->
-                            // what if the user not exists in the guild?
                             try
+                                let guildMember =
+                                    if guildMember.Id = userId then guildMember
+                                    else
+                                        await <| guild.GetMemberAsync userId
                                 guildMember.GrantRoleAsync(role).GetAwaiter().GetResult()
                             with e -> ()
 
