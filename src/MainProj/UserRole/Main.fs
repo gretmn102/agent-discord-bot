@@ -21,6 +21,7 @@ type Request =
     | RemoveUserRole of RoleId
     | UpdateRolesPermission
     | SetTemplateRole of RoleId
+    | SetUserRoleToUser of RoleId * UserId
 
 type Req =
     | Request of EventArgs.MessageCreateEventArgs * Request
@@ -94,6 +95,12 @@ module Parser =
     let pupdateUserRolesPermissions: _ Parser =
         pstringCI "updateUserRolesPermissions" >>. spaces
 
+    let psetUserRoleToUser: _ Parser =
+        pstringCI "setUserRoleToUser" >>. spaces
+        >>. tuple2
+                ((pmentionRole <|> puint64) .>> spaces)
+                (puserMention <|> puint64)
+
     let start: _ Parser =
         choice [
             pgiveOrChangeRole |>> GiveOrChangeRole
@@ -104,6 +111,7 @@ module Parser =
             premoveUserRole |>> RemoveUserRole
             psetTemplateRole |>> SetTemplateRole
             pupdateUserRolesPermissions >>% UpdateRolesPermission
+            psetUserRoleToUser |>> SetUserRoleToUser
         ]
 
 
@@ -835,6 +843,61 @@ let reducer =
                     awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
 
                 state
+
+            | SetUserRoleToUser(roleId, userId) ->
+                e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+
+                let guild = e.Guild
+                let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                if (guildMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
+                    || (guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles) then
+
+                    match Map.tryFind guild.Id state.GuildUserRoles with
+                    | Some userRoleDatas ->
+                        match guild.GetRole roleId with
+                        | null ->
+                            awaiti <| e.Channel.SendMessageAsync (sprintf "The %d role not exists in the guild" roleId)
+
+                            state
+                        | role ->
+                            // what if the user not exists in the guild?
+                            try
+                                guildMember.GrantRoleAsync(role).GetAwaiter().GetResult()
+                            with e -> ()
+
+                            let userRoleData =
+                                match Map.tryFind userId userRoleDatas with
+                                | Some userRoleData ->
+                                    // TODO: confirm to replace
+
+                                    let userRoleData =
+                                        { userRoleData with
+                                            RoleId = roleId }
+
+                                    Roles.replace userRoleData
+
+                                    userRoleData
+
+                                | None ->
+                                    Roles.insert(guild.Id, userId, roleId )
+
+
+                            awaiti <| e.Channel.SendMessageAsync "User roles has been updated"
+
+                            { state with
+                                GuildUserRoles =
+                                    let m = Map.add userId userRoleData userRoleDatas
+                                    Map.add guild.Id m state.GuildUserRoles
+                            }
+
+                    | None ->
+                        awaiti <| e.Channel.SendMessageAsync  "This server doesn't yet have user roles"
+
+                        state
+                else
+                    awaiti <| e.Channel.SendMessageAsync "You don't have permission to manage roles or administrative permission"
+
+                    state
 
         | ModalHandle e ->
             UserRoleForm.modalHandle e state
