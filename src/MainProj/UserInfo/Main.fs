@@ -70,7 +70,7 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
                 let embed =
                     let status =
                         match user.Presence with
-                        | null -> "Не определен"
+                        | null -> None
                         | presence ->
                             match presence.Status with
                             | Entities.UserStatus.Online -> "<:online:636551903299371008> Онлайн"
@@ -79,13 +79,35 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
                             | Entities.UserStatus.Invisible -> "<:offline:636551904096157697> Прячется 🕵️" // not working, unfortunately
                             | Entities.UserStatus.Offline -> "<:offline:636551904096157697> Не в сети"
                             | _ -> "Не определен"
+                            |> Some
+
+                    let clientStatus =
+                        match user.Presence with
+                        | null -> None
+                        | presence ->
+                            presence.Activities
+                            |> Seq.tryPick (fun activity ->
+                                if activity.ActivityType = Entities.ActivityType.Custom then
+                                    Some <| sprintf "%s %s" (activity.CustomStatus.Emoji.GetDiscordName()) activity.CustomStatus.Name
+                                else
+                                    None
+                            )
 
                     let mainInfo =
                         match user with
                         | :? Entities.DiscordMember as guildMember ->
                             [
                                 sprintf "**Имя:** %s#%s (%d)" guildMember.Username guildMember.Discriminator guildMember.Id
-                                sprintf "**Статус:** %s" status
+
+                                match status with
+                                | Some status ->
+                                    sprintf "**Статус:** %s" status
+                                | None -> ()
+
+                                match clientStatus with
+                                | Some clientStatus ->
+                                    sprintf "**Пользовательский статус:** %s" clientStatus
+                                | None -> ()
 
                                 let creationTimestamp = DateTime.Unix.toSec user.CreationTimestamp.UtcDateTime
                                 sprintf "**Дата регистрации**: <t:%d:D> (<t:%d:R>)" creationTimestamp creationTimestamp
@@ -97,7 +119,16 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
                         | user ->
                             [
                                 sprintf "**Имя:** %s#%s (%d)" user.Username user.Discriminator user.Id
-                                sprintf "**Статус:** %s" status
+
+                                match status with
+                                | Some status ->
+                                    sprintf "**Статус:** %s" status
+                                | None -> ()
+
+                                match clientStatus with
+                                | Some clientStatus ->
+                                    sprintf "**Пользовательский статус:** %s" clientStatus
+                                | None -> ()
 
                                 let creationTimestamp = DateTime.Unix.toSec user.CreationTimestamp.UtcDateTime
                                 sprintf "**Дата регистрации**: <t:%d:D> (<t:%d:R>)" creationTimestamp creationTimestamp
