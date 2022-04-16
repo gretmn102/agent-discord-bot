@@ -186,6 +186,7 @@ let main argv =
                 Age.Main.componentInteractionCreateHandle client e
                 || UserRole.Main.componentInteractionCreateHandle client e
                 || Ranking.Main.componentInteractionCreateHandle client e
+                || Doorkeeper.Invites.componentInteractionCreateHandle client e
 
             if not isHandled then
                 AppsHub.resp client e
