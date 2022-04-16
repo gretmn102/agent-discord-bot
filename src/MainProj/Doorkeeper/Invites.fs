@@ -106,7 +106,7 @@ module InviteTable =
                 match sortBy with
                 | SortByUses -> Seq.sortByDescending (fun x -> x.Uses)
 
-            let headers = [| "Автор"; "Использовано▼" |]
+            let headers = [| "Автор"; "Код"; "Использовано▼" |]
 
             let table =
                 if 0 < page && page <= pagesCount then
@@ -118,14 +118,15 @@ module InviteTable =
                     invites
                     |> sortFunction
                     |> Seq.skip lb |> Seq.take ub
-                    |> Seq.mapi (fun i user ->
+                    |> Seq.mapi (fun i invite ->
                         let author =
-                            getAuthor user.Code
-                            |> Option.defaultWith (fun () -> sprintf "<@!%d>" user.Inviter.Id)
+                            getAuthor invite.Code
+                            |> Option.defaultWith (fun () -> sprintf "<@!%d>" invite.Inviter.Id)
 
                         [|
                             sprintf "%d %s" (lb + i + 1) author
-                            string user.Uses
+                            invite.Code
+                            string invite.Uses
                         |]
                     )
                     |> Array.ofSeq
