@@ -50,7 +50,7 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                         let guild = e.Guild
                         let channel = guild.GetChannel beforeChatId
                         let guildMember =
-                            await (e.Guild.GetMemberAsync e.User.Id)
+                            getGuildMember e.Guild e.User
 
                         try
                             channel.AddOverwriteAsync(guildMember, deny=accessChannelsPermission)
@@ -71,7 +71,7 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                         let guild = e.Guild
                         let channel = guild.GetChannel beforeChatId
                         let guildMember =
-                            await (e.Guild.GetMemberAsync e.User.Id)
+                            getGuildMember e.Guild e.User
 
                         try
                             channel.AddOverwriteAsync(guildMember, allow=accessChannelsPermission)
@@ -84,7 +84,7 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
 let reduce (e: DSharpPlus.EventArgs.MessageCreateEventArgs) msg =
     match msg with
     | MentionInVoice ->
-        let guildMember = await (e.Guild.GetMemberAsync e.Author.Id)
+        let guildMember = getGuildMember e.Guild e.Author
         let errorMessage =
             "This command is available only if you are in the voice channel of this guild."
         match guildMember.VoiceState with

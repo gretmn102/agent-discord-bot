@@ -246,7 +246,7 @@ let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: M
     match req with
     | SetSetting newSetting ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync e.Author.Id)
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 

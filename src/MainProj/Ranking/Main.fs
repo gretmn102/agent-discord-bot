@@ -215,7 +215,7 @@ let rankingSettingReduce
     match msg with
     | SetOutputChannel outputChannelId ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -247,7 +247,7 @@ let rankingSettingReduce
 
     | SetLevelRoles levelRoles ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -323,7 +323,7 @@ let mostActiveSettingReduce
     match msg with
     | SetMostActiveRole roleId ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 
@@ -628,7 +628,7 @@ let requestReduce
 
     | SetExp(targetUserId, exp) ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -665,7 +665,7 @@ let requestReduce
 
     | MostActiveActivate ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 

@@ -90,3 +90,8 @@ let await (t:Task<_>) =
     t.GetAwaiter() |> fun x -> x.GetResult()
 let awaiti (t:Task<_>) =
     await t |> ignore
+
+let getGuildMember (guild: DSharpPlus.Entities.DiscordGuild) (user: DSharpPlus.Entities.DiscordUser) =
+    match user with
+    | :? DSharpPlus.Entities.DiscordMember as guildMember -> guildMember
+    | user -> await (guild.GetMemberAsync user.Id)

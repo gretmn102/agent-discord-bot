@@ -99,7 +99,7 @@ type State = unit
 let reduce ((client, e, msg): Msg) (state: State): State =
     match msg with
     | SendMessage x ->
-        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember e.Guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -135,7 +135,7 @@ let reduce ((client, e, msg): Msg) (state: State): State =
         state
 
     | GetMessage messagePath ->
-        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember e.Guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
@@ -180,7 +180,7 @@ let reduce ((client, e, msg): Msg) (state: State): State =
         state
 
     | EditMessage x ->
-        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember e.Guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
@@ -228,7 +228,7 @@ let reduce ((client, e, msg): Msg) (state: State): State =
         state
 
     | SwitchBotReactions(messagePath, emojis) ->
-        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember e.Guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then

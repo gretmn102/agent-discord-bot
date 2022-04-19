@@ -29,7 +29,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Boosters.GuildSetti
     match msg with
     | SetSetting(channelId, messageTemplate) ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 

@@ -28,7 +28,7 @@ let reduce (msg: Msg) (state: State) =
             | Join ->
                 match vnext.GetConnection(e.Guild) with
                 | null ->
-                    let guildMember = await <| e.Guild.GetMemberAsync(e.Author.Id)
+                    let guildMember = getGuildMember e.Guild e.Author
                     match guildMember.VoiceState with
                     | null ->
                         awaiti <| e.Channel.SendMessageAsync("You are not in a voice channel.")

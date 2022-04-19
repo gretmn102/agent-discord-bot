@@ -162,7 +162,7 @@ let newcomersRolesReduce
         match msg with
         | Pass (targetUserId, roleKeys) ->
             let guild = e.Guild
-            let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+            let currentMember = getGuildMember guild e.Author
             let replyMessage =
                 await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -307,7 +307,7 @@ let newcomersRolesReduce
             guildNewcomersRoles
         | SetPassSetting passSettings ->
             let guild = e.Guild
-            let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+            let currentMember = getGuildMember guild e.Author
             let replyMessage =
                 await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -377,7 +377,7 @@ let newcomersRolesReduce
 
     | SetNewcomersRoles roleIds ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -445,7 +445,7 @@ let welcomeSettingReduce
     match msg with
     | SetWelcomeSetting(channelId, template) ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -478,7 +478,7 @@ let welcomeSettingReduce
 
     | SetWelcomeLogSetting(channelId, template) ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -511,7 +511,7 @@ let welcomeSettingReduce
 
     | SetWelcomeLeaveSetting(channelId, template) ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -543,7 +543,7 @@ let welcomeSettingReduce
             guildWelcomeSetting
     | SetWelcomeLeaverMessage(channelId, template) ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -576,7 +576,7 @@ let welcomeSettingReduce
             guildWelcomeSetting
     | SetWelcomeLeaverLogMessage(channelId, template) ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 

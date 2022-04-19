@@ -126,7 +126,7 @@ module Array =
 let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
     match msg with
     | Send opts ->
-        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember e.Guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 

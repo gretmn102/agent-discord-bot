@@ -69,7 +69,7 @@ let voiceNotificationReduce
     match msg with
     | SetOutput outputChannelId ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -100,7 +100,7 @@ let voiceNotificationReduce
 
     | SetTemplateMsg templateMessage ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -159,7 +159,7 @@ let reduce (msg: Msg) (state: State): State =
 
                         if isDiff then
                             let outputChannel = e.Guild.GetChannel(outputChannelId)
-                            let guildMember = await (e.Guild.GetMemberAsync(e.User.Id))
+                            let guildMember = getGuildMember e.Guild e.User
 
                             let message =
                                 FParsecUtils.runEither Parser.ptemplateMessage templateMsg

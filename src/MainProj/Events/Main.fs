@@ -77,7 +77,7 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: WomensDaySet
         state
     | SetEventSetting (filteringRoleId, isEnabled) ->
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -125,7 +125,7 @@ let reduce (msg: Msg) (state: State): State =
             match Map.tryFind e.Guild.Id state.Setting with
             | Some setting ->
                 if setting.IsEnabled then
-                    let guildMember = await (e.Guild.GetMemberAsync e.Author.Id)
+                    let guildMember = getGuildMember e.Guild e.Author
                     let existsRole =
                         guildMember.Roles
                         |> Seq.exists (fun x -> x.Id = setting.FilteringRoleId)

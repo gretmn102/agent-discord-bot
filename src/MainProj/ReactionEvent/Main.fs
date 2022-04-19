@@ -86,7 +86,7 @@ let reduce (msg: Msg) (state: State) =
                 match Map.tryFind x.Emoji data with
                 | None -> ()
                 | Some data ->
-                    let guildMember = await (x.Guild.GetMemberAsync(x.User.Id))
+                    let guildMember = getGuildMember x.Guild x.User
                     let grantOrRevokeRole =
                         match x.Changed with
                         | Added -> guildMember.GrantRoleAsync
@@ -107,7 +107,7 @@ let reduce (msg: Msg) (state: State) =
     | Request(e, req) ->
         match req with
         | SetReactionEvent(messagePath, emoji, roleIds) ->
-            let currentMember = await (e.Guild.GetMemberAsync e.Author.Id)
+            let currentMember = getGuildMember e.Guild e.Author
             let replyMessage =
                 await (e.Channel.SendMessageAsync("Processing..."))
 

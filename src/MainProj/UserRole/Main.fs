@@ -431,7 +431,7 @@ module UserRoleForm =
                         (fun userRoleId ->
                             let b = Entities.DiscordInteractionResponseBuilder()
 
-                            let guildMember = await <| e.Interaction.Guild.GetMemberAsync e.Interaction.User.Id
+                            let guildMember = getGuildMember e.Interaction.Guild e.Interaction.User
 
                             createUI (b.AddComponents >> ignore) (b.AddEmbed >> ignore) guildMember (Some userRoleId)
                             interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
@@ -497,7 +497,7 @@ let reducer =
             await (e.Channel.SendMessageAsync("Processing..."))
 
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
 
         if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
             let guildPermissiveRoles =
@@ -556,7 +556,7 @@ let reducer =
             await (e.Channel.SendMessageAsync("Processing..."))
 
         let guild = e.Guild
-        let currentMember = await (guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember guild e.Author
 
         if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
             guildPermissiveRoles
@@ -749,7 +749,7 @@ let reducer =
                     await (e.Channel.SendMessageAsync("Processing..."))
 
                 let guild = e.Guild
-                let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                let guildMember = getGuildMember guild e.Author
                 let guildUserRoles =
                     if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
                         state.GuildUserRoles
@@ -779,7 +779,7 @@ let reducer =
                     await (e.Channel.SendMessageAsync("Processing..."))
 
                 let guild = e.Guild
-                let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                let guildMember = getGuildMember guild e.Author
                 let templateRoles =
                     if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
                         let guildTemplateRoles = state.GuildTemplateRoles
@@ -810,7 +810,7 @@ let reducer =
                     await (e.Channel.SendMessageAsync("Processing..."))
 
                 let guild = e.Guild
-                let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                let guildMember = getGuildMember guild e.Author
                 if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
                     match Map.tryFind guild.Id state.GuildTemplateRoles with
                     | Some templateRole ->
@@ -848,7 +848,7 @@ let reducer =
                 e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
 
                 let guild = e.Guild
-                let guildMember = await (guild.GetMemberAsync(e.Author.Id))
+                let guildMember = getGuildMember guild e.Author
                 if (guildMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
                     || (guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles) then
 

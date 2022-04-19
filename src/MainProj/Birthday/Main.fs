@@ -48,7 +48,7 @@ let settingReduce
 
     match msg with
     | SetRole newRoleId ->
-        let currentMember = await (e.Guild.GetMemberAsync(e.Author.Id))
+        let currentMember = getGuildMember e.Guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
