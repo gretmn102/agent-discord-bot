@@ -315,19 +315,25 @@ let reduce msg (state: State) =
                         Rating.insert(guildId, winnerId, 1, 0)
                     )
                     (fun (attacker: Rating.Data) ->
-                        { attacker with
-                            Wins = attacker.Wins + 1
-                        }
+                        let attacker =
+                            { attacker with
+                                Wins = attacker.Wins + 1
+                            }
+                        Rating.replace attacker
+                        attacker
                     )
                 |> Map.addOrModWith
                     loserId
                     (fun () ->
                         Rating.insert(guildId, loserId, 0, 1)
                     )
-                    (fun (attacker: Rating.Data) ->
-                        { attacker with
-                            Loses = attacker.Loses + 1
-                        }
+                    (fun (loser: Rating.Data) ->
+                        let loser =
+                            { loser with
+                                Loses = loser.Loses + 1
+                            }
+                        Rating.replace loser
+                        loser
                     )
 
             state.Rating
