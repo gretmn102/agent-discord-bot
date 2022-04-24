@@ -76,6 +76,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.AgeCmd msg ->
                 Age.Main.exec e msg
 
+            | CommandParser.EggBattleCmd msg ->
+                EggBattle.Main.handle e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -187,6 +190,7 @@ let main argv =
                 || UserRole.Main.componentInteractionCreateHandle client e
                 || Ranking.Main.componentInteractionCreateHandle client e
                 || Doorkeeper.Invites.componentInteractionCreateHandle client e
+                || EggBattle.Main.componentInteractionCreateHandle client e
 
             if not isHandled then
                 AppsHub.resp client e
