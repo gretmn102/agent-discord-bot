@@ -176,45 +176,47 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
                 let embed =
                     let fields =
                         [
-                            let membersCount, botsCount =
+                            let info =
                                 guild.Members
                                 |> Seq.fold
-                                    (fun (membersCount, botsCount) x ->
-                                        if x.Value.IsBot then
-                                            membersCount, botsCount + 1
-                                        else
-                                            membersCount + 1, botsCount
+                                    (fun (info: {| membersCount: int; botsCount: int; statuses: Map<_, _> |}) (KeyValue(_, user)) ->
+                                        let info =
+                                            if user.IsBot then
+                                                {| info with
+                                                    botsCount = info.botsCount + 1 |}
+                                            else
+                                                {| info with
+                                                    membersCount = info.membersCount + 1
+                                                |}
+
+                                        {| info with
+                                            statuses =
+                                                match user.Presence with
+                                                | null ->
+                                                    info.statuses
+                                                    |> Map.addOrModWith
+                                                        Entities.UserStatus.Offline
+                                                        (fun () -> 1)
+                                                        (fun acc -> acc + 1)
+
+                                                | presence ->
+                                                    info.statuses
+                                                    |> Map.addOrModWith
+                                                        presence.Status
+                                                        (fun () -> 1)
+                                                        (fun acc -> acc + 1)
+                                        |}
                                     )
-                                    (0, 0)
+                                    {| membersCount = 0; botsCount = 0; statuses = Map.empty |}
+
                             "Участники:", [
                                 sprintf "Всего: **%d**" guild.MemberCount
-                                sprintf "Людей: **%d**" membersCount
-                                sprintf "Ботов: **%d**" botsCount
+                                sprintf "Людей: **%d**" info.membersCount
+                                sprintf "Ботов: **%d**" info.botsCount
                             ] |> String.concat "\n"
 
                             let statuses =
-                                let m =
-                                    guild.Members
-                                    |> Seq.fold
-                                        (fun m (KeyValue(_, user)) ->
-                                            match user.Presence with
-                                            | null ->
-                                                m
-                                                |> Map.addOrModWith
-                                                    Entities.UserStatus.Offline
-                                                    (fun () -> 1)
-                                                    (fun acc -> acc + 1)
-
-                                            | presence ->
-                                                m
-                                                |> Map.addOrModWith
-                                                    presence.Status
-                                                    (fun () -> 1)
-                                                    (fun acc -> acc + 1)
-                                        )
-                                        Map.empty
-
-                                let f status = Map.tryFind status m |> Option.defaultValue 0
+                                let f status = Map.tryFind status info.statuses |> Option.defaultValue 0
                                 [
                                     sprintf "<:online:636551903299371008> В сети: **%d**" (f Entities.UserStatus.Online)
                                     sprintf "<:idle:636551903123210269> Нет на месте: **%d**" (f Entities.UserStatus.Idle)
