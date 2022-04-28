@@ -135,7 +135,7 @@ let reduce (msg: Msg) (state: State): State =
                             flowers.[r.Next(0, flowers.Length)]
 
                         try
-                            (e.Message.CreateReactionAsync flower).GetAwaiter().GetResult()
+                            awaiti <| e.Message.CreateReactionAsync flower
                         with e ->
                             ()
             | None -> ()

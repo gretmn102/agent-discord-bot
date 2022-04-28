@@ -265,9 +265,9 @@ let reduce ((client, e, msg): Msg) (state: State): State =
                             |> Option.iter (fun emoji ->
                                 let reactions = await (msg.GetReactionsAsync(emoji))
                                 if reactions |> Seq.exists (fun x -> x.Id = client.CurrentUser.Id) then
-                                    (msg.DeleteOwnReactionAsync emoji).GetAwaiter().GetResult()
+                                    awaiti <| msg.DeleteOwnReactionAsync emoji
                                 else
-                                    (msg.CreateReactionAsync emoji).GetAwaiter().GetResult()
+                                    awaiti <| msg.CreateReactionAsync emoji
                             )
                         )
 

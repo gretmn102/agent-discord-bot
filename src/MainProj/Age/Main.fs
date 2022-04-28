@@ -116,7 +116,7 @@ let reduce (msg: Req) (state: State) =
     | Request(e, msg) ->
         match msg with
         | CreateForm ->
-            e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+            awaiti <| e.Channel.TriggerTypingAsync()
 
             let b = Entities.DiscordMessageBuilder()
 
@@ -215,8 +215,7 @@ let modalHandle (e: EventArgs.ModalSubmitEventArgs) =
 
                 b.AddEmbed (createAgeStatisticEmbed interaction.Guild.Id) |> ignore
 
-            interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-            |> fun x -> x.GetAwaiter().GetResult()
+            awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
         | false, _ -> ()
 
@@ -236,7 +235,7 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
                             )
                         )
 
-            e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b).GetAwaiter().GetResult()
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b)
 
             true
 
@@ -249,7 +248,7 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
             else
                 b.Content <- "Чтобы посмотреть статистику, сперва введите свой возраст."
 
-            e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b).GetAwaiter().GetResult()
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
             true
 

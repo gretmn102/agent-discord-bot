@@ -192,7 +192,7 @@ module UserRoleForm =
                                 )
                             )
 
-                    e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b).GetAwaiter().GetResult()
+                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b)
                 else
                     let b =
                         Entities.DiscordInteractionResponseBuilder()
@@ -200,8 +200,7 @@ module UserRoleForm =
                     b.IsEphemeral <- true
                     b.Content <- sprintf "Этот интерфейс принадлежит <@!%d>. Создайте себе свой командой `.%s`" ownerId Parser.roleNameCmd
 
-                    e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-                        .GetAwaiter().GetResult()
+                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
                 true
             else
@@ -258,8 +257,7 @@ module UserRoleForm =
                                         |> await
 
                                     try
-                                        role.ModifyPositionAsync(templateRole.Position - 1)
-                                        |> fun x -> x.GetAwaiter().GetResult()
+                                        awaiti <| role.ModifyPositionAsync(templateRole.Position - 1)
                                     with
                                         ex ->
                                             let jsonMessage =
@@ -425,8 +423,7 @@ module UserRoleForm =
                                     .AsEphemeral(true)
                                     .AddEmbed(embed)
 
-                            interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-                                .GetAwaiter().GetResult()
+                            awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
                         )
                         (fun userRoleId ->
                             let b = Entities.DiscordInteractionResponseBuilder()
@@ -434,8 +431,7 @@ module UserRoleForm =
                             let guildMember = getGuildMember e.Interaction.Guild e.Interaction.User
 
                             createUI (b.AddComponents >> ignore) (b.AddEmbed >> ignore) guildMember (Some userRoleId)
-                            interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
-                                .GetAwaiter().GetResult()
+                            awaiti <| interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
                             changed := true
                         )
@@ -453,12 +449,9 @@ module UserRoleForm =
                             .AddComponents(b.Components)
                             .AddEmbeds(b.Embeds)
 
-                    interaction.CreateFollowupMessageAsync(b)
-                        .GetAwaiter().GetResult()
-                    |> ignore
+                    awaiti <| interaction.CreateFollowupMessageAsync(b)
                 else
-                    interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-                        .GetAwaiter().GetResult()
+                    awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
                 { state with
                     GuildUserRoles = guildUserRoles
@@ -480,8 +473,7 @@ module UserRoleForm =
                         .AsEphemeral(true)
                         .AddEmbed(embed)
 
-                interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-                    .GetAwaiter().GetResult()
+                awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
                 state
         else
@@ -644,7 +636,7 @@ let reducer =
             match msg with
             | GiveOrChangeRole roleEditModel ->
                 let giveOrChangeRole roleEditModel state =
-                    e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+                    awaiti <| e.Channel.TriggerTypingAsync()
 
                     let b = Entities.DiscordMessageBuilder()
 
@@ -826,10 +818,9 @@ let reducer =
                                     let userRole = guild.GetRole userRole.RoleId
                                     if isNull userRole then ()
                                     else
-                                        userRole.ModifyAsync(
+                                        awaiti <| userRole.ModifyAsync(
                                             permissions = System.Nullable templateRole.Permissions
                                         )
-                                        |> fun x -> x.GetAwaiter().GetResult()
 
                                         System.Threading.Thread.Sleep 250
                                 )
@@ -845,7 +836,7 @@ let reducer =
                 state
 
             | SetUserRoleToUser(roleId, userId) ->
-                e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+                awaiti <| e.Channel.TriggerTypingAsync()
 
                 let guild = e.Guild
                 let guildMember = getGuildMember guild e.Author
@@ -865,7 +856,7 @@ let reducer =
                                     if guildMember.Id = userId then guildMember
                                     else
                                         await <| guild.GetMemberAsync userId
-                                guildMember.GrantRoleAsync(role).GetAwaiter().GetResult()
+                                awaiti <| guildMember.GrantRoleAsync(role)
                             with e -> ()
 
                             let userRoleData =

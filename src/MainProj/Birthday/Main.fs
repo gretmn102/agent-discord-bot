@@ -243,7 +243,7 @@ let startAsync (client: DiscordClient) =
                                 | null -> None
                                 | currentMember ->
                                     try
-                                        (currentMember.GrantRoleAsync role).GetAwaiter().GetResult()
+                                        awaiti <| currentMember.GrantRoleAsync role
                                         Some userId
                                     with e ->
                                         None

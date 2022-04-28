@@ -261,8 +261,8 @@ let main argv =
 
         Ranking.Main.mostActiveTimerStart client
 
-        client.ConnectAsync().GetAwaiter().GetResult()
+        awaiti <| client.ConnectAsync()
 
-        (Task.Delay -1).GetAwaiter().GetResult()
+        awaiti <| Task.Delay -1
 
         0

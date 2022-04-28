@@ -38,7 +38,7 @@ module Parser =
 let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Request) =
     match msg with
     | GetAvatar otherUserIdOrSelf ->
-        e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+        awaiti <| e.Channel.TriggerTypingAsync()
 
         let message =
             let createAvatarMessage (user: Entities.DiscordUser) =
@@ -68,7 +68,7 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
         ignore (await (e.Channel.SendMessageAsync message))
 
     | GetUserInfo otherUserIdOrSelf ->
-        e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+        awaiti <| e.Channel.TriggerTypingAsync()
 
         let message =
             let createMessage (user: Entities.DiscordUser) =
@@ -169,7 +169,7 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
         ignore (await (e.Channel.SendMessageAsync message))
 
     | GetGuildInfo otherGuildIdOrSelf ->
-        e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+        awaiti <| e.Channel.TriggerTypingAsync()
 
         let message =
             let createMessage (guild: Entities.DiscordGuild) =

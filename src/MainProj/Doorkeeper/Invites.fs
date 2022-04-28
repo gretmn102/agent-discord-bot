@@ -222,8 +222,7 @@ module InviteTable =
 
             createTable e.Guild b.AddComponents b.AddEmbed (getPage currentPage) state
 
-            e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b).GetAwaiter().GetResult()
-
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
         if e.Message.Author.Id = client.CurrentUser.Id then
             match e.Id with
@@ -313,7 +312,7 @@ let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: M
         state
 
     | GetInvites ->
-        e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+        awaiti <| e.Channel.TriggerTypingAsync()
 
         let b = Entities.DiscordMessageBuilder()
 

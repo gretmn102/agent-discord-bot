@@ -98,7 +98,7 @@ let reduce (msg: Msg) (state: State) =
                         | null -> ()
                         | role ->
                             try
-                                (grantOrRevokeRole role).GetAwaiter().GetResult()
+                                awaiti <| grantOrRevokeRole role
                             with e ->
                                 ()
                     )

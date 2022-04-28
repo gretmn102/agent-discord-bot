@@ -53,8 +53,7 @@ let cmdBuilder
 
     let send whomId =
         let whom =
-            client.GetUserAsync whomId
-            |> fun x -> x.GetAwaiter().GetResult()
+            await <| client.GetUserAsync whomId
 
         let b = Entities.DiscordEmbedBuilder()
         b.Description <- content e.Author.Username whom.Username

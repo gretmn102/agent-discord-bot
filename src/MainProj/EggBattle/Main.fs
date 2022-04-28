@@ -194,8 +194,7 @@ module RatingTable =
 
             createTable e.Guild b.AddComponents b.AddEmbed (getPage currentPage) state
 
-            e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b).GetAwaiter().GetResult()
-
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
         if e.Message.Author.Id = client.CurrentUser.Id then
             match e.Id with
@@ -226,7 +225,7 @@ let reduce msg (state: State) =
     | Request(e, r) ->
         match r with
         | ChallengeToDuel userId ->
-            e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+            awaiti <| e.Channel.TriggerTypingAsync()
 
             if e.Author.Id = userId then
                 let b =
@@ -284,7 +283,7 @@ let reduce msg (state: State) =
 
             state
         | CreateRatingTable ->
-            e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+            awaiti <| e.Channel.TriggerTypingAsync()
 
             let b = Entities.DiscordMessageBuilder()
 
@@ -353,7 +352,7 @@ let reduce msg (state: State) =
 
         b.AddEmbed embed |> ignore
 
-        e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b).GetAwaiter().GetResult()
+        awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
         { state with
             Rating = ratingState
@@ -416,7 +415,7 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
                             .AsEphemeral(true)
                             .WithContent(sprintf "На эту кнопку должен нажать <@!%d>!" fightState.DefenderId)
 
-                    e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b).GetAwaiter().GetResult()
+                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
             | Left errMsg ->
                 // remove components
@@ -425,7 +424,7 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
                 // necessary because throw `System.ArgumentException: You must specify content, an embed, a sticker, or at least one file.`
                 b.AddEmbeds msg.Embeds |> ignore
                 b.Content <- msg.Content
-                e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b).GetAwaiter().GetResult()
+                awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
                 Entities.DiscordFollowupMessageBuilder()
                     .AsEphemeral(true)
@@ -460,7 +459,7 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
 
                 b.AddEmbed embed |> ignore
 
-                e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b).GetAwaiter().GetResult()
+                awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
             )
 
             true

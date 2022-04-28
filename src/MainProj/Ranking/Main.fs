@@ -435,14 +435,14 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
                     match getMember mostActiveSetting.LastMostActiveUserId with
                     | Some guildMember ->
                         try
-                            guildMember.RevokeRoleAsync(mostActiveRole).GetAwaiter().GetResult()
+                            awaiti <| guildMember.RevokeRoleAsync(mostActiveRole)
                         with _ -> ()
                     | None -> ()
 
                     match getMember mostActiveUser.UserId with
                     | Some guildMember ->
                         try
-                            guildMember.GrantRoleAsync(mostActiveRole).GetAwaiter().GetResult()
+                            awaiti <| guildMember.GrantRoleAsync(mostActiveRole)
                         with _ -> ()
                     | None -> ()
 
@@ -688,7 +688,7 @@ let requestReduce
             state
 
     | MostActiveLeaderboard ->
-        e.Channel.TriggerTypingAsync().GetAwaiter().GetResult()
+        awaiti <| e.Channel.TriggerTypingAsync()
 
         let b = Entities.DiscordMessageBuilder()
 
@@ -800,8 +800,7 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
 
         createMostActiveLeaderboard e.Guild.Id (fun content -> b.Content <- content) b.AddComponents b.AddEmbed (getPage currentPage) state
 
-        e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b).GetAwaiter().GetResult()
-
+        awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
     if e.Message.Author.Id = client.CurrentUser.Id then
         match e.Id with

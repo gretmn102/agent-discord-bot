@@ -65,7 +65,7 @@ let reduce (msg: Msg) (state: State) =
                         else
                             state.CancelationToken
 
-                    vnc.WaitForPlaybackFinishAsync().GetAwaiter().GetResult()
+                    awaiti <| vnc.WaitForPlaybackFinishAsync()
 
                     async {
                         try

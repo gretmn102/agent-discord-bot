@@ -310,8 +310,7 @@ let resp (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.ComponentInt
         res.Embed <- embed.Build()
         let b = DSharpPlus.Entities.DiscordInteractionResponseBuilder(res)
 
-        e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.UpdateMessage, b)
-        |> fun x -> x.GetAwaiter().GetResult()
+        awaiti <| e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.UpdateMessage, b)
     | Left err ->
         match err with
         | Hub.HasNotStartedYet ->
@@ -321,20 +320,18 @@ let resp (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.ComponentInt
             b.Content <- "Бот перезагружался, и игра слетела. Начните заново."
             b.IsEphemeral <- true
 
-            e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, b)
-            |> fun x -> x.GetAwaiter().GetResult()
+            awaiti <| e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, b)
         | Hub.ThisIsNotYourApp ->
             let b = DSharpPlus.Entities.DiscordInteractionResponseBuilder()
             b.Content <- "Скорее всего, это чужая игра. Ваша игра [тут](), или начните новую." // TODO: ссылка на игру
             b.IsEphemeral <- true
 
-            e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, b)
-            |> fun x -> x.GetAwaiter().GetResult()
+            awaiti <| e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, b)
         | Hub.OtherErr msg ->
             let b = DSharpPlus.Entities.DiscordInteractionResponseBuilder(msg)
             b.IsEphemeral <- true
-            e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, b)
-            |> fun x -> x.GetAwaiter().GetResult()
+            awaiti <| e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, b)
+
 let start appType (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.MessageCreateEventArgs) =
     let res = m.PostAndReply(fun r -> Init(e.Author.Id, appType, r))
     let embed = DSharpPlus.Entities.DiscordEmbedBuilder(res.Embed)

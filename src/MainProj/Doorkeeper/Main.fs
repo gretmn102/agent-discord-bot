@@ -222,7 +222,7 @@ let newcomersRolesReduce
                                     | null -> ()
                                     | role ->
                                         try
-                                            targetUser.RevokeRoleAsync(role).GetAwaiter().GetResult()
+                                            awaiti <| targetUser.RevokeRoleAsync(role)
                                         with e ->
                                             printfn "%A" e
                                 )
@@ -233,7 +233,7 @@ let newcomersRolesReduce
                                     | null -> ()
                                     | role ->
                                         try
-                                            targetUser.GrantRoleAsync(role).GetAwaiter().GetResult()
+                                            awaiti <| targetUser.GrantRoleAsync(role)
                                         with e ->
                                             printfn "%A" e
                                 )

@@ -423,7 +423,7 @@ let mainReduce req state =
 
                                 try
                                     awaiti (webhook.ExecuteAsync b)
-                                    e.Message.DeleteAsync().GetAwaiter().GetResult()
+                                    awaiti (e.Message.DeleteAsync())
                                 with e -> ()
 
                             | None -> ()
