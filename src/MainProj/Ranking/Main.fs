@@ -892,7 +892,8 @@ let mostActiveTimerStart (client: DiscordClient) =
     let scheduler = new Scheduler.Scheduler<unit>(Scheduler.State.Empty)
 
     let nextDay (now: System.DateTime) =
-        System.DateTime(now.Year, now.Month, now.Day + 1, 0, 0, 0)
+        let now = now.AddDays 1.0
+        System.DateTime(now.Year, now.Month, now.Day, 0, 0, 0)
 
     scheduler.AddJob { Time = nextDay System.DateTime.Now; Type = () }
 
