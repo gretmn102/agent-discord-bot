@@ -33,6 +33,10 @@ let mainProjPath = f mainProjName
 let mainProjDir =
     Fake.IO.Path.getDirectory mainProjPath
 
+let serverName = "Server"
+let serverPath = f serverName
+let serverDir = Path.getDirectory serverPath
+
 let deployDir = Path.getFullName "./deploy"
 // --------------------------------------------------------------------------------------
 // Helpers
@@ -92,11 +96,18 @@ Target.create "RunTests" (fun _ ->
     |> dotnet "run -c Release"
 )
 
-let deploy () =
+let deployBot () =
     let runtimeOption = if Environment.isUnix then "--runtime linux-x64" else ""
-    dotnet (sprintf "publish -c Release -o \"%s\" %s" deployDir runtimeOption) mainProjDir
+    dotnet (sprintf "publish -c Release -o \"%s\\bot\" %s" deployDir runtimeOption) mainProjDir
 
-Target.create "Deploy" (fun _ -> deploy())
+let deployServer () =
+    let runtimeOption = if Environment.isUnix then "--runtime linux-x64" else ""
+    dotnet (sprintf "publish -c Release -o \"%s\\server\" %s" deployDir runtimeOption) serverDir
+
+Target.create "Deploy" (fun _ ->
+    deployBot ()
+    deployServer ()
+)
 
 // --------------------------------------------------------------------------------------
 // Build order
