@@ -5,6 +5,7 @@ framework: netstandard2.0, netcoreapp3.1
 nuget FSharp.Core
 nuget DSharpPlus == 4.2.0-nightly-01105
 nuget DSharpPlus.VoiceNext
+nuget FAKE
 nuget Fuchu
 nuget FParsec
 nuget HtmlAgilityPack
@@ -22,16 +23,9 @@ source https://gitlab.com/api/v4/projects/28574921/packages/nuget/index.json
 storage: none
 nuget FSharpMyExt
 
-group Server
-    source https://api.nuget.org/v3/index.json
-    framework: netstandard2.0, netcoreapp3.1, net6.0
-    storage: none
-
-    nuget Saturn
-
 group Build
     source https://api.nuget.org/v3/index.json
-    framework: net6.0
+    framework: netstandard2.0
     storage: none
 
     nuget FSharp.Core
