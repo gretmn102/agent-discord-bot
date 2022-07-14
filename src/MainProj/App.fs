@@ -79,6 +79,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.EggBattleCmd msg ->
                 EggBattle.Main.handle e msg
 
+            | CommandParser.ModerationCmd msg ->
+                Moderation.Main.exec e msg
+
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-

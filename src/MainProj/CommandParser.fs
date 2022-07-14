@@ -53,6 +53,8 @@ type Cmd =
 
     | EggBattleCmd of EggBattle.Main.Request
 
+    | ModerationCmd of Moderation.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -102,6 +104,8 @@ let pcommand: _ Parser =
         Age.Main.Parser.start |>> AgeCmd
 
         EggBattle.Main.Parser.start |>> EggBattleCmd
+
+        Moderation.Main.Parser.start |>> ModerationCmd
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
         pballotBox
