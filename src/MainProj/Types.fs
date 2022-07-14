@@ -95,3 +95,18 @@ let getGuildMember (guild: DSharpPlus.Entities.DiscordGuild) (user: DSharpPlus.E
     match user with
     | :? DSharpPlus.Entities.DiscordMember as guildMember -> guildMember
     | user -> await (guild.GetMemberAsync user.Id)
+
+open dotenv.net
+
+let getEnvironmentVariable =
+    DotEnv.Load()
+
+    let envVars = DotEnv.Read()
+
+    fun envVar ->
+        match envVars.TryGetValue envVar with
+        | false, _ ->
+            match System.Environment.GetEnvironmentVariable envVar with
+            | null -> None
+            | value -> Some value
+        | true, value -> Some value

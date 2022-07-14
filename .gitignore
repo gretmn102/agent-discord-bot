@@ -394,3 +394,5 @@ paket-files/
 /.ionide/
 /.fake/
 /deploy/
+/src/MainProj/.env
+/tests/.env

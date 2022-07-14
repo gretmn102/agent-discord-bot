@@ -124,11 +124,20 @@ let main argv =
         "DiscordCommandBotToken"
         #endif
 
-    match System.Environment.GetEnvironmentVariable tokenEnvVar with
-    | null ->
+    let ablyToken =
+        let serverConnectionVarName = "AblyToken"
+        match getEnvironmentVariable serverConnectionVarName with
+        | Some value -> value
+        | None ->
+            failwithf "Environment variable `%s` not setup" serverConnectionVarName
+
+    Api.start ablyToken
+
+    match getEnvironmentVariable tokenEnvVar with
+    | None ->
         printfn "Environment variable `%s` not setup" tokenEnvVar
         1
-    | token ->
+    | Some token ->
         let config = DSharpPlus.DiscordConfiguration()
 
         config.set_Token token
