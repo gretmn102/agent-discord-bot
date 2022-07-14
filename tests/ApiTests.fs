@@ -102,6 +102,6 @@ let pingTests =
 
             let act = getState ()
 
-            let exp = """{"Id":"42","Result":{"Case":"Some","Fields":[{"Case":"Pong"}]},"Error":null}"""
+            let exp = """{"Id":"42","Result":{"Case":"Pong"},"Error":null}"""
             Assert.Equal("", exp, act)
     ]

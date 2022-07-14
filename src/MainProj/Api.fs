@@ -2,6 +2,7 @@ module Api
 
 module ApiProtocol =
     open Newtonsoft.Json
+    open FsharpMyExtension
 
     type Id = string
 
@@ -60,14 +61,15 @@ module ApiProtocol =
                 }
 
         member this.Serialize(): string =
-            JsonConvert.SerializeObject this
+            FSharpJsonType.SerializeOption.serNotIndent this
 
         static member Deserialize json: Result<Response<'R, 'ErrorData>, Response<'R, string>> =
             try
-                Ok(JsonConvert.DeserializeObject<Response<'R, 'ErrorData>>(json))
+
+                Ok(FSharpJsonType.SerializeOption.des json)
             with e ->
                 try
-                    let t = JsonConvert.DeserializeObject<Linq.JToken>(json)
+                    let t: Linq.JToken = FSharpJsonType.SerializeOption.des json
                     {
                         Id = t.Value "id" // can be null
                         Result = None
@@ -95,14 +97,14 @@ module ApiProtocol =
             }
 
         member this.Serialize(): string =
-            JsonConvert.SerializeObject this
+            FSharpJsonType.SerializeOption.serNotIndent this
 
         static member Deserialize json: Result<Request<'D>, Response<unit, string>> =
             try
-                Ok(JsonConvert.DeserializeObject<Request<'D>>(json))
+                Ok(FSharpJsonType.SerializeOption.des json)
             with e ->
                 try
-                    let t = JsonConvert.DeserializeObject<Linq.JToken>(json)
+                    let t: Linq.JToken = FSharpJsonType.SerializeOption.des json
                     {
                         Id = t.Value "id" // can be null
                         Result = None
