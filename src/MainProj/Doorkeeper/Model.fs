@@ -88,40 +88,82 @@ module WelcomeSetting =
             mutable LeaversChannelMessage: ChannelMessage option
             mutable LeaversLogChannelMessage: ChannelMessage option
         }
-        static member Init(guildId, outputChannel, templateMessage, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage, leaversChannelMessage, leaversLogChannelMessage) =
+        static member Init guildId =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
-                OutputChannel = outputChannel
-                TemplateMessage = templateMessage
-                OutputLogChannel = outputLogChannel
-                TemplateLogMessage = templateLogMessage
-                OutputLeaveChannel = outputLeaveChannel
-                TemplateLeaveMessage = templateLeaveMessage
-                LeaversChannelMessage = leaversChannelMessage
-                LeaversLogChannelMessage = leaversLogChannelMessage
+                OutputChannel = None
+                TemplateMessage = None
+                OutputLogChannel = None
+                TemplateLogMessage = None
+                OutputLeaveChannel = None
+                TemplateLeaveMessage = None
+                LeaversChannelMessage = None
+                LeaversLogChannelMessage = None
             }
 
-    let welcomeSetting = Db.database.GetCollection<WelcomeSettingData>("welcomeSetting")
 
-    type GuildWelcomeSetting = Map<GuildId, WelcomeSettingData>
+    type Collection = IMongoCollection<WelcomeSettingData>
 
-    let getAll (): GuildWelcomeSetting =
-        welcomeSetting.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.GuildId x st
-            )
-            Map.empty
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Collection =
+        let replace (newData: WelcomeSettingData) (welcomeSetting: Collection) =
+            welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+            |> ignore
 
-    let replace (newData: WelcomeSettingData) =
-        welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
+        let insert guildId setAdditionParams (welcomeSetting: Collection) =
+            let x = setAdditionParams (WelcomeSettingData.Init guildId)
+            welcomeSetting.InsertOne(x)
+            x
 
-    let insert (guildId, outputChannel, roleIds, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage, leaversChannelMessage, leaversLogChannelMessage) =
-        let x = WelcomeSettingData.Init(guildId, outputChannel, roleIds, outputLogChannel, templateLogMessage, outputLeaveChannel, templateLeaveMessage, leaversChannelMessage, leaversLogChannelMessage)
-        welcomeSetting.InsertOne(x)
-        x
+    type GuildWelcomeSetting =
+        {
+            Cache: Map<GuildId, WelcomeSettingData>
+            Collection: Collection
+        }
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildWelcomeSetting =
+        let getAll (db: IMongoDatabase): GuildWelcomeSetting =
+            let welcomeSetting = db.GetCollection<WelcomeSettingData>("welcomeSetting")
+
+            {
+                Cache =
+                    welcomeSetting.Find(fun x -> true).ToEnumerable()
+                    |> Seq.fold
+                        (fun st x ->
+                            Map.add x.GuildId x st
+                        )
+                        Map.empty
+                Collection = welcomeSetting
+            }
+
+        let setWelcomeSetting guildId setAdditionParams (guildWelcomeSetting: GuildWelcomeSetting) =
+            let cache = guildWelcomeSetting.Cache
+
+            {
+                guildWelcomeSetting with
+                    Cache =
+                        match Map.tryFind guildId cache with
+                        | Some welcomeSettingData ->
+                            let newcomersRoles =
+                                setAdditionParams welcomeSettingData
+
+                            Collection.replace newcomersRoles guildWelcomeSetting.Collection
+
+                            Map.add guildId newcomersRoles cache
+                        | None ->
+                            let x =
+                                guildWelcomeSetting.Collection
+                                |> Collection.insert guildId setAdditionParams
+
+                            Map.add guildId x cache
+            }
+
+        let tryFind guildId (guildWelcomeSetting: GuildWelcomeSetting) =
+            Map.tryFind guildId guildWelcomeSetting.Cache
 
 module InvitesSetting =
     type SettingData =

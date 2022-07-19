@@ -452,21 +452,13 @@ let welcomeSettingReduce
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
             let template = template |> List.map Template.ToString |> String.concat ""
             let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                match Map.tryFind e.Guild.Id guildWelcomeSetting with
-                | Some welcomeSettingData ->
-                    let newcomersRoles =
-                        { welcomeSettingData with
-                            OutputChannel = Some channelId
-                            TemplateMessage =
-                                Some template
-                        }
-
-                    WelcomeSetting.replace newcomersRoles
-
-                    Map.add guild.Id newcomersRoles guildWelcomeSetting
-                | None ->
-                    let x = WelcomeSetting.insert (guild.Id, Some channelId, Some template, None, None, None, None, None, None)
-                    Map.add guild.Id x guildWelcomeSetting
+                guildWelcomeSetting
+                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                    { welcomeSettingData with
+                        OutputChannel = Some channelId
+                        TemplateMessage = Some template
+                    }
+                )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome setting has been set")))
 
@@ -485,21 +477,13 @@ let welcomeSettingReduce
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
             let template = template |> List.map Template.ToString |> String.concat ""
             let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                match Map.tryFind e.Guild.Id guildWelcomeSetting with
-                | Some welcomeSettingData ->
-                    let newcomersRoles =
-                        { welcomeSettingData with
-                            OutputLogChannel = Some channelId
-                            TemplateLogMessage =
-                                Some template
-                        }
-
-                    WelcomeSetting.replace newcomersRoles
-
-                    Map.add guild.Id newcomersRoles guildWelcomeSetting
-                | None ->
-                    let x = WelcomeSetting.insert (guild.Id, None, None, Some channelId, Some template, None, None, None, None)
-                    Map.add guild.Id x guildWelcomeSetting
+                guildWelcomeSetting
+                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                    { welcomeSettingData with
+                        OutputLogChannel = Some channelId
+                        TemplateLogMessage = Some template
+                    }
+                )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome log setting has been set")))
 
@@ -518,21 +502,13 @@ let welcomeSettingReduce
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
             let template = template |> List.map Template.ToString |> String.concat ""
             let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                match Map.tryFind e.Guild.Id guildWelcomeSetting with
-                | Some welcomeSettingData ->
-                    let newcomersRoles =
-                        { welcomeSettingData with
-                            OutputLeaveChannel = Some channelId
-                            TemplateLeaveMessage =
-                                Some template
-                        }
-
-                    WelcomeSetting.replace newcomersRoles
-
-                    Map.add guild.Id newcomersRoles guildWelcomeSetting
-                | None ->
-                    let x = WelcomeSetting.insert (guild.Id, None, None, None, None, Some channelId, Some template, None, None)
-                    Map.add guild.Id x guildWelcomeSetting
+                guildWelcomeSetting
+                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                    { welcomeSettingData with
+                        OutputLeaveChannel = Some channelId
+                        TemplateLeaveMessage = Some template
+                    }
+                )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leave setting has been set")))
 
@@ -550,22 +526,14 @@ let welcomeSettingReduce
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
             let template = template |> List.map Template.ToString |> String.concat ""
             let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                match Map.tryFind e.Guild.Id guildWelcomeSetting with
-                | Some welcomeSettingData ->
-                    let newcomersRoles =
-                        { welcomeSettingData with
-                            LeaversChannelMessage =
-                                WelcomeSetting.ChannelMessage.Init channelId template
-                                |> Some
-                        }
-
-                    WelcomeSetting.replace newcomersRoles
-
-                    Map.add guild.Id newcomersRoles guildWelcomeSetting
-                | None ->
-                    let channelMessage = WelcomeSetting.ChannelMessage.Init channelId template
-                    let x = WelcomeSetting.insert (guild.Id, None, None, None, None, None, None, Some channelMessage, None)
-                    Map.add guild.Id x guildWelcomeSetting
+                guildWelcomeSetting
+                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                    { welcomeSettingData with
+                        LeaversChannelMessage =
+                            WelcomeSetting.ChannelMessage.Init channelId template
+                            |> Some
+                    }
+                )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leaver setting has been set")))
 
@@ -583,22 +551,14 @@ let welcomeSettingReduce
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
             let template = template |> List.map Template.ToString |> String.concat ""
             let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                match Map.tryFind e.Guild.Id guildWelcomeSetting with
-                | Some welcomeSettingData ->
-                    let newcomersRoles =
-                        { welcomeSettingData with
-                            LeaversLogChannelMessage =
-                                WelcomeSetting.ChannelMessage.Init channelId template
-                                |> Some
-                        }
-
-                    WelcomeSetting.replace newcomersRoles
-
-                    Map.add guild.Id newcomersRoles guildWelcomeSetting
-                | None ->
-                    let channelMessage = WelcomeSetting.ChannelMessage.Init channelId template
-                    let x = WelcomeSetting.insert (guild.Id, None, None, None, None, None, None, None, Some channelMessage)
-                    Map.add guild.Id x guildWelcomeSetting
+                guildWelcomeSetting
+                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                    { welcomeSettingData with
+                        LeaversLogChannelMessage =
+                            WelcomeSetting.ChannelMessage.Init channelId template
+                            |> Some
+                    }
+                )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leaver log setting has been set")))
 
@@ -632,7 +592,7 @@ let reduce (msg: Msg) (state: State): State =
                 grantRoles data.RoleIds
             | None -> ()
 
-            match Map.tryFind guildId state.WelcomeSetting with
+            match WelcomeSetting.GuildWelcomeSetting.tryFind guildId state.WelcomeSetting with
             | Some data ->
                 let send (channelMessage: WelcomeSetting.ChannelMessage) =
                     match e.Guild.GetChannel channelMessage.ChannelId with
@@ -695,7 +655,7 @@ let reduce (msg: Msg) (state: State): State =
         if not e.Member.IsBot then
             let guildId = e.Guild.Id
 
-            match Map.tryFind guildId state.WelcomeSetting with
+            match WelcomeSetting.GuildWelcomeSetting.tryFind guildId state.WelcomeSetting with
             | Some data ->
                 let send = function
                     | Some outputChannelId, Some templateMessage ->
@@ -776,7 +736,7 @@ let reduce (msg: Msg) (state: State): State =
 let m =
     let init = {
         NewcomersRoles = NewcomersRoles.getAll ()
-        WelcomeSetting = WelcomeSetting.getAll ()
+        WelcomeSetting = WelcomeSetting.GuildWelcomeSetting.getAll Db.database
         Leavers = Leavers.getAll ()
     }
 
