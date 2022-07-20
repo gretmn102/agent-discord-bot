@@ -442,23 +442,14 @@ let welcomeSettingReduce
     (msg: WelcomeSettingMsg)
     (guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting): WelcomeSetting.GuildWelcomeSetting =
 
-    match msg with
-    | SetWelcomeSetting(channelId, template) ->
+    let apply setWelcomeSetting =
         let guild = e.Guild
         let currentMember = getGuildMember guild e.Author
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
-        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
-            let template = template |> List.map Template.ToString |> String.concat ""
-            let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                guildWelcomeSetting
-                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                    { welcomeSettingData with
-                        OutputChannel = Some channelId
-                        TemplateMessage = Some template
-                    }
-                )
+        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+            let guildWelcomeSetting = setWelcomeSetting guild
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome setting has been set")))
 
@@ -468,105 +459,73 @@ let welcomeSettingReduce
 
             guildWelcomeSetting
 
-    | SetWelcomeLogSetting(channelId, template) ->
-        let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-
-        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+    match msg with
+    | SetWelcomeSetting(channelId, template) ->
+        apply (fun guild ->
             let template = template |> List.map Template.ToString |> String.concat ""
-            let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                guildWelcomeSetting
-                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                    { welcomeSettingData with
-                        OutputLogChannel = Some channelId
-                        TemplateLogMessage = Some template
-                    }
-                )
-
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome log setting has been set")))
 
             guildWelcomeSetting
-        else
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                { welcomeSettingData with
+                    OutputChannel = Some channelId
+                    TemplateMessage = Some template
+                }
+            )
+        )
+
+    | SetWelcomeLogSetting(channelId, template) ->
+        apply (fun guild ->
+            let template = template |> List.map Template.ToString |> String.concat ""
 
             guildWelcomeSetting
+            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                { welcomeSettingData with
+                    OutputLogChannel = Some channelId
+                    TemplateLogMessage = Some template
+                }
+            )
+        )
 
     | SetWelcomeLeaveSetting(channelId, template) ->
-        let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-
-        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+        apply (fun guild ->
             let template = template |> List.map Template.ToString |> String.concat ""
-            let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                guildWelcomeSetting
-                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                    { welcomeSettingData with
-                        OutputLeaveChannel = Some channelId
-                        TemplateLeaveMessage = Some template
-                    }
-                )
-
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leave setting has been set")))
 
             guildWelcomeSetting
-        else
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                { welcomeSettingData with
+                    OutputLeaveChannel = Some channelId
+                    TemplateLeaveMessage = Some template
+                }
+            )
+        )
 
-            guildWelcomeSetting
     | SetWelcomeLeaverMessage(channelId, template) ->
-        let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-
-        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+        apply (fun guild ->
             let template = template |> List.map Template.ToString |> String.concat ""
-            let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                guildWelcomeSetting
-                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                    { welcomeSettingData with
-                        LeaversChannelMessage =
-                            WelcomeSetting.ChannelMessage.Init channelId template
-                            |> Some
-                    }
-                )
-
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leaver setting has been set")))
 
             guildWelcomeSetting
-        else
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                { welcomeSettingData with
+                    LeaversChannelMessage =
+                        WelcomeSetting.ChannelMessage.Init channelId template
+                        |> Some
+                }
+            )
+        )
 
-            guildWelcomeSetting
     | SetWelcomeLeaverLogMessage(channelId, template) ->
-        let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-
-        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+        apply (fun guild ->
             let template = template |> List.map Template.ToString |> String.concat ""
-            let guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting =
-                guildWelcomeSetting
-                |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                    { welcomeSettingData with
-                        LeaversLogChannelMessage =
-                            WelcomeSetting.ChannelMessage.Init channelId template
-                            |> Some
-                    }
-                )
-
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome leaver log setting has been set")))
 
             guildWelcomeSetting
-        else
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
-
-            guildWelcomeSetting
+            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
+                { welcomeSettingData with
+                    LeaversLogChannelMessage =
+                        WelcomeSetting.ChannelMessage.Init channelId template
+                        |> Some
+                }
+            )
+        )
 
 let reduce (msg: Msg) (state: State): State =
     match msg with
