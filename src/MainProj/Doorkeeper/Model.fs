@@ -247,3 +247,10 @@ module Leavers =
     let remove (roleData: Data) =
         datas.DeleteOne(fun x -> x.Id = roleData.Id)
         |> ignore
+
+type State =
+    {
+        NewcomersRoles: NewcomersRoles.GuildNewcomersRoles
+        WelcomeSetting: WelcomeSetting.GuildWelcomeSetting
+        Leavers: Leavers.GuildDatas
+    }

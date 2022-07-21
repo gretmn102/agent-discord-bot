@@ -98,13 +98,7 @@ type Msg =
     | Request of EventArgs.MessageCreateEventArgs * Request
     | GuildMemberAddedHandle of EventArgs.GuildMemberAddEventArgs
     | GuildMemberRemovedHandle of EventArgs.GuildMemberRemoveEventArgs
-
-type State =
-    {
-        NewcomersRoles: NewcomersRoles.GuildNewcomersRoles
-        WelcomeSetting: WelcomeSetting.GuildWelcomeSetting
-        Leavers: Leavers.GuildDatas
-    }
+    | ApiRequest of Api.Request * AsyncReplyChannel<Api.Response>
 
 let newcomersRolesReduce
     (e: EventArgs.MessageCreateEventArgs)
@@ -630,6 +624,18 @@ let reduce (msg: Msg) (state: State): State =
                     welcomeSettingReduce e cmd state.WelcomeSetting
             }
 
+    | ApiRequest (req, replyChannel) ->
+        let newState, res = Api.requestHandler state req
+
+        replyChannel.Reply res
+
+        match newState with
+        | Some newState ->
+            { state with
+                WelcomeSetting = newState
+            }
+        | None -> state
+
 let m =
     let init = {
         NewcomersRoles = NewcomersRoles.getAll ()
@@ -662,3 +668,5 @@ let guildMemberRemoveHandle (e: EventArgs.GuildMemberRemoveEventArgs) =
 let execNewcomersRolesCmd e msg =
     m.Post (Request (e, msg))
 
+let apiRequestHandle req =
+    m.PostAndReply (fun r -> ApiRequest(req, r))

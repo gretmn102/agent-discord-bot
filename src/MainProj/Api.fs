@@ -125,9 +125,11 @@ open IO.Ably.Realtime
 
 type Request =
     | Ping
+    | Doorkeeper of Doorkeeper.Api.Request
 
 type Response =
     | Pong
+    | Doorkeeper of Doorkeeper.Api.Response
 
 let start (token: string) =
     let ably = new AblyRealtime(token)
@@ -161,6 +163,16 @@ let start (token: string) =
                         ApiProtocol.Response.Create(id, Ok Pong)
                         |> publish
                     | None -> ()
+
+                | Request.Doorkeeper req ->
+                    let res = Doorkeeper.Main.apiRequestHandle req
+
+                    match x.Id with
+                    | Some id ->
+                        ApiProtocol.Response.Create(id, Ok res)
+                        |> publish
+                    | None -> ()
+
             | Error err ->
                 publish err
         | msg ->

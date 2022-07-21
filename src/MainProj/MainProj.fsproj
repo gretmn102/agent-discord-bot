@@ -49,6 +49,7 @@
     <Compile Include="VoiceChannelNotification\Main.fs" />
     <Compile Include="Doorkeeper\Model.fs" />
     <Compile Include="Doorkeeper\Invites.fs" />
+    <Compile Include="Doorkeeper\Api.fs" />
     <Compile Include="Doorkeeper\Main.fs" />
     <Compile Include="Ranking\Model.fs" />
     <Compile Include="Ranking\Main.fs" />
