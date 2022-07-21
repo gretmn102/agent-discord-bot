@@ -4,20 +4,9 @@ open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
 
+open Shared
 open Types
 open Model
-
-type Template =
-    | Text of string
-    | UserName
-    | UserMention
-    static member UserNameName = "userName"
-    static member UserMentionName = "userMention"
-
-    static member ToString = function
-        | Text x -> x
-        | UserName -> sprintf "<@%s>" Template.UserNameName
-        | UserMention -> sprintf "<@%s>" Template.UserMentionName
 
 type PassMsg =
     | Pass of UserId * string list
@@ -30,11 +19,11 @@ type NewcomersRolesMsg =
     | PassMsg of PassMsg
 
 type WelcomeSettingMsg =
-    | SetWelcomeSetting of ChannelId * Template list
-    | SetWelcomeLogSetting of ChannelId * Template list
-    | SetWelcomeLeaverMessage of ChannelId * Template list
-    | SetWelcomeLeaverLogMessage of ChannelId * Template list
-    | SetWelcomeLeaveSetting of ChannelId * Template list
+    | SetWelcomeSetting of ChannelId * MessageTemplate.Message
+    | SetWelcomeLogSetting of ChannelId * MessageTemplate.Message
+    | SetWelcomeLeaverMessage of ChannelId * MessageTemplate.Message
+    | SetWelcomeLeaverLogMessage of ChannelId * MessageTemplate.Message
+    | SetWelcomeLeaveSetting of ChannelId * MessageTemplate.Message
 
 type Request =
     | NewcomersRolesReq of NewcomersRolesMsg
@@ -54,23 +43,11 @@ module Parser =
         skipStringCI "setNewcomersRoles" >>. spaces
         >>. many (pmentionRole <|> puint64 .>> spaces)
 
-    let ptemplateMessage: _ Parser =
-        let praw = many1Satisfy ((<>) '<')
-        let pall =
-            choice [
-                praw |>> Template.Text
-                puserMentionTargetStr Template.UserNameName >>% UserName
-                puserMentionTargetStr Template.UserMentionName >>% UserMention
-                pstring "<" |>> Template.Text
-            ]
-
-        many pall
-
     let pchannelTemplateMessage cmdName =
         skipStringCI cmdName >>. spaces
         >>. tuple2
                 (pchannelMention .>> spaces)
-                ptemplateMessage
+                MessageTemplate.Message.parser
 
     let start: _ Parser =
         let ppassCommand =
@@ -116,20 +93,6 @@ module Parser =
             p |>> NewcomersRolesReq
             psettings |>> WelcomeSettingReq
         ]
-
-let templateBuild (targetUser: Entities.DiscordMember) message =
-    FParsecUtils.runEither Parser.ptemplateMessage message
-    |> Either.map (
-        List.map (function
-            | Text x -> x
-            | UserMention -> targetUser.Mention
-            | UserName -> targetUser.Username
-        )
-        >> System.String.Concat
-    )
-
-let templateToString template =
-    template |> List.map Template.ToString |> System.String.Concat
 
 type Msg =
     | Request of EventArgs.MessageCreateEventArgs * Request
@@ -247,17 +210,11 @@ let newcomersRolesReduce
                                     awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
 
                                 | mainChannel ->
-                                    FParsecUtils.runEither Parser.ptemplateMessage passSetting.WelcomeMessage
-                                    |> Either.map (
-                                        List.map (function
-                                            | Text x -> x
-                                            | UserMention -> targetUser.Mention
-                                            | UserName -> targetUser.Username
-                                        )
-                                        >> System.String.Concat
-                                    )
-                                    |> Either.iter (fun msg ->
-                                        awaiti <| mainChannel.SendMessageAsync msg
+                                    MessageTemplate.Message.parse passSetting.WelcomeMessage
+                                    |> Either.iter (
+                                        MessageTemplate.Message.substitute targetUser.Mention targetUser.Username
+                                        >> mainChannel.SendMessageAsync
+                                        >> awaiti
                                     )
 
                                 match passSetting.PassLogMessage with
@@ -265,16 +222,9 @@ let newcomersRolesReduce
                                     match guild.GetChannel channelId with
                                     | null -> ()
                                     | channel ->
-                                        FParsecUtils.runEither Parser.ptemplateMessage message
-                                        |> Either.map (
-                                            List.map (function
-                                                | Text x -> x
-                                                | UserMention -> targetUser.Mention
-                                                | UserName -> targetUser.Username
-                                            )
-                                            >> System.String.Concat
-                                        )
+                                        MessageTemplate.Message.parse message
                                         |> Either.iter (fun msg ->
+                                            let msg = MessageTemplate.Message.substitute targetUser.Mention targetUser.Username msg
                                             try
                                                 awaiti <| channel.SendMessageAsync msg
                                             with _ -> ()
@@ -462,7 +412,7 @@ let welcomeSettingReduce
     match msg with
     | SetWelcomeSetting(channelId, template) ->
         apply (fun guild ->
-            let template = template |> List.map Template.ToString |> String.concat ""
+            let template = template |> MessageTemplate.Message.toString
 
             guildWelcomeSetting
             |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
@@ -475,7 +425,7 @@ let welcomeSettingReduce
 
     | SetWelcomeLogSetting(channelId, template) ->
         apply (fun guild ->
-            let template = template |> List.map Template.ToString |> String.concat ""
+            let template = template |> MessageTemplate.Message.toString
 
             guildWelcomeSetting
             |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
@@ -488,7 +438,7 @@ let welcomeSettingReduce
 
     | SetWelcomeLeaveSetting(channelId, template) ->
         apply (fun guild ->
-            let template = template |> List.map Template.ToString |> String.concat ""
+            let template = template |> MessageTemplate.Message.toString
 
             guildWelcomeSetting
             |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
@@ -501,7 +451,7 @@ let welcomeSettingReduce
 
     | SetWelcomeLeaverMessage(channelId, template) ->
         apply (fun guild ->
-            let template = template |> List.map Template.ToString |> String.concat ""
+            let template = template |> MessageTemplate.Message.toString
 
             guildWelcomeSetting
             |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
@@ -515,7 +465,7 @@ let welcomeSettingReduce
 
     | SetWelcomeLeaverLogMessage(channelId, template) ->
         apply (fun guild ->
-            let template = template |> List.map Template.ToString |> String.concat ""
+            let template = template |> MessageTemplate.Message.toString
 
             guildWelcomeSetting
             |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
@@ -557,16 +507,10 @@ let reduce (msg: Msg) (state: State): State =
                     match e.Guild.GetChannel channelMessage.ChannelId with
                     | null -> ()
                     | outputChannel ->
-                        FParsecUtils.runEither Parser.ptemplateMessage channelMessage.Message
-                        |> Either.map (
-                            List.map (function
-                                | Text x -> x
-                                | UserMention -> e.Member.Mention
-                                | UserName -> e.Member.Username
-                            )
-                            >> System.String.Concat
-                        )
+                        MessageTemplate.Message.parse channelMessage.Message
                         |> Either.iter (fun msg ->
+                            let msg = MessageTemplate.Message.substitute e.Member.Mention e.Member.Username msg
+
                             try
                                 awaiti <| outputChannel.SendMessageAsync msg
                             with e ->
@@ -621,16 +565,10 @@ let reduce (msg: Msg) (state: State): State =
                         match e.Guild.GetChannel outputChannelId with
                         | null -> ()
                         | outputChannel ->
-                            FParsecUtils.runEither Parser.ptemplateMessage templateMessage
-                            |> Either.map (
-                                List.map (function
-                                    | Text x -> x
-                                    | UserMention -> e.Member.Mention
-                                    | UserName -> e.Member.Username
-                                )
-                                >> System.String.Concat
-                            )
+                            MessageTemplate.Message.parse templateMessage
                             |> Either.iter (fun msg ->
+                                let msg = MessageTemplate.Message.substitute e.Member.Mention e.Member.Username msg
+
                                 try
                                     awaiti <| outputChannel.SendMessageAsync msg
                                 with e ->

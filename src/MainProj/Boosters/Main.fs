@@ -3,22 +3,31 @@ open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
 
+open Shared
 open Types
 open Model
 
 type Request =
-    | SetSetting of ChannelId * Doorkeeper.Main.Template list
+    | SetSetting of ChannelId * MessageTemplate.Message
     | GetSetting
 
 module Parser =
     open FParsec
 
+    open DiscordMessage.Parser
+
     let setSettingName = "boostersSetSetting"
     let getSettingName = "boostersGetSetting"
 
+    let pchannelTemplateMessage cmdName =
+        skipStringCI cmdName >>. spaces
+        >>. tuple2
+                (pchannelMention .>> spaces)
+                MessageTemplate.Message.parser
+
     let start =
         choice [
-            Doorkeeper.Main.Parser.pchannelTemplateMessage setSettingName |>> SetSetting
+            pchannelTemplateMessage setSettingName |>> SetSetting
             skipStringCI getSettingName >>% GetSetting
         ]
 
@@ -35,7 +44,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Boosters.GuildSetti
 
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
             let state: Boosters.GuildSettings =
-                let template = Doorkeeper.Main.templateToString messageTemplate
+                let template = MessageTemplate.Message.toString messageTemplate
 
                 match Map.tryFind e.Guild.Id state with
                 | Some setting ->
@@ -69,7 +78,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Boosters.GuildSetti
                     [
                         "```"
                         sprintf ".%s <channel_mention|channel_id>" Parser.setSettingName
-                        sprintf "%s boosted the server!" (Doorkeeper.Main.Template.ToString Doorkeeper.Main.Template.UserMention)
+                        sprintf "%s boosted the server!" (MessageTemplate.Part.toString MessageTemplate.Part.UserMention)
                         "```"
                     ] |> String.concat "\n"
 
@@ -172,22 +181,24 @@ let mainReduce req (state: State) =
         if not <| List.isEmpty addedRoles then
             match Map.tryFind e.Guild.Id state.GuildBoostersSettings with
             | Some setting ->
-                Doorkeeper.Main.templateBuild e.Member setting.Message
-                |> Either.iter (fun msg ->
-                    match e.Guild.GetChannel setting.OutputChannelId with
-                    | null -> ()
-                    | channel ->
-                        addedRoles
-                        |> List.iter (fun role ->
-                            match role.Tags with
-                            | null -> () // returns if the role is created while the bot is running
-                            | tags ->
-                                if tags.IsPremiumSubscriber then
+                match e.Guild.GetChannel setting.OutputChannelId with
+                | null -> ()
+                | channel ->
+                    addedRoles
+                    |> List.iter (fun role ->
+                        match role.Tags with
+                        | null -> () // returns if the role is created while the bot is running
+                        | tags ->
+                            if tags.IsPremiumSubscriber then
+                                MessageTemplate.Message.parse setting.Message
+                                |> Either.iter (fun msg ->
+                                    let msg = MessageTemplate.Message.substitute e.Member.Mention e.Member.Username msg
+
                                     try
                                         awaiti (channel.SendMessageAsync msg)
                                     with _ -> ()
-                        )
-                )
+                                )
+                    )
             | None -> ()
 
         state
