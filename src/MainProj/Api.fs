@@ -169,7 +169,7 @@ let start (token: string) =
 
                     match x.Id with
                     | Some id ->
-                        ApiProtocol.Response.Create(id, Ok res)
+                        ApiProtocol.Response.Create(id, Ok (Doorkeeper res))
                         |> publish
                     | None -> ()
 
