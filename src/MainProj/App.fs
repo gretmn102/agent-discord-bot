@@ -128,7 +128,12 @@ let main argv =
         #endif
 
     let ablyToken =
-        let serverConnectionVarName = "AblyToken"
+        let serverConnectionVarName =
+            #if TEST_BOT
+            "AblyTokenTest"
+            #else
+            "AblyToken"
+            #endif
         match getEnvironmentVariable serverConnectionVarName with
         | Some value -> value
         | None ->
