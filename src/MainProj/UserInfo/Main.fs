@@ -94,7 +94,23 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
                             presence.Activities
                             |> Seq.tryPick (fun activity ->
                                 if activity.ActivityType = Entities.ActivityType.Custom then
-                                    Some <| sprintf "%s %s" (activity.CustomStatus.Emoji.GetDiscordName()) activity.CustomStatus.Name
+                                    match activity.CustomStatus with
+                                    | null -> "activity.CustomStatus is null"
+                                    | customStatus ->
+                                        let emoji =
+                                            match customStatus.Emoji with
+                                            | null -> ""
+                                            | emoji ->
+                                                if emoji.RequiresColons then
+                                                    let emojiName = emoji.GetDiscordName ()
+
+                                                    sprintf "<%s%d> " emojiName emoji.Id
+                                                else
+                                                    sprintf "%s " emoji.Name
+
+                                        emoji + customStatus.Name
+
+                                    |> Some
                                 else
                                     None
                             )
