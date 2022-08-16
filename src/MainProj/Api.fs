@@ -1,4 +1,5 @@
 module Api
+open Types
 
 module ApiProtocol =
     open Newtonsoft.Json
@@ -48,6 +49,9 @@ module ApiProtocol =
                     new JsonSerializerSettings(
                         ContractResolver = new CamelCasePropertyNamesContractResolver()
                     )
+
+                x.Converters.Add (new SnowflakeConverter())
+                x.Converters.Add (new NullableSnowflakeConverter())
                 x.Converters.Add FSharpJsonType.SerializeOption.converter
                 x
             )
@@ -89,7 +93,6 @@ module ApiProtocol =
 
         static member Deserialize json: Result<Response<'R, 'ErrorData>, Response<'R, string>> =
             try
-
                 Ok(JsonSerializer.des json)
             with e ->
                 try

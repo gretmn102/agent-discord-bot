@@ -6,19 +6,19 @@ open Model
 type Message = string
 
 type Checkpoint =
-    | Channel of ChannelId
+    | Channel of Snowflake
     // | DoorkeeperRole of RoleId
     // | EnteredUserRole of RoleId
     | NewcomerWelcomeMessage of Message
     | ReturnedWelcomeMessage of Message
 
 // type Inner =
-//     | Channel of ChannelId
+//     | Channel of Snowflake
 //     | NewcomerWelcomeMessage of Message
 //     | ReturnedWelcomeMessage of Message
 
 type Exit =
-    | Channel of ChannelId
+    | Channel of Snowflake
     | GoodbyeMessage of Message
 
 type SetRoot =
@@ -27,14 +27,14 @@ type SetRoot =
     | Exit of Exit
 
 type Request =
-    | Get of GuildId
-    | Set of GuildId * SetRoot
+    | Get of Snowflake
+    | Set of Snowflake * SetRoot
 
 type Settings =
     {
         Checkpoint:
             {|
-                Channel: ChannelId option
+                Channel: Snowflake option
                 // DoorkeeperRole: RoleId option
                 // EnteredUserRole: RoleId option
                 NewcomerWelcomeMessage: Message option
@@ -42,13 +42,13 @@ type Settings =
             |}
         // Inner:
         //     {|
-        //         Channel: ChannelId option
+        //         Channel: Snowflake option
         //         NewcomerWelcomeMessage: Message option
         //         ReturnedWelcomeMessage: Message option
         //     |}
         Exit:
             {|
-                Channel: ChannelId option
+                Channel: Snowflake option
                 GoodbyeMessage: Message option
             |}
     }
@@ -69,8 +69,8 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
             | Checkpoint.Channel channelId ->
                 let state =
                     state.WelcomeSetting
-                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId (fun x ->
-                        { x with OutputChannel = Some channelId }
+                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
+                        { x with OutputChannel = Some channelId.v }
                     )
 
                 Some state, Ok ()
@@ -80,7 +80,7 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
 
                 let state =
                     state.WelcomeSetting
-                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId (fun x ->
+                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
                         { x with TemplateMessage = Some msg }
                     )
 
@@ -89,7 +89,7 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
             | Checkpoint.ReturnedWelcomeMessage msg ->
                 // TODO: check if the message is correct
 
-                match WelcomeSetting.GuildWelcomeSetting.tryFind guildId state.WelcomeSetting with
+                match WelcomeSetting.GuildWelcomeSetting.tryFind guildId.v state.WelcomeSetting with
                 | Some welcomeSetting ->
                     let channelId =
                         welcomeSetting.OutputChannel
@@ -102,7 +102,7 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
                     | Some channelId ->
                         let state =
                             state.WelcomeSetting
-                            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId (fun x ->
+                            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
                                 { x with
                                     LeaversChannelMessage =
                                         WelcomeSetting.ChannelMessage.Init channelId msg
@@ -122,8 +122,8 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
             | Exit.Channel channelId ->
                 let state =
                     state.WelcomeSetting
-                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId (fun x ->
-                        { x with OutputLeaveChannel = Some channelId }
+                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
+                        { x with OutputLeaveChannel = Some channelId.v }
                     )
 
                 Some state, Ok ()
@@ -132,7 +132,7 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
 
                 let state =
                     state.WelcomeSetting
-                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId (fun x ->
+                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
                         { x with TemplateLeaveMessage = Some msg }
                     )
 
@@ -141,12 +141,12 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
         |> fun (state, x) -> state, Response.Set x
 
     | Request.Get guildId ->
-        let welcomeSetting = WelcomeSetting.GuildWelcomeSetting.tryFind guildId state.WelcomeSetting
+        let welcomeSetting = WelcomeSetting.GuildWelcomeSetting.tryFind guildId.v state.WelcomeSetting
 
         {
             Checkpoint =
                 {|
-                    Channel = welcomeSetting |> Option.bind (fun x -> x.OutputChannel)
+                    Channel = welcomeSetting |> Option.bind (fun x -> x.OutputChannel |> Option.map Snowflake.Create)
                     // DoorkeeperRole = RoleId
                     // EnteredUserRole = RoleId
                     NewcomerWelcomeMessage = welcomeSetting |> Option.bind (fun x -> x.TemplateMessage)
@@ -163,7 +163,7 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
             //     |}
             Exit =
                 {|
-                    Channel = welcomeSetting |> Option.bind (fun x -> x.OutputLeaveChannel)
+                    Channel = welcomeSetting |> Option.bind (fun x -> x.OutputLeaveChannel |> Option.map Snowflake.Create)
                     GoodbyeMessage = welcomeSetting |> Option.bind (fun x -> x.TemplateLeaveMessage)
                 |}
         }

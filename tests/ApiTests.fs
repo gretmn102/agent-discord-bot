@@ -5,6 +5,30 @@ open IO.Ably.Realtime
 
 open Types
 
+[<Tests>]
+let snowflakeTests =
+    testList "snowflakeTests" [
+        testCase "serialize and deserialize" <| fun () ->
+            let converter = SnowflakeConverter()
+
+            let ser x =
+                Newtonsoft.Json.JsonConvert.SerializeObject(x, converter)
+
+            let des (str: string) =
+                Newtonsoft.Json.JsonConvert.DeserializeObject(str, converter)
+
+            let sample = Snowflake.Create 12345UL
+
+            let exp = "\"12345\""
+            let act = ser sample
+
+            Assert.Equal("", exp, act)
+
+            let act: Snowflake = des exp
+
+            Assert.Equal("", sample, act)
+    ]
+
 module ApiProtocolTests =
     [<Tests>]
     let apiProtocolSerializeTests =
@@ -31,7 +55,7 @@ module ApiProtocolTests =
                         {
                             Checkpoint =
                                 {|
-                                    Channel = Some 0UL
+                                    Channel = Some (Snowflake.Create 0UL)
                                     NewcomerWelcomeMessage = None
                                     ReturnedWelcomeMessage = Some "1234"
                                 |}
@@ -49,7 +73,7 @@ module ApiProtocolTests =
 
                 let act = sample.Serialize()
 
-                let exp = """{"id":"42","result":{"case":"Ping"},"error":null}"""
+                let exp = """{"id":"42","data":{"case":"Doorkeeper","fields":[{"case":"Get","fields":[{"checkpoint":{"channel":"0","newcomerWelcomeMessage":null,"returnedWelcomeMessage":"1234"},"exit":{"channel":null,"goodbyeMessage":null}}]}]}}"""
 
                 Assert.Equal("", exp, act)
 
@@ -65,7 +89,7 @@ module ApiProtocolTests =
 
                 let act = sample.Serialize()
 
-                let exp = """{"id":"42","data":{"case":"Doorkeeper","fields":[{"case":"Get","fields":[{"checkpoint":{"channel":0,"newcomerWelcomeMessage":null,"returnedWelcomeMessage":"1234"},"exit":{"channel":null,"goodbyeMessage":null}}]}]}}"""
+                let exp = """{"id":"42","result":{"case":"Ping"},"error":null}"""
 
                 Assert.Equal("", exp, act)
 
