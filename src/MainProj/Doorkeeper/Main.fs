@@ -126,7 +126,7 @@ let newcomersRolesReduce
             let sendErrorMessage () =
                 awaiti (replyMessage.ModifyAsync (Entities.Optional passErrorMsg))
 
-            match Map.tryFind e.Guild.Id guildNewcomersRoles with
+            match NewcomersRoles.GuildNewcomersRoles.tryFind e.Guild.Id guildNewcomersRoles with
             | Some newcomersRoles ->
                 match newcomersRoles.PassSettings with
                 | Some passSetting ->
@@ -259,19 +259,13 @@ let newcomersRolesReduce
             | Right passSettings ->
                 if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
                     let guildNewcomersRoles =
-                        match Map.tryFind e.Guild.Id guildNewcomersRoles with
-                        | Some newcomersRoles ->
-
-                            let newcomersRoles =
+                        guildNewcomersRoles
+                        |> NewcomersRoles.GuildNewcomersRoles.setWelcomeSetting
+                            e.Guild.Id
+                            (fun newcomersRoles ->
                                 { newcomersRoles with
                                     PassSettings = Some passSettings }
-
-                            NewcomersRoles.replace newcomersRoles
-
-                            Map.add guild.Id newcomersRoles guildNewcomersRoles
-                        | None ->
-                            let x = NewcomersRoles.insert (guild.Id, Set.empty, Some passSettings)
-                            Map.add guild.Id x guildNewcomersRoles
+                            )
 
                     awaiti (replyMessage.ModifyAsync(Entities.Optional("Pass settings has been set")))
 
@@ -294,7 +288,7 @@ let newcomersRolesReduce
                     b.Embed <- embed.Build()
                     b
 
-                match Map.tryFind e.Guild.Id guildNewcomersRoles with
+                match NewcomersRoles.GuildNewcomersRoles.tryFind e.Guild.Id guildNewcomersRoles with
                 | Some newcomersRoles->
                     match newcomersRoles.PassSettings with
                     | Some passSettings ->
@@ -327,19 +321,14 @@ let newcomersRolesReduce
 
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
            || (currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles) then
-            let guildNewcomersRoles: NewcomersRoles.GuildNewcomersRoles =
-                match Map.tryFind e.Guild.Id guildNewcomersRoles with
-                | Some newcomersRoles ->
-                    let newcomersRoles =
+            let guildNewcomersRoles =
+                guildNewcomersRoles
+                |> NewcomersRoles.GuildNewcomersRoles.setWelcomeSetting
+                    e.Guild.Id
+                    (fun newcomersRoles ->
                         { newcomersRoles with
                             RoleIds = Set.ofList roleIds }
-
-                    NewcomersRoles.replace newcomersRoles
-
-                    Map.add guild.Id newcomersRoles guildNewcomersRoles
-                | None ->
-                    let x = NewcomersRoles.insert (guild.Id, Set.ofList roleIds, None)
-                    Map.add guild.Id x guildNewcomersRoles
+                    )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Roles has been set")))
 
@@ -351,7 +340,7 @@ let newcomersRolesReduce
 
     | GetNewcomersRoles ->
         let message =
-            match Map.tryFind e.Guild.Id guildNewcomersRoles with
+            match NewcomersRoles.GuildNewcomersRoles.tryFind e.Guild.Id guildNewcomersRoles with
             | Some newcomersRoles ->
                 let b = Entities.DiscordMessageBuilder()
                 let embed = Entities.DiscordEmbedBuilder()
@@ -490,7 +479,7 @@ let reduce (msg: Msg) (state: State): State =
                             printfn "%A" e.Message
                 )
 
-            match Map.tryFind guildId state.NewcomersRoles with
+            match NewcomersRoles.GuildNewcomersRoles.tryFind guildId state.NewcomersRoles with
             | Some data ->
                 grantRoles data.RoleIds
             | None -> ()
@@ -638,7 +627,7 @@ let reduce (msg: Msg) (state: State): State =
 
 let m =
     let init = {
-        NewcomersRoles = NewcomersRoles.getAll ()
+        NewcomersRoles = NewcomersRoles.GuildNewcomersRoles.getAll Db.database
         WelcomeSetting = WelcomeSetting.GuildWelcomeSetting.getAll Db.database
         Leavers = Leavers.getAll ()
     }

@@ -15,6 +15,14 @@ module NewcomersRoles =
             IssuedRoleIds: (string * RoleId) []
             PassLogMessage: (ChannelId * string) option
         }
+        static member Empty = {
+            PermittedRoles = Set.empty
+            MainChannelId = 0UL
+            WelcomeMessage = ""
+            IssuedRoleIds = [||]
+            PassLogMessage = None
+        }
+
         static member SampleJson =
             {
                 PermittedRoles = Set [ 12345678UL ]
@@ -36,35 +44,76 @@ module NewcomersRoles =
 
             mutable PassSettings: PassSettings option
         }
-        static member Init(guildId: GuildId, roleIds: RoleId Set, passSettings) =
+        static member Init(guildId: GuildId) =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
-                RoleIds = roleIds
+                RoleIds = Set.empty
 
-                PassSettings = passSettings
+                PassSettings = None
             }
 
-    let permissiveRoles = Db.database.GetCollection<NewcomersRolesData>("newcomersRoles")
+    type Collection = IMongoCollection<NewcomersRolesData>
 
-    type GuildNewcomersRoles = Map<GuildId, NewcomersRolesData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Collection =
+        let replace (newData: NewcomersRolesData) (welcomeSetting: Collection) =
+            welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+            |> ignore
 
-    let getAll (): GuildNewcomersRoles =
-        permissiveRoles.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.GuildId x st
-            )
-            Map.empty
+        let insert guildId setAdditionParams (welcomeSetting: Collection) =
+            let x = setAdditionParams (NewcomersRolesData.Init guildId)
+            welcomeSetting.InsertOne(x)
+            x
 
-    let replace (newData: NewcomersRolesData) =
-        permissiveRoles.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
+    type GuildNewcomersRoles =
+        {
+            Cache: Map<GuildId, NewcomersRolesData>
+            Collection: Collection
+        }
 
-    let insert (guildId: GuildId, roleIds: RoleId Set, passSettings) =
-        let x = NewcomersRolesData.Init(guildId, roleIds, passSettings)
-        permissiveRoles.InsertOne(x)
-        x
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildNewcomersRoles =
+        let getAll (db: IMongoDatabase): GuildNewcomersRoles =
+            let welcomeSetting = db.GetCollection<NewcomersRolesData>("newcomersRoles")
+
+            {
+                Cache =
+                    welcomeSetting.Find(fun x -> true).ToEnumerable()
+                    |> Seq.fold
+                        (fun st x ->
+                            Map.add x.GuildId x st
+                        )
+                        Map.empty
+                Collection = welcomeSetting
+            }
+
+        let setWelcomeSetting guildId setAdditionParams (guildWelcomeSetting: GuildNewcomersRoles) =
+            let cache = guildWelcomeSetting.Cache
+
+            {
+                guildWelcomeSetting with
+                    Cache =
+                        match Map.tryFind guildId cache with
+                        | Some welcomeSettingData ->
+                            let newcomersRoles =
+                                setAdditionParams welcomeSettingData
+
+                            Collection.replace newcomersRoles guildWelcomeSetting.Collection
+
+                            Map.add guildId newcomersRoles cache
+                        | None ->
+                            let x =
+                                guildWelcomeSetting.Collection
+                                |> Collection.insert guildId setAdditionParams
+
+                            Map.add guildId x cache
+            }
+
+        let tryFind guildId (guildWelcomeSetting: GuildNewcomersRoles) =
+            Map.tryFind guildId guildWelcomeSetting.Cache
 
 module WelcomeSetting =
     type ChannelMessage =
