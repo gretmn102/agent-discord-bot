@@ -619,10 +619,7 @@ let reduce (msg: Msg) (state: State): State =
         replyChannel.Reply res
 
         match newState with
-        | Some newState ->
-            { state with
-                WelcomeSetting = newState
-            }
+        | Some newState -> newState
         | None -> state
 
 let m =

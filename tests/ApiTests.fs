@@ -56,8 +56,16 @@ module ApiProtocolTests =
                             Checkpoint =
                                 {|
                                     Channel = Some (Snowflake.Create 0UL)
+                                    DoorkeeperRole = None
+                                    EnteredUserRole = None
                                     NewcomerWelcomeMessage = None
                                     ReturnedWelcomeMessage = Some "1234"
+                                |}
+                            Inner =
+                                {|
+                                    Channel = None
+                                    NewcomerWelcomeMessage = Some "NewcomerWelcomeMessage"
+                                    // ReturnedWelcomeMessage: Message option
                                 |}
                             Exit =
                                 {|
@@ -73,7 +81,7 @@ module ApiProtocolTests =
 
                 let act = sample.Serialize()
 
-                let exp = """{"id":"42","data":{"case":"Doorkeeper","fields":[{"case":"Get","fields":[{"checkpoint":{"channel":"0","newcomerWelcomeMessage":null,"returnedWelcomeMessage":"1234"},"exit":{"channel":null,"goodbyeMessage":null}}]}]}}"""
+                let exp = """{"id":"42","data":{"case":"Doorkeeper","fields":[{"case":"Get","fields":[{"checkpoint":{"channel":"0","doorkeeperRole":null,"enteredUserRole":null,"newcomerWelcomeMessage":null,"returnedWelcomeMessage":"1234"},"inner":{"channel":null,"newcomerWelcomeMessage":"NewcomerWelcomeMessage"},"exit":{"channel":null,"goodbyeMessage":null}}]}]}}"""
 
                 Assert.Equal("", exp, act)
 
