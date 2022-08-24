@@ -115,6 +115,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.EmojiFontCmd msg ->
                 EmojiFont.Main.exec e msg
 
+            | CommandParser.CalcCmd msg ->
+                Calc.Main.exec e msg
+
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 

@@ -78,6 +78,8 @@
     <Compile Include="EggBattle\Model.fs" />
     <Compile Include="EggBattle\Main.fs" />
     <Compile Include="Moderation\Main.fs" />
+    <Compile Include="Calc\Core.fs" />
+    <Compile Include="Calc\Main.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />

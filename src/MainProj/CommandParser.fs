@@ -55,6 +55,8 @@ type Cmd =
 
     | ModerationCmd of Moderation.Main.Request
 
+    | CalcCmd of Calc.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -113,6 +115,8 @@ let pcommand: _ Parser =
         Ship.Main.Parser.start |>> ShipCmd
 
         EmojiFont.Main.Parser.start |>> EmojiFontCmd
+
+        Calc.Main.Parser.start |>> CalcCmd
     ]
 
 let start botId str =
