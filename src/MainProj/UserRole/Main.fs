@@ -10,6 +10,7 @@ open Model
 type RoleEditModel = {
     Name: string
     Color: Entities.DiscordColor
+    IconUrl: string option
 }
 
 type Request =
@@ -57,13 +58,15 @@ module Parser =
 
     let pgiveOrChangeRole: _ Parser =
         let pargs =
-            pipe2
+            pipe3
                 (pquote .>> spaces)
-                phexColor
-                (fun name color ->
+                (phexColor .>> spaces)
+                (opt (many1Satisfy (fun _ -> true))) // todo: validate url
+                (fun name color iconUrl ->
                     {
                         Name = name
                         Color = color
+                        IconUrl = iconUrl
                     }
                 )
 
@@ -128,6 +131,9 @@ module UserRoleForm =
     [<Literal>]
     let UserRoleFormModalColorId = "UserRoleFormModalColorId"
 
+    [<Literal>]
+    let UserRoleFormModalIconUrl = "UserRoleFormModalIconUrl"
+
     let createUI
         (addComponents: Entities.DiscordComponent [] -> unit)
         addEmbed
@@ -189,6 +195,16 @@ module UserRoleForm =
                                     placeholder = "#ffa500",
                                     style = TextInputStyle.Short,
                                     value = (match existRole with None -> "" | Some role -> sprintf "#%x" role.Color.Value)
+                                )
+                            )
+                            .AddComponents(
+                                Entities.TextInputComponent(
+                                    "Ссылка на иконку",
+                                    UserRoleFormModalIconUrl,
+                                    required = false,
+                                    placeholder = "",
+                                    style = TextInputStyle.Short,
+                                    value = (match existRole with None -> "" | Some role -> match role.IconUrl with None -> "" | Some x -> x)
                                 )
                             )
 
@@ -318,28 +334,73 @@ module UserRoleForm =
                                 createUI addComponents addEmbed guildMember (Some userRole.Id)
 
                                 guildUserRoles
+
                             | Some roleEditModel ->
-                                userRole.ModifyAsync (
-                                    name = roleEditModel.Name,
-                                    color = System.Nullable(roleEditModel.Color)
-                                )
-                                |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+                                let res =
+                                    let res =
+                                        let changeWithoutIcon () =
+                                            try
+                                                userRole.ModifyAsync (
+                                                    name = roleEditModel.Name,
+                                                    color = System.Nullable(roleEditModel.Color)
+                                                )
+                                                |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
 
-                                let roleGranded =
-                                    guildMember.Roles
-                                    |> Seq.exists (fun x -> x.Id = userRole.Id)
+                                                Right ()
+                                            with e ->
+                                                Left e.Message
 
-                                if roleGranded then
-                                    setContent "Role has been changed"
-                                else
-                                    try
-                                        guildMember.GrantRoleAsync userRole
-                                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+                                        let changeWithIcon iconUrl =
+                                            if guild.Features |> Seq.exists ((=) "ROLE_ICONS") then
+                                                match WebClientDownloader.getData [] iconUrl with
+                                                | Left errMsg ->
+                                                    sprintf "Download url by '%s' error:\n" errMsg
+                                                    |> Left
+                                                | Right bytes ->
+                                                    try
+                                                        use m = new System.IO.MemoryStream(bytes)
 
-                                        setContent "Role has been changed and returned to user"
-                                    with e ->
-                                        let errMsg = sprintf "An error occurred when returning the role to the user:\n%s" e.Message
-                                        setContent errMsg
+                                                        userRole.ModifyAsync (
+                                                            name = roleEditModel.Name,
+                                                            color = System.Nullable(roleEditModel.Color),
+                                                            icon = m
+                                                        )
+                                                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                                        Right ()
+                                                    with e ->
+                                                        Left e.Message
+                                            else
+                                                Left "This guild don't has ROLE_ICONS feature"
+
+                                        match roleEditModel.IconUrl with
+                                        | Some iconUrl ->
+                                            if userRole.IconUrl = iconUrl then
+                                                changeWithoutIcon ()
+                                            else
+                                                changeWithIcon iconUrl
+                                        | None -> changeWithoutIcon ()
+
+                                    match res with
+                                    | Right () ->
+                                        let roleGranded =
+                                            guildMember.Roles
+                                            |> Seq.exists (fun x -> x.Id = userRole.Id)
+
+                                        if roleGranded then
+                                            "Role has been changed"
+                                        else
+                                            try
+                                                guildMember.GrantRoleAsync userRole
+                                                |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                                "Role has been changed and returned to user"
+                                            with e ->
+                                                sprintf "An error occurred when returning the role to the user:\n%s" e.Message
+
+                                    | Left errMsg -> errMsg
+
+                                setContent res
 
                                 guildUserRoles
                     | None ->
@@ -403,8 +464,19 @@ module UserRoleForm =
 
                 | false, _ -> Left (sprintf "Internal error: %s not found" UserRoleFormModalColorId)
 
-            match name, color with
-            | Right name, Right color ->
+            let iconUrl =
+                match e.Values.TryGetValue UserRoleFormModalIconUrl with
+                | true, iconUrl ->
+                    if System.String.IsNullOrWhiteSpace iconUrl then
+                        Right None
+                    else
+                        // todo: validate url
+                        Right (Some iconUrl)
+                | false, _ ->
+                    Right None
+
+            match name, color, iconUrl with
+            | Right name, Right color, Right iconUrl ->
                 let b = Entities.DiscordInteractionResponseBuilder()
                 b.IsEphemeral <- true
 
@@ -438,6 +510,7 @@ module UserRoleForm =
                         (Some {
                             Name = name
                             Color = color
+                            IconUrl = iconUrl
                         })
                         state
 
@@ -905,7 +978,15 @@ let reducer =
                         match e.Guild.GetRole x.RoleId with
                         | null -> None
                         | role ->
-                            Some { Name = role.Name; Color = role.Color }
+                            Some {
+                                Name = role.Name
+                                Color = role.Color
+                                IconUrl =
+                                    if System.String.IsNullOrEmpty role.IconUrl then
+                                        None
+                                    else
+                                        Some role.IconUrl
+                            }
                     )
                 )
 
