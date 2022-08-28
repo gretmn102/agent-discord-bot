@@ -6,7 +6,6 @@ open DSharpPlus
 open Types
 open Model
 
-
 type RoleEditModel = {
     Name: string
     Color: Entities.DiscordColor
@@ -354,7 +353,7 @@ module UserRoleForm =
                                             if guild.Features |> Seq.exists ((=) "ROLE_ICONS") then
                                                 match WebClientDownloader.getData [] iconUrl with
                                                 | Left errMsg ->
-                                                    sprintf "Download url by '%s' error:\n" errMsg
+                                                    sprintf "Download url by '%s' error:\n%s" iconUrl errMsg
                                                     |> Left
                                                 | Right bytes ->
                                                     try
