@@ -93,30 +93,71 @@ module TemplateRoles =
             mutable GuildId: GuildId
             mutable TemplateRoleId: RoleId
         }
-        static member Init(guildId: GuildId, roleIds: RoleId) =
+        static member Init(guildId: GuildId) =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
-                TemplateRoleId = roleIds
+                TemplateRoleId = 0UL
             }
 
-    let permissiveRoles = database.GetCollection<TemplateRoleData>("temlateRoles")
+    type Collection = IMongoCollection<TemplateRoleData>
 
-    type GuildTemplateRoles = Map<GuildId, TemplateRoleData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Collection =
+        let replace (newData: TemplateRoleData) (welcomeSetting: Collection) =
+            welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+            |> ignore
 
-    let getAll (): GuildTemplateRoles =
-        permissiveRoles.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.GuildId x st
-            )
-            Map.empty
+        let insert guildId setAdditionParams (welcomeSetting: Collection) =
+            let x = setAdditionParams (TemplateRoleData.Init guildId)
+            welcomeSetting.InsertOne(x)
+            x
 
-    let replace (newData: TemplateRoleData) =
-        permissiveRoles.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
+    type GuildTemplateRoles =
+        {
+            Cache: Map<GuildId, TemplateRoleData>
+            Collection: Collection
+        }
 
-    let insert (guildId: GuildId, templateRoleId: RoleId) =
-        let x = TemplateRoleData.Init(guildId, templateRoleId)
-        permissiveRoles.InsertOne(x)
-        x
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildTemplateRoles =
+        let getAll (db: IMongoDatabase): GuildTemplateRoles =
+            let welcomeSetting = db.GetCollection<TemplateRoleData>("temlateRoles")
+
+            {
+                Cache =
+                    welcomeSetting.Find(fun x -> true).ToEnumerable()
+                    |> Seq.fold
+                        (fun st x ->
+                            Map.add x.GuildId x st
+                        )
+                        Map.empty
+                Collection = welcomeSetting
+            }
+
+        let set guildId setAdditionParams (guildTemplateRoles: GuildTemplateRoles) =
+            let cache = guildTemplateRoles.Cache
+
+            {
+                guildTemplateRoles with
+                    Cache =
+                        match Map.tryFind guildId cache with
+                        | Some welcomeSettingData ->
+                            let newcomersRoles =
+                                setAdditionParams welcomeSettingData
+
+                            Collection.replace newcomersRoles guildTemplateRoles.Collection
+
+                            Map.add guildId newcomersRoles cache
+                        | None ->
+                            let x =
+                                guildTemplateRoles.Collection
+                                |> Collection.insert guildId setAdditionParams
+
+                            Map.add guildId x cache
+            }
+
+        let tryFind guildId (guildWelcomeSetting: GuildTemplateRoles) =
+            Map.tryFind guildId guildWelcomeSetting.Cache

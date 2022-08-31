@@ -247,7 +247,7 @@ module UserRoleForm =
 
             if hasPermissiveRole then
                 let createAndGrantRole () =
-                    match Map.tryFind guild.Id state.GuildTemplateRoles with
+                    match TemplateRoles.GuildTemplateRoles.tryFind guild.Id state.GuildTemplateRoles with
                     | Some templateRole ->
                         let templateRole = guild.GetRole templateRole.TemplateRoleId
 
@@ -848,18 +848,13 @@ let reducer =
                     if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
                         let guildTemplateRoles = state.GuildTemplateRoles
                         let guildPermissiveRoles =
-                            match Map.tryFind guild.Id guildTemplateRoles with
-                            | Some templateRoles ->
-                                let templateRoles =
+                            guildTemplateRoles
+                            |> TemplateRoles.GuildTemplateRoles.set
+                                guild.Id
+                                (fun templateRoles ->
                                     { templateRoles with
                                         TemplateRoleId = templateRoleId }
-
-                                TemplateRoles.replace templateRoles
-
-                                Map.add guild.Id templateRoles guildTemplateRoles
-                            | None ->
-                                let x = TemplateRoles.insert (guild.Id, templateRoleId)
-                                Map.add guild.Id x guildTemplateRoles
+                                )
 
                         awaiti (replyMessage.ModifyAsync(Entities.Optional("Template role has been set")))
 
@@ -876,7 +871,7 @@ let reducer =
                 let guild = e.Guild
                 let guildMember = getGuildMember guild e.Author
                 if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
-                    match Map.tryFind guild.Id state.GuildTemplateRoles with
+                    match TemplateRoles.GuildTemplateRoles.tryFind guild.Id state.GuildTemplateRoles with
                     | Some templateRole ->
                         let templateRole = guild.GetRole templateRole.TemplateRoleId
 
@@ -1011,7 +1006,7 @@ let reducer =
             {
                 GuildPermissiveRoles = PermissiveRoles.getAll ()
                 GuildUserRoles = Roles.getAll ()
-                GuildTemplateRoles = TemplateRoles.getAll ()
+                GuildTemplateRoles = TemplateRoles.GuildTemplateRoles.getAll Db.database
             }
         loop init
     )
