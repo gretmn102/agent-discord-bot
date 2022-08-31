@@ -58,33 +58,74 @@ module PermissiveRoles =
             mutable GuildId: GuildId
             mutable RoleIds: RoleId Set
         }
-        static member Init(guildId: GuildId, roleIds: RoleId Set) =
+        static member Init(guildId: GuildId) =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
-                RoleIds = roleIds
+                RoleIds = Set.empty
             }
 
-    let permissiveRoles = database.GetCollection<PermissiveRolesData>("permissiveRoles")
+    type Collection = IMongoCollection<PermissiveRolesData>
 
-    type GuildPermissiveRoles = Map<GuildId, PermissiveRolesData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Collection =
+        let replace (newData: PermissiveRolesData) (welcomeSetting: Collection) =
+            welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+            |> ignore
 
-    let getAll (): GuildPermissiveRoles =
-        permissiveRoles.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.GuildId x st
-            )
-            Map.empty
+        let insert guildId setAdditionParams (welcomeSetting: Collection) =
+            let x = setAdditionParams (PermissiveRolesData.Init guildId)
+            welcomeSetting.InsertOne(x)
+            x
 
-    let replace (newData: PermissiveRolesData) =
-        permissiveRoles.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
+    type GuildPermissiveRoles =
+        {
+            Cache: Map<GuildId, PermissiveRolesData>
+            Collection: Collection
+        }
 
-    let insert (guildId: GuildId, roleIds: RoleId Set) =
-        let x = PermissiveRolesData.Init(guildId, roleIds)
-        permissiveRoles.InsertOne(x)
-        x
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildPermissiveRoles =
+        let getAll (db: IMongoDatabase): GuildPermissiveRoles =
+            let welcomeSetting = db.GetCollection<PermissiveRolesData>("permissiveRoles")
+
+            {
+                Cache =
+                    welcomeSetting.Find(fun x -> true).ToEnumerable()
+                    |> Seq.fold
+                        (fun st x ->
+                            Map.add x.GuildId x st
+                        )
+                        Map.empty
+                Collection = welcomeSetting
+            }
+
+        let set guildId setAdditionParams (guildTemplateRoles: GuildPermissiveRoles) =
+            let cache = guildTemplateRoles.Cache
+
+            {
+                guildTemplateRoles with
+                    Cache =
+                        match Map.tryFind guildId cache with
+                        | Some welcomeSettingData ->
+                            let newcomersRoles =
+                                setAdditionParams welcomeSettingData
+
+                            Collection.replace newcomersRoles guildTemplateRoles.Collection
+
+                            Map.add guildId newcomersRoles cache
+                        | None ->
+                            let x =
+                                guildTemplateRoles.Collection
+                                |> Collection.insert guildId setAdditionParams
+
+                            Map.add guildId x cache
+            }
+
+        let tryFind guildId (guildWelcomeSetting: GuildPermissiveRoles) =
+            Map.tryFind guildId guildWelcomeSetting.Cache
 
 module TemplateRoles =
     type TemplateRoleData =

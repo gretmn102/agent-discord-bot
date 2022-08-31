@@ -238,7 +238,7 @@ module UserRoleForm =
 
         let guildMember = await (guild.GetMemberAsync userId)
 
-        match Map.tryFind guild.Id guildPermissiveRoles with
+        match PermissiveRoles.GuildPermissiveRoles.tryFind guild.Id guildPermissiveRoles with
         | Some permissiveRoles ->
             let hasPermissiveRole =
                 guildMember.Roles
@@ -565,18 +565,12 @@ let reducer =
 
         if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
             let guildPermissiveRoles =
-                match Map.tryFind guild.Id guildPermissiveRoles with
-                | Some permissiveRoles ->
-                    let permissiveRoles =
+                guildPermissiveRoles
+                |> PermissiveRoles.GuildPermissiveRoles.set
+                    guild.Id
+                    (fun permissiveRoles ->
                         { permissiveRoles with
-                            RoleIds = Set.add roleId permissiveRoles.RoleIds }
-
-                    PermissiveRoles.replace permissiveRoles
-
-                    Map.add guild.Id permissiveRoles guildPermissiveRoles
-                | None ->
-                    let x = PermissiveRoles.insert (guild.Id, Set.singleton roleId)
-                    Map.add guild.Id x guildPermissiveRoles
+                            RoleIds = Set.add roleId permissiveRoles.RoleIds })
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been added")))
 
@@ -594,16 +588,16 @@ let reducer =
         onServerDoesNotHaveRoles
         (guildPermissiveRoles: PermissiveRoles.GuildPermissiveRoles) =
 
-            match Map.tryFind guildId guildPermissiveRoles with
+            match PermissiveRoles.GuildPermissiveRoles.tryFind guildId guildPermissiveRoles with
             | Some permissiveRoles ->
                 if Set.contains roleId permissiveRoles.RoleIds then
-                    let permissiveRoles =
-                        { permissiveRoles with
-                            RoleIds = Set.remove roleId permissiveRoles.RoleIds }
-
-                    PermissiveRoles.replace permissiveRoles
-
-                    let guildPermissiveRoles = Map.add guildId permissiveRoles guildPermissiveRoles
+                    let guildPermissiveRoles =
+                        guildPermissiveRoles
+                        |> PermissiveRoles.GuildPermissiveRoles.set
+                            guildId
+                            (fun permissiveRoles ->
+                                { permissiveRoles with
+                                    RoleIds = Set.remove roleId permissiveRoles.RoleIds })
 
                     onRoleHasBeenRemoved guildPermissiveRoles
                 else
@@ -746,7 +740,7 @@ let reducer =
                 { state with GuildPermissiveRoles = guildPermissiveRoles }
             | GetPermissiveRoles ->
                 let message =
-                    match Map.tryFind e.Guild.Id state.GuildPermissiveRoles with
+                    match PermissiveRoles.GuildPermissiveRoles.tryFind e.Guild.Id state.GuildPermissiveRoles with
                     | Some permissiveRoles ->
                         let b = Entities.DiscordMessageBuilder()
                         let embed = Entities.DiscordEmbedBuilder()
@@ -1004,7 +998,7 @@ let reducer =
 
         let init =
             {
-                GuildPermissiveRoles = PermissiveRoles.getAll ()
+                GuildPermissiveRoles = PermissiveRoles.GuildPermissiveRoles.getAll Db.database
                 GuildUserRoles = Roles.getAll ()
                 GuildTemplateRoles = TemplateRoles.GuildTemplateRoles.getAll Db.database
             }
