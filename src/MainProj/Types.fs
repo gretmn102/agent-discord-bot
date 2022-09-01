@@ -152,3 +152,14 @@ let getEnvironmentVariable =
             | null -> None
             | value -> Some value
         | true, value -> Some value
+
+open MongoDB.Driver
+
+module IMongoCollection =
+    let isEmpty (collection: IMongoCollection<_>) =
+        let countOptions =
+            CountOptions(
+                Limit = System.Nullable(1L)
+            )
+
+        0L = collection.CountDocuments((fun _ -> true), countOptions)

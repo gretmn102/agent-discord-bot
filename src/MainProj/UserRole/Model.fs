@@ -51,7 +51,7 @@ module Roles =
         roles.DeleteOne(fun x -> x.Id = roleData.Id)
         |> ignore
 
-module PermissiveRoles =
+module PermissiveRolesOld =
     type PermissiveRolesData =
         {
             mutable Id: ObjectId
@@ -88,8 +88,10 @@ module PermissiveRoles =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module GuildPermissiveRoles =
+        let collectionName = "permissiveRoles"
+
         let getAll (db: IMongoDatabase): GuildPermissiveRoles =
-            let welcomeSetting = db.GetCollection<PermissiveRolesData>("permissiveRoles")
+            let welcomeSetting = db.GetCollection<PermissiveRolesData>(collectionName)
 
             {
                 Cache =
@@ -127,7 +129,14 @@ module PermissiveRoles =
         let tryFind guildId (guildWelcomeSetting: GuildPermissiveRoles) =
             Map.tryFind guildId guildWelcomeSetting.Cache
 
-module TemplateRoles =
+        let drop (db: IMongoDatabase) (guildWelcomeSetting: GuildPermissiveRoles) =
+            db.DropCollection collectionName
+
+            { guildWelcomeSetting with
+                Cache = Map.empty
+            }
+
+module TemplateRolesOld =
     type TemplateRoleData =
         {
             mutable Id: ObjectId
@@ -164,8 +173,10 @@ module TemplateRoles =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module GuildTemplateRoles =
+        let collectionName = "temlateRoles"
+
         let getAll (db: IMongoDatabase): GuildTemplateRoles =
-            let welcomeSetting = db.GetCollection<TemplateRoleData>("temlateRoles")
+            let welcomeSetting = db.GetCollection<TemplateRoleData>(collectionName)
 
             {
                 Cache =
@@ -202,3 +213,166 @@ module TemplateRoles =
 
         let tryFind guildId (guildWelcomeSetting: GuildTemplateRoles) =
             Map.tryFind guildId guildWelcomeSetting.Cache
+
+        let drop (db: IMongoDatabase) (guildWelcomeSetting: GuildTemplateRoles) =
+            db.DropCollection collectionName
+
+            { guildWelcomeSetting with
+                Cache = Map.empty
+            }
+
+module Setting =
+    type Version =
+        | V0 = 0
+
+    type MainData =
+        {
+            IsEnabled: bool
+            TemplateRoleId: RoleId option
+            PermissiveRoleIds: RoleId Set
+        }
+        static member Empty =
+            {
+                IsEnabled = true
+                TemplateRoleId = None
+                PermissiveRoleIds = Set.empty
+            }
+
+    type Data =
+        {
+            mutable Id: ObjectId
+            mutable GuildId: GuildId
+            mutable Version: Version
+            mutable Data: MainData
+        }
+        static member Init(guildId: GuildId) =
+            {
+                Id = ObjectId.Empty
+                GuildId = guildId
+                Version = Version.V0
+                Data = MainData.Empty
+            }
+
+    type Collection = IMongoCollection<Data>
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Collection =
+        let replace (newData: Data) (welcomeSetting: Collection) =
+            welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+            |> ignore
+
+        let insert guildId setAdditionParams (welcomeSetting: Collection) =
+            let x =
+                let data = Data.Init guildId
+                { data with
+                    Data = setAdditionParams data.Data
+                }
+
+            welcomeSetting.InsertOne(x)
+
+            x
+
+    type GuildData =
+        {
+            Cache: Map<GuildId, Data>
+            Collection: Collection
+        }
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildData =
+        let set guildId setAdditionParams (guildData: GuildData) =
+            let cache = guildData.Cache
+
+            {
+                guildData with
+                    Cache =
+                        match Map.tryFind guildId cache with
+                        | Some fullData ->
+                            let data =
+                                { fullData with
+                                    Data = setAdditionParams fullData.Data
+                                }
+
+                            Collection.replace data guildData.Collection
+
+                            Map.add guildId data cache
+                        | None ->
+                            let x =
+                                guildData.Collection
+                                |> Collection.insert guildId setAdditionParams
+
+                            Map.add guildId x cache
+            }
+
+        let collectionName = "userRoleSetting"
+
+        let init (db: IMongoDatabase): GuildData =
+            let collection = db.GetCollection<Data>(collectionName)
+
+            if IMongoCollection.isEmpty collection then
+                let guildData =
+                    {
+                        Cache = Map.empty
+                        Collection = collection
+                    }
+
+                let permissiveRoles = PermissiveRolesOld.GuildPermissiveRoles.getAll db
+                let guildData =
+                    permissiveRoles.Collection.Find(fun _ -> true).ToEnumerable()
+                    |> Seq.fold
+                        (fun st x ->
+                            st
+                            |> set
+                                x.GuildId
+                                (fun data ->
+                                    { data with
+                                        PermissiveRoleIds = x.RoleIds
+                                    }
+                                )
+                        )
+                        guildData
+
+                let templateRoles = TemplateRolesOld.GuildTemplateRoles.getAll db
+                let guildData =
+                    templateRoles.Collection.Find(fun _ -> true).ToEnumerable()
+                    |> Seq.fold
+                        (fun st x ->
+                            st
+                            |> set
+                                x.GuildId
+                                (fun data ->
+                                    { data with
+                                        TemplateRoleId = Some x.TemplateRoleId
+                                    }
+                                )
+                        )
+                        guildData
+
+                PermissiveRolesOld.GuildPermissiveRoles.drop db permissiveRoles |> ignore
+                TemplateRolesOld.GuildTemplateRoles.drop db templateRoles |> ignore
+
+                guildData
+            else
+                {
+                    Cache =
+                        collection.Find(fun x -> true).ToEnumerable()
+                        |> Seq.fold
+                            (fun st x ->
+                                Map.add x.GuildId x st
+                            )
+                            Map.empty
+                    Collection = collection
+                }
+
+        let drop (db: IMongoDatabase) (guildWelcomeSetting: GuildData) =
+            db.DropCollection collectionName
+
+            { guildWelcomeSetting with
+                Cache = Map.empty
+            }
+
+        let tryFind guildId (guildWelcomeSetting: GuildData) =
+            Map.tryFind guildId guildWelcomeSetting.Cache
+            |> Option.map (fun x -> x.Data)
