@@ -456,182 +456,72 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
             state
 
 module MostActiveTable =
+    open Shared.Ui.Table
+
     [<Struct>]
     type SortBy =
         | SortByExp
         | SortByDayExp
         | SortByIndex
 
-    [<Literal>]
-    let RefreshButtonId = "MostActiveLeaderboardRefreshButtonId"
-    [<Literal>]
-    let LeftArrowButtonId = "MostActiveLeftArrowButtonId"
-    [<Literal>]
-    let PaginationButtonId = "MostActivePaginationButtonId"
-    [<Literal>]
-    let RightArrowButtonId = "MostActiveRightArrowButtonId"
+    let initSetting (state: Map<UserId, Rankings.RankingData>): Setting<_, SortBy> =
+        {
+            Id = "MostActive"
+
+            Title = "Приглашения"
+
+            GetHeaders = fun sortBy ->
+                match sortBy with
+                | SortByDayExp ->
+                    [| "Учасники"; "ОбщОпыт"; "СутОпыт▼" |]
+                | SortByExp ->
+                    [| "Учасники"; "ОбщОпыт▼"; "СутОпыт" |]
+                | SortByIndex ->
+                    [| "Учасники▼"; "ОбщОпыт"; "СутОпыт" |]
+
+            GetItems = fun () ->
+                state
+                |> Map.toArray
+
+            ItemsCountPerPage = 10
+
+            SortBy = SortByDayExp
+
+            SortFunction = fun sortBy items ->
+                match sortBy with
+                | SortByDayExp ->
+                    Array.sortByDescending (fun (_, data) -> data.DayExp) items
+                | SortByExp ->
+                    Array.sortByDescending (fun (_, data) -> data.Exp) items
+                | SortByIndex -> items
+
+            MapFunction =
+                fun i (userId, user) ->
+                    [|
+                        sprintf "%d <@!%d>" i userId
+                        string user.Exp
+                        string user.DayExp
+                    |]
+        }
 
     let createTable
-        guildId
-        setContent
         (addComponents: Entities.DiscordComponent [] -> _)
         addEmbed
         page
-        state =
+        userRanks =
 
-        match Map.tryFind guildId state.MostActiveSettings with
-        | Some mostActiveSetting ->
-            match Map.tryFind guildId state.Rankings with
-            | Some ranking ->
-                if Map.isEmpty ranking then
-                    setContent "Not found any rank"
-                else
-                    let itemsCountPerPage = 10
-                    let sortBy = SortByDayExp
+        createTable addComponents addEmbed page (initSetting userRanks)
 
-                    let itemsCount = ranking.Count
-                    let lastPageItemsCount = itemsCount % itemsCountPerPage
-                    let pagesCount = itemsCount / itemsCountPerPage + if lastPageItemsCount > 0 then 1 else 0
-
-                    let table =
-                        let sortFunction: Map<UserId, Rankings.RankingData> -> _ =
-                            match sortBy with
-                            | SortByDayExp -> Seq.sortByDescending (fun x -> x.Value.DayExp)
-                            | SortByExp -> Seq.sortByDescending (fun x -> x.Value.Exp)
-                            | SortByIndex -> Seq.cast
-
-                        let headers = [| "Учасники"; "ОбщОпыт"; "СутОпыт" |]
-
-                        let table =
-                            if 0 < page && page <= pagesCount then
-                                let lb = (page - 1) * itemsCountPerPage
-                                let ub =
-                                    if page = pagesCount then if lastPageItemsCount > 0 then lastPageItemsCount else itemsCountPerPage
-                                    else itemsCountPerPage
-
-                                ranking
-                                |> sortFunction
-                                |> Seq.skip lb |> Seq.take ub
-                                |> Seq.mapi (fun i (KeyValue(userId, user)) ->
-                                    [|
-                                        sprintf "%d <@!%d>" (lb + i + 1) userId
-                                        string user.Exp
-                                        string user.DayExp
-                                    |]
-                                )
-                                |> Array.ofSeq
-                                |> Array.transpose
-                                |> Array.map (String.concat "\n")
-
-                            else
-                                Array.replicate headers.Length ""
-
-                        table
-                        |> Array.map2 (fun header value -> header, value) headers
-
-                    let embed =
-                        let b =
-                            Entities.DiscordEmbedBuilder()
-                                .WithColor(Entities.DiscordColor "#2f3136")
-                                .WithDescription(
-                                    sprintf "Суточная статистика опыта с <t:%d:D>:"
-                                        (DateTime.Unix.toSec mostActiveSetting.LastUpdate)
-                                )
-                        let b =
-                            table
-                            |> Array.fold
-                                (fun (b: Entities.DiscordEmbedBuilder) (header, value) ->
-                                    b.AddField(header, value, true)
-                                )
-                                b
-
-                        b.Build()
-
-                    addComponents [|
-                        Entities.DiscordButtonComponent(
-                            ButtonStyle.Secondary,
-                            RefreshButtonId,
-                            "",
-                            emoji = Entities.DiscordComponentEmoji(Name = "🔄") // :arrows_counterclockwise:
-                        )
-
-                        Entities.DiscordButtonComponent(
-                            ButtonStyle.Secondary,
-                            LeftArrowButtonId,
-                            "",
-                            disabled = (page <= 1),
-                            emoji = Entities.DiscordComponentEmoji(Name = "⬅️")
-                        )
-                        Entities.DiscordButtonComponent(
-                            ButtonStyle.Secondary,
-                            PaginationButtonId,
-                            sprintf "%d/%d" page pagesCount,
-                            disabled = true
-                        )
-                        Entities.DiscordButtonComponent(
-                            ButtonStyle.Secondary,
-                            RightArrowButtonId,
-                            "",
-                            disabled = (page >= pagesCount),
-                            emoji = Entities.DiscordComponentEmoji(Name = "➡️")
-                        )
-                    |]
-                    |> ignore
-
-                    addEmbed embed |> ignore
-            | None ->
-                setContent "Not found any rank"
-        | None ->
-            setContent "Most active settings not set!"
 
     let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-        let getCurrentPage () =
-            e.Message.Components
-            |> Seq.tryPick (fun row ->
-                row.Components
-                |> Seq.tryPick (fun row ->
-                    if row.CustomId = PaginationButtonId then
-                        let paginationButton = row :?> Entities.DiscordButtonComponent
-                        let page =
-                            let label = paginationButton.Label
-                            let slashIndex = label.IndexOf "/"
-                            int label.[..slashIndex - 1]
-                        Some page
-                    else
-                        None
-                )
-            )
+        let state = getState ()
 
-        let update getPage =
-            let currentPage =
-                match getCurrentPage () with
-                | Some currentPage -> currentPage
+        let userRanks =
+            match Map.tryFind e.Guild.Id state.Rankings with
+            | Some ranking -> ranking
+            | None -> Map.empty
 
-                | None -> 1
-
-            let state = getState ()
-
-            let b = Entities.DiscordInteractionResponseBuilder()
-
-            createTable e.Guild.Id (fun content -> b.Content <- content) b.AddComponents b.AddEmbed (getPage currentPage) state
-
-            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
-
-        if e.Message.Author.Id = client.CurrentUser.Id then
-            match e.Id with
-            | RefreshButtonId ->
-                update id
-                true
-            | LeftArrowButtonId ->
-                update (fun currentPage -> currentPage - 1)
-                true
-            | RightArrowButtonId ->
-                update (fun currentPage -> currentPage + 1)
-                true
-            | _ -> false
-
-        else
-            false
+        componentInteractionCreateHandle client e (initSetting userRanks)
 
 let requestReduce
     (e: EventArgs.MessageCreateEventArgs)
@@ -742,7 +632,12 @@ let requestReduce
 
         let b = Entities.DiscordMessageBuilder()
 
-        MostActiveTable.createTable e.Guild.Id (fun content -> b.Content <- content) b.AddComponents b.AddEmbed 1 state
+        let userRanks =
+            match Map.tryFind e.Guild.Id state.Rankings with
+            | Some ranking -> ranking
+            | None -> Map.empty
+
+        MostActiveTable.createTable b.AddComponents b.AddEmbed 1 userRanks
 
         awaiti <| e.Channel.SendMessageAsync b
 

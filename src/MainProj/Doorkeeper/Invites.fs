@@ -64,182 +64,62 @@ module Parser =
         ]
 
 module InviteTable =
+    open Shared.Ui.Table
+
     [<Struct>]
     type SortBy = SortByUses
 
-    [<Literal>]
-    let RefreshButtonId = "InvitesRefreshButtonId"
-    [<Literal>]
-    let LeftArrowButtonId = "InvitesLeftArrowButtonId"
-    [<Literal>]
-    let PaginationButtonId = "InvitesPaginationButtonId"
-    [<Literal>]
-    let RightArrowButtonId = "InvitesRightArrowButtonId"
+    let initSetting (guild: Entities.DiscordGuild) (state: Model.InvitesSetting.GuildSetting): Setting<_, SortBy> =
+        {
+            Id = "Invites"
 
-    let createTable
-        (guild: Entities.DiscordGuild)
-        (addComponents: Entities.DiscordComponent [] -> _)
-        addEmbed
-        page
-        (state: Model.InvitesSetting.GuildSetting) =
+            Title = "Приглашения"
 
-        let invites = await <| guild.GetInvitesAsync()
-
-        let getAuthor =
-            let guildInvitesSetting = Map.tryFind guild.Id state
-            match guildInvitesSetting with
-            | Some invitesSetting ->
-                let assocs = Map.ofArray invitesSetting.Associations
-                fun inviteCode ->
-                    Map.tryFind inviteCode assocs
-            | None -> fun _ -> None
-
-        let itemsCountPerPage = 10
-        let sortBy = SortByUses
-
-        let itemsCount = invites.Count
-        let lastPageItemsCount = itemsCount % itemsCountPerPage
-        let pagesCount = itemsCount / itemsCountPerPage + if lastPageItemsCount > 0 then 1 else 0
-
-        let table =
-            let sortFunction: seq<Entities.DiscordInvite> -> _ =
+            GetHeaders = fun sortBy ->
                 match sortBy with
-                | SortByUses -> Seq.sortByDescending (fun x -> x.Uses)
+                | SortByUses ->
+                    [| "Автор"; "Код"; "Использовано▼" |]
 
-            let headers = [| "Автор"; "Код"; "Использовано▼" |]
+            GetItems = fun () ->
+                await <| guild.GetInvitesAsync()
+                |> Array.ofSeq
 
-            let table =
-                if 0 < page && page <= pagesCount then
-                    let lb = (page - 1) * itemsCountPerPage
-                    let ub =
-                        if page = pagesCount then if lastPageItemsCount > 0 then lastPageItemsCount else itemsCountPerPage
-                        else itemsCountPerPage
+            ItemsCountPerPage = 10
 
-                    invites
-                    |> sortFunction
-                    |> Seq.skip lb |> Seq.take ub
-                    |> Seq.mapi (fun i invite ->
-                        let author =
-                            getAuthor invite.Code
-                            |> Option.defaultWith (fun () -> sprintf "<@!%d>" invite.Inviter.Id)
+            SortBy = SortByUses
 
-                        [|
-                            sprintf "%d %s" (lb + i + 1) author
-                            invite.Code
-                            string invite.Uses
-                        |]
-                    )
-                    |> Array.ofSeq
-                    |> Array.transpose
-                    |> Array.map (String.concat "\n")
+            SortFunction = fun sortBy items ->
+                match sortBy with
+                | SortByUses -> Array.sortByDescending (fun x -> x.Uses) items
 
-                else
-                    Array.replicate headers.Length ""
+            MapFunction =
+                let getAuthor =
+                    let guildInvitesSetting = Map.tryFind guild.Id state
+                    match guildInvitesSetting with
+                    | Some invitesSetting ->
+                        let assocs = Map.ofArray invitesSetting.Associations
+                        fun inviteCode ->
+                            Map.tryFind inviteCode assocs
+                    | None -> fun _ -> None
 
-            table
-            |> Array.map2 (fun header value -> header, value) headers
+                fun i invite ->
+                    let author =
+                        getAuthor invite.Code
+                        |> Option.defaultWith (fun () -> sprintf "<@!%d>" invite.Inviter.Id)
 
-        let embed =
-            let b =
-                Entities.DiscordEmbedBuilder()
-                    .WithColor(Entities.DiscordColor "#2f3136")
-                    .WithTitle("Приглашения")
+                    [|
+                        sprintf "%d %s" i author
+                        invite.Code
+                        string invite.Uses
+                    |]
+        }
 
-            let b =
-                table
-                |> Array.fold
-                    (fun (b: Entities.DiscordEmbedBuilder) (header, value) ->
-                        // System.ArgumentException: Value cannot be empty or whitespace. (Parameter 'value')
-                        let value = if value = "" then "x" else value
-
-                        b.AddField(header, value, true)
-                    )
-                    b
-
-            b.Build()
-
-        addComponents [|
-            Entities.DiscordButtonComponent(
-                ButtonStyle.Secondary,
-                RefreshButtonId,
-                "",
-                emoji = Entities.DiscordComponentEmoji(Name = "🔄") // :arrows_counterclockwise:
-            )
-
-            Entities.DiscordButtonComponent(
-                ButtonStyle.Secondary,
-                LeftArrowButtonId,
-                "",
-                disabled = (page <= 1),
-                emoji = Entities.DiscordComponentEmoji(Name = "⬅️")
-            )
-            Entities.DiscordButtonComponent(
-                ButtonStyle.Secondary,
-                PaginationButtonId,
-                sprintf "%d/%d" page pagesCount,
-                disabled = true
-            )
-            Entities.DiscordButtonComponent(
-                ButtonStyle.Secondary,
-                RightArrowButtonId,
-                "",
-                disabled = (page >= pagesCount),
-                emoji = Entities.DiscordComponentEmoji(Name = "➡️")
-            )
-        |]
-        |> ignore
-
-        addEmbed embed |> ignore
+    let createTable guild addComponents addEmbed page state =
+        createTable addComponents addEmbed page (initSetting guild state)
 
     let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-        let getCurrentPage () =
-            e.Message.Components
-            |> Seq.tryPick (fun row ->
-                row.Components
-                |> Seq.tryPick (fun row ->
-                    if row.CustomId = PaginationButtonId then
-                        let paginationButton = row :?> Entities.DiscordButtonComponent
-                        let page =
-                            let label = paginationButton.Label
-                            let slashIndex = label.IndexOf "/"
-                            int label.[..slashIndex - 1]
-                        Some page
-                    else
-                        None
-                )
-            )
-
-        let update getPage =
-            let currentPage =
-                match getCurrentPage () with
-                | Some currentPage -> currentPage
-
-                | None -> 1
-
-            let state = getState ()
-
-            let b = Entities.DiscordInteractionResponseBuilder()
-
-            createTable e.Guild b.AddComponents b.AddEmbed (getPage currentPage) state
-
-            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
-
-        if e.Message.Author.Id = client.CurrentUser.Id then
-            match e.Id with
-            | RefreshButtonId ->
-                update id
-                true
-            | LeftArrowButtonId ->
-                update (fun currentPage -> currentPage - 1)
-                true
-            | RightArrowButtonId ->
-                update (fun currentPage -> currentPage + 1)
-                true
-            | _ -> false
-
-        else
-            false
-
+        let state = getState ()
+        componentInteractionCreateHandle client e (initSetting e.Guild state)
 
 let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: Model.InvitesSetting.GuildSetting) =
     match req with

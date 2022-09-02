@@ -38,6 +38,7 @@
     <Compile Include="Types.fs" />
     <Compile Include="DiscordMessage.fs" />
     <Compile Include="Shared\MessageTemplate.fs" />
+    <Compile Include="Shared\Ui\Table.fs" />
     <Compile Include="Scheduler\Scheduler.fs" />
     <Compile Include="Db.fs" />
     <Compile Include="NumberToWords.fs" />
