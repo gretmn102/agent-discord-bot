@@ -66,8 +66,9 @@ module Parser =
 module InviteTable =
     open Shared.Ui.Table
 
-    [<Struct>]
-    type SortBy = SortByUses
+    type SortBy =
+        | SortByUses = 0
+        | SortByCode = 1
 
     let initSetting (guild: Entities.DiscordGuild) (state: Model.InvitesSetting.GuildSetting): Setting<_, SortBy> =
         {
@@ -77,8 +78,11 @@ module InviteTable =
 
             GetHeaders = fun sortBy ->
                 match sortBy with
-                | SortByUses ->
+                | SortBy.SortByUses ->
                     [| "Автор"; "Код"; "Использовано▼" |]
+                | SortBy.SortByCode ->
+                    [| "Автор"; "Код▼"; "Использовано" |]
+                | x -> failwithf "InviteTable.SortBy %A" x
 
             GetItems = fun () ->
                 await <| guild.GetInvitesAsync()
@@ -86,11 +90,17 @@ module InviteTable =
 
             ItemsCountPerPage = 10
 
-            SortBy = SortByUses
+            SortBy =
+                SortByContainer.Init [|
+                    SortBy.SortByUses, "Отсортировать по использованию"
+                    SortBy.SortByCode, "Отсортировать по коду"
+                |]
 
             SortFunction = fun sortBy items ->
                 match sortBy with
-                | SortByUses -> Array.sortByDescending (fun x -> x.Uses) items
+                | SortBy.SortByUses -> Array.sortByDescending (fun x -> x.Uses) items
+                | SortBy.SortByCode -> Array.sortByDescending (fun x -> x.Code) items
+                | x -> failwithf "InviteTable.SortBy %A" x
 
             MapFunction =
                 let getAuthor =
@@ -114,8 +124,8 @@ module InviteTable =
                     |]
         }
 
-    let createTable guild addComponents addEmbed page state =
-        createTable addComponents addEmbed page (initSetting guild state)
+    let createTable guild addComponents addEmbed state =
+        createTable addComponents addEmbed 1 None (initSetting guild state)
 
     let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
         let state = getState ()
@@ -196,7 +206,7 @@ let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: M
 
         let b = Entities.DiscordMessageBuilder()
 
-        InviteTable.createTable e.Guild b.AddComponents b.AddEmbed 1 state
+        InviteTable.createTable e.Guild b.AddComponents b.AddEmbed state
 
         awaiti <| e.Channel.SendMessageAsync b
 

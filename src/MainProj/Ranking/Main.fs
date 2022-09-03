@@ -458,11 +458,11 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
 module MostActiveTable =
     open Shared.Ui.Table
 
-    [<Struct>]
+
     type SortBy =
-        | SortByExp
-        | SortByDayExp
-        | SortByIndex
+        | SortByDayExp = 0
+        | SortByExp = 1
+        | SortByIndex = 2
 
     let initSetting (state: Map<UserId, Rankings.RankingData>): Setting<_, SortBy> =
         {
@@ -472,12 +472,14 @@ module MostActiveTable =
 
             GetHeaders = fun sortBy ->
                 match sortBy with
-                | SortByDayExp ->
+                | SortBy.SortByDayExp ->
                     [| "Учасники"; "ОбщОпыт"; "СутОпыт▼" |]
-                | SortByExp ->
+                | SortBy.SortByExp ->
                     [| "Учасники"; "ОбщОпыт▼"; "СутОпыт" |]
-                | SortByIndex ->
+                | SortBy.SortByIndex ->
                     [| "Учасники▼"; "ОбщОпыт"; "СутОпыт" |]
+                | x ->
+                    failwithf "MostActiveTable.SortBy %A" x
 
             GetItems = fun () ->
                 state
@@ -485,15 +487,21 @@ module MostActiveTable =
 
             ItemsCountPerPage = 10
 
-            SortBy = SortByDayExp
+            SortBy = SortByContainer.Init [|
+                SortBy.SortByDayExp, "Отсортировать по сут. опыту"
+                SortBy.SortByExp, "Отсортировать по общ. опыту"
+                SortBy.SortByIndex, "Отсортировать по общ. индексу"
+            |]
 
             SortFunction = fun sortBy items ->
                 match sortBy with
-                | SortByDayExp ->
+                | SortBy.SortByDayExp ->
                     Array.sortByDescending (fun (_, data) -> data.DayExp) items
-                | SortByExp ->
+                | SortBy.SortByExp ->
                     Array.sortByDescending (fun (_, data) -> data.Exp) items
-                | SortByIndex -> items
+                | SortBy.SortByIndex -> items
+                | x ->
+                    failwithf "MostActiveTable.SortBy %A" x
 
             MapFunction =
                 fun i (userId, user) ->
@@ -507,11 +515,9 @@ module MostActiveTable =
     let createTable
         (addComponents: Entities.DiscordComponent [] -> _)
         addEmbed
-        page
         userRanks =
 
-        createTable addComponents addEmbed page (initSetting userRanks)
-
+        createTable addComponents addEmbed 1 None (initSetting userRanks)
 
     let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
         let state = getState ()
@@ -637,7 +643,7 @@ let requestReduce
             | Some ranking -> ranking
             | None -> Map.empty
 
-        MostActiveTable.createTable b.AddComponents b.AddEmbed 1 userRanks
+        MostActiveTable.createTable b.AddComponents b.AddEmbed userRanks
 
         awaiti <| e.Channel.SendMessageAsync b
 

@@ -53,8 +53,9 @@ type Req =
 module RatingTable =
     open Shared.Ui.Table
 
-    [<Struct>]
-    type SortBy = SortByWins
+    type SortBy =
+        | SortByWins = 0
+        | SortByLoses = 1
 
     let initSetting (state: Map<UserId, Rating.Data>): Setting<_, SortBy> =
         {
@@ -64,8 +65,11 @@ module RatingTable =
 
             GetHeaders = fun sortBy ->
                 match sortBy with
-                | SortByWins ->
+                | SortBy.SortByWins ->
                     [| "Игрок"; "Победы▼"; "Поражения" |]
+                | SortBy.SortByLoses ->
+                    [| "Игрок"; "Победы"; "Поражения▼" |]
+                | x -> failwithf "RatingTable.SortBy %A" x
 
             GetItems = fun () ->
                 state
@@ -73,12 +77,18 @@ module RatingTable =
 
             ItemsCountPerPage = 10
 
-            SortBy = SortByWins
+            SortBy = SortByContainer.Init [|
+                SortBy.SortByWins, "Отсортировать по победам"
+                SortBy.SortByLoses, "Отсортировать по поражениям"
+            |]
 
             SortFunction = fun sortBy items ->
                 match sortBy with
-                | SortByWins ->
+                | SortBy.SortByWins ->
                     Array.sortByDescending (fun (_, data) -> data.Wins) items
+                | SortBy.SortByLoses ->
+                    Array.sortByDescending (fun (_, data) -> data.Loses) items
+                | x -> failwithf "RatingTable.SortBy %A" x
 
             MapFunction =
                 fun i (userId, data) ->
@@ -89,8 +99,8 @@ module RatingTable =
                     |]
         }
 
-    let createTable addComponents addEmbed page state =
-        createTable addComponents addEmbed page (initSetting state)
+    let createTable addComponents addEmbed state =
+        createTable addComponents addEmbed 1 None (initSetting state)
 
     let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
         let state = getState ()
@@ -173,7 +183,7 @@ let reduce msg (state: State) =
 
             match Map.tryFind e.Guild.Id state.Rating with
             | Some guildRating ->
-                RatingTable.createTable b.AddComponents b.AddEmbed 1 guildRating
+                RatingTable.createTable b.AddComponents b.AddEmbed guildRating
             | None -> b.Content <- "Таблица пока что пуста."
 
             awaiti <| e.Channel.SendMessageAsync b
