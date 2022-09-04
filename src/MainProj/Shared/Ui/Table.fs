@@ -226,6 +226,22 @@ let inline componentInteractionCreateHandle
 
         awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
+    let restartComponent errMsg =
+        DiscordMessage.Ext.clearComponents e.Message
+
+        let b = Entities.DiscordInteractionResponseBuilder()
+        b.Content <-
+            [
+                "Вызовите комманду еще раз, потому что-то пошло не так:"
+                "```"
+                sprintf "%s" errMsg
+                "```"
+            ] |> String.concat "\n"
+
+        b.IsEphemeral <- true
+
+        awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+
     if e.Message.Author.Id = client.CurrentUser.Id then
         match ComponentState.Deserialize e.Id with
         | Ok (data: ComponentState<'SortBy>) ->
@@ -247,10 +263,16 @@ let inline componentInteractionCreateHandle
                         update id (Some sortBy)
                         true
                     | xs ->
-                        failwithf "expected [| sortByRaw |] but %A" xs
+                        sprintf "expected [| sortByRaw |] but %A" xs
+                        |> restartComponent
+
+                        true
 
                 | x ->
-                    failwithf "expected ComponentId but %A" x
+                    sprintf "expected data.ComponentId but %A" x
+                    |> restartComponent
+
+                    true
             else
                 false
         | _ -> false

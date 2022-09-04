@@ -273,26 +273,6 @@ let m =
             }
         loop Map.empty
     )
-module DiscordMessage =
-    let removeComponents (msg:DSharpPlus.Entities.DiscordMessage) =
-        // does not clean components:
-        // let content = DSharpPlus.Entities.Optional.FromValue ""
-        // awaiti (msg.ModifyAsync content)
-
-        let b = DSharpPlus.Entities.DiscordMessageBuilder()
-        // necessary because throw `System.ArgumentException: You must specify content, an embed, a sticker, or at least one file.`
-        b.AddEmbeds msg.Embeds |> ignore
-        b.Content <- msg.Content
-        awaiti (msg.ModifyAsync b)
-
-let removeComponents (client:DSharpPlus.DiscordClient) channelId (messageId:MessageId) =
-    let x = await (client.GetChannelAsync(channelId))
-    try
-        let msg =
-            await (x.GetMessageAsync messageId)
-
-        DiscordMessage.removeComponents msg
-    with e -> ()
 
 let resp (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.ComponentInteractionCreateEventArgs) =
     let msgPath =
@@ -314,7 +294,7 @@ let resp (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.ComponentInt
     | Left err ->
         match err with
         | Hub.HasNotStartedYet ->
-            DiscordMessage.removeComponents e.Message
+            DiscordMessage.Ext.clearComponents e.Message
 
             let b = DSharpPlus.Entities.DiscordInteractionResponseBuilder()
             b.Content <- "Бот перезагружался, и игра слетела. Начните заново."

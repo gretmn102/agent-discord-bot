@@ -87,3 +87,15 @@ module Parser =
                 many1Satisfy (isNoneOf "\"\\")
                 <|> (skipChar '\\' >>. ((pchar '"' |>> string) <|>% "\\"))
             ))
+
+module Ext =
+    let clearComponents (msg: DSharpPlus.Entities.DiscordMessage) =
+        // does not clean components:
+        // let content = DSharpPlus.Entities.Optional.FromValue ""
+        // awaiti (msg.ModifyAsync content)
+
+        let b = DSharpPlus.Entities.DiscordMessageBuilder()
+        // necessary because throw `System.ArgumentException: You must specify content, an embed, a sticker, or at least one file.`
+        b.AddEmbeds msg.Embeds |> ignore
+        b.Content <- msg.Content
+        awaiti (msg.ModifyAsync b)
