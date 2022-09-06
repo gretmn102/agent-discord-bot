@@ -7,6 +7,214 @@ open Types
 open Extensions
 open Model
 
+module AbstrRoleList =
+    type Cmd =
+        | AddRoleId of RoleId
+        | RemoveRoleId of RoleId
+        | GetRoles
+
+    module Parser =
+        open FParsec
+
+        open DiscordMessage.Parser
+
+        type 'Result Parser = Primitives.Parser<'Result, unit>
+
+        let create cmdName =
+            let paddRole: RoleId Parser =
+                pstringCI (sprintf "add%sRole" cmdName) >>. spaces
+                >>. (pmentionRole <|> puint64)
+
+            let premoveRole: RoleId Parser =
+                pstringCI (sprintf "remove%sRole" cmdName) >>. spaces
+                >>. (pmentionRole <|> puint64)
+
+            let pgetRoles: _ Parser =
+                pstringCI (sprintf "%sRoles" cmdName)
+
+            let start: _ Parser =
+                choice [
+                    paddRole |>> AddRoleId
+                    premoveRole |>> RemoveRoleId
+                    pgetRoles >>% GetRoles
+                ]
+
+            start
+
+    let reducer get update (e: EventArgs.MessageCreateEventArgs) (state: Setting.GuildData) cmd =
+        match cmd with
+        | AddRoleId roleId ->
+            let replyMessage =
+                await (e.Channel.SendMessageAsync("Processing..."))
+
+            let guild = e.Guild
+            let currentMember = getGuildMember guild e.Author
+
+            if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
+                let state =
+                    state
+                    |> Setting.GuildData.set
+                        guild.Id
+                        (fun setting ->
+                            setting
+                            |> update (Set.add roleId (get setting))
+                        )
+
+                awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been added")))
+
+                state
+            else
+                awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+
+                state
+
+        | RemoveRoleId roleId ->
+            let replyMessage =
+                await (e.Channel.SendMessageAsync("Processing..."))
+
+            let guild = e.Guild
+            let guildId = guild.Id
+            let currentMember = getGuildMember guild e.Author
+
+            if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
+                match Setting.GuildData.tryFind guildId state with
+                | Some permissiveRoles ->
+                    if Set.contains roleId permissiveRoles.PermissiveRoleIds then
+                        let state =
+                            state
+                            |> Setting.GuildData.set
+                                guildId
+                                (fun setting ->
+                                    setting
+                                    |> update (Set.remove roleId (get setting))
+                                )
+
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been removed")))
+
+                        state
+                    else
+                        awaiti (replyMessage.ModifyAsync(Entities.Optional("Role doesn't exists in DB")))
+                        state
+                | None ->
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have permissive roles")))
+                    state
+
+            else
+                awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+
+                state
+
+        | GetRoles ->
+            let message =
+                match Setting.GuildData.tryFind e.Guild.Id state with
+                | Some setting ->
+                    let b = Entities.DiscordMessageBuilder()
+                    let embed = Entities.DiscordEmbedBuilder()
+                    embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                    embed.Description <-
+                        [
+                            yield "Permissive roles:"
+                            yield! get setting |> Set.map (sprintf "* <@&%d>")
+                        ] |> String.concat "\n"
+
+                    b.Embed <- embed.Build()
+                    b
+                | None ->
+                    let b = Entities.DiscordMessageBuilder()
+                    let embed = Entities.DiscordEmbedBuilder()
+                    embed.Description <-
+                        [
+                            "This server doesn't yet have permissive roles. To add them, use the command:"
+                            "```"
+                            ".addPermissiveRole <role_mention|role_id>"
+                            "```"
+                        ] |> String.concat "\n"
+                    b.Embed <- embed.Build()
+                    b
+
+            awaiti (e.Channel.SendMessageAsync message)
+
+            state
+
+    /// `Some _` if something changes
+    let roleDeleteHandler get update (e: EventArgs.GuildRoleDeleteEventArgs) (state: Setting.GuildData) =
+        let guildId = e.Role.Id
+        let roleId = e.Role.Id
+
+        match Setting.GuildData.tryFind guildId state with
+        | Some permissiveRoles ->
+            if Set.contains roleId permissiveRoles.PermissiveRoleIds then
+                state
+                |> Setting.GuildData.set
+                    guildId
+                    (fun setting ->
+                        setting
+                        |> update (Set.remove roleId (get setting))
+                    )
+                |> Some
+            else
+                None
+        | None ->
+            None
+
+module PermissiveRoleList =
+    open AbstrRoleList
+
+    let private get (setting: Setting.MainData) =
+        setting.PermissiveRoleIds
+
+    let private update newVal (setting: Setting.MainData) =
+        { setting with
+            PermissiveRoleIds = newVal
+        }
+
+    module Parser =
+        let start = Parser.create "permissive"
+
+    let reducer e state cmd =
+        reducer
+            get
+            update
+            e
+            state
+            cmd
+
+    let roleDeleteHandler e state =
+        roleDeleteHandler
+            get
+            update
+            e
+            state
+
+module PermissiveIconRoleList =
+    open AbstrRoleList
+
+    let private get (setting: Setting.MainData) =
+        setting.PermissiveIconRoleIds
+
+    let private update newVal (setting: Setting.MainData) =
+        { setting with
+            PermissiveIconRoleIds = newVal
+        }
+
+    module Parser =
+        let start = Parser.create "permissiveIcon"
+
+    let reducer e state cmd =
+        reducer
+            get
+            update
+            e
+            state
+            cmd
+
+    let roleDeleteHandler e state =
+        roleDeleteHandler
+            get
+            update
+            e
+            state
+
 type RoleEditModel = {
     Name: string
     Color: Entities.DiscordColor
@@ -15,9 +223,8 @@ type RoleEditModel = {
 
 type Request =
     | GiveOrChangeRole of RoleEditModel option
-    | AddPermissiveRole of RoleId
-    | RemovePermissiveRole of RoleId
-    | GetPermissiveRoles
+    | PermissiveRoleCmd of AbstrRoleList.Cmd
+    | PermissiveIconRoleCmd of AbstrRoleList.Cmd
     | GetUserRoles
     | RemoveUserRole of RoleId
     | UpdateRolesPermission
@@ -72,17 +279,6 @@ module Parser =
         pstringCI roleNameCmd >>. spaces
         >>. opt pargs
 
-    let paddPermissiveRole: RoleId Parser =
-        pstringCI "addPermissiveRole" >>. spaces
-        >>. (pmentionRole <|> puint64)
-
-    let premovePermissiveRole: RoleId Parser =
-        pstringCI "removePermissiveRole" >>. spaces
-        >>. (pmentionRole <|> puint64)
-
-    let pgetPermissiveRoles: _ Parser =
-        pstringCI "permissiveRoles"
-
     let pgetUserRoles: _ Parser =
         pstringCI "userRoles"
 
@@ -106,16 +302,17 @@ module Parser =
     let start: _ Parser =
         choice [
             pgiveOrChangeRole |>> GiveOrChangeRole
-            paddPermissiveRole |>> AddPermissiveRole
-            premovePermissiveRole |>> RemovePermissiveRole
-            pgetPermissiveRoles >>% GetPermissiveRoles
-            pgetUserRoles >>% GetUserRoles
             premoveUserRole |>> RemoveUserRole
+            pgetUserRoles >>% GetUserRoles
+            psetUserRoleToUser |>> SetUserRoleToUser
+
             psetTemplateRole |>> SetTemplateRole
             pupdateUserRolesPermissions >>% UpdateRolesPermission
-            psetUserRoleToUser |>> SetUserRoleToUser
-        ]
 
+            PermissiveRoleList.Parser.start |>> PermissiveRoleCmd
+
+            PermissiveIconRoleList.Parser.start |>> PermissiveIconRoleCmd
+        ]
 
 module UserRoleForm =
     [<Literal>]
@@ -351,24 +548,34 @@ module UserRoleForm =
 
                                         let changeWithIcon iconUrl =
                                             if guild.Features |> Seq.exists ((=) "ROLE_ICONS") then
-                                                match WebClientDownloader.getData [] iconUrl with
-                                                | Left errMsg ->
-                                                    sprintf "Download url by '%s' error:\n%s" iconUrl errMsg
+                                                let hasPermissiveRole =
+                                                    guildMember.Roles
+                                                    |> Seq.exists (fun role ->
+                                                        Set.contains role.Id setting.PermissiveIconRoleIds)
+
+                                                if hasPermissiveRole then
+                                                    match WebClientDownloader.getData [] iconUrl with
+                                                    | Left errMsg ->
+                                                        sprintf "Download url by '%s' error:\n%s" iconUrl errMsg
+                                                        |> Left
+                                                    | Right bytes ->
+                                                        try
+                                                            use m = new System.IO.MemoryStream(bytes)
+
+                                                            userRole.ModifyAsync (
+                                                                name = roleEditModel.Name,
+                                                                color = System.Nullable(roleEditModel.Color),
+                                                                icon = m
+                                                            )
+                                                            |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                                            Right ()
+                                                        with e ->
+                                                            Left e.Message
+                                                else
+                                                    sprintf "You do not have these permissive icon roles: %s."
+                                                        (setting.PermissiveIconRoleIds |> Seq.map (sprintf "<@&%d>") |> String.concat ", ")
                                                     |> Left
-                                                | Right bytes ->
-                                                    try
-                                                        use m = new System.IO.MemoryStream(bytes)
-
-                                                        userRole.ModifyAsync (
-                                                            name = roleEditModel.Name,
-                                                            color = System.Nullable(roleEditModel.Color),
-                                                            icon = m
-                                                        )
-                                                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
-
-                                                        Right ()
-                                                    with e ->
-                                                        Left e.Message
                                             else
                                                 Left "This guild don't has ROLE_ICONS feature"
 
@@ -552,92 +759,6 @@ module UserRoleForm =
             state
 
 let reducer =
-    let addPermisiveRole
-        (e:EventArgs.MessageCreateEventArgs)
-        (roleId: RoleId)
-        (guildPermissiveRoles: Setting.GuildData) =
-
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-
-        let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
-
-        if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
-            let guildPermissiveRoles =
-                guildPermissiveRoles
-                |> Setting.GuildData.set
-                    guild.Id
-                    (fun setting ->
-                        { setting with
-                            PermissiveRoleIds = Set.add roleId setting.PermissiveRoleIds })
-
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been added")))
-
-            guildPermissiveRoles
-        else
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
-
-            guildPermissiveRoles
-
-    let removePermissiveRole
-        guildId
-        roleId
-        onRoleHasBeenRemoved
-        onRoleDoesNotExists
-        onServerDoesNotHaveRoles
-        (guildPermissiveRoles: Setting.GuildData) =
-
-            match Setting.GuildData.tryFind guildId guildPermissiveRoles with
-            | Some permissiveRoles ->
-                if Set.contains roleId permissiveRoles.PermissiveRoleIds then
-                    let guildPermissiveRoles =
-                        guildPermissiveRoles
-                        |> Setting.GuildData.set
-                            guildId
-                            (fun setting ->
-                                { setting with
-                                    PermissiveRoleIds = Set.remove roleId setting.PermissiveRoleIds })
-
-                    onRoleHasBeenRemoved guildPermissiveRoles
-                else
-                    onRoleDoesNotExists ()
-            | None ->
-                onServerDoesNotHaveRoles ()
-
-    let removePermisiveRoleCmd
-        (e:EventArgs.MessageCreateEventArgs)
-        (roleId: RoleId)
-        (guildPermissiveRoles: Setting.GuildData) =
-
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-
-        let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
-
-        if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
-            guildPermissiveRoles
-            |> removePermissiveRole
-                guild.Id
-                roleId
-                (fun guildPermissiveRoles ->
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional("Role has been removed")))
-                    guildPermissiveRoles
-                )
-                (fun () ->
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional("Role doesn't exists in DB")))
-                    guildPermissiveRoles
-                )
-                (fun () ->
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional("This server doesn't yet have permissive roles")))
-                    guildPermissiveRoles
-                )
-        else
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
-
-            guildPermissiveRoles
-
     let removeUserRole
         guildId
         roleId
@@ -688,14 +809,23 @@ let reducer =
                         (fun _ -> guildUserRoles)
                         (fun _ -> guildUserRoles)
 
-                state.Setting
-                |> removePermissiveRole
-                    guildId
-                    roleId
-                    (fun setting ->
-                        { state with Setting = setting })
-                    (fun _ -> { state with GuildUserRoles = removeUserRole state.GuildUserRoles })
-                    (fun _ -> { state with GuildUserRoles = removeUserRole state.GuildUserRoles })
+                { state with GuildUserRoles = removeUserRole state.GuildUserRoles }
+
+            let state =
+                match PermissiveRoleList.roleDeleteHandler e state.Setting with
+                | Some setting ->
+                    { state with
+                        Setting = setting
+                    }
+                | None -> state
+
+            let state =
+                match PermissiveIconRoleList.roleDeleteHandler e state.Setting with
+                | Some setting ->
+                    { state with
+                        Setting = setting
+                    }
+                | None -> state
 
             state
         | Request(e, msg) ->
@@ -730,44 +860,7 @@ let reducer =
                         state.GuildUserRoles
 
                 { state with GuildUserRoles = roles }
-            | AddPermissiveRole roleId ->
-                let setting = addPermisiveRole e roleId state.Setting
 
-                { state with Setting = setting }
-            | RemovePermissiveRole roleId ->
-                let setting = removePermisiveRoleCmd e roleId state.Setting
-
-                { state with Setting = setting }
-            | GetPermissiveRoles ->
-                let message =
-                    match Setting.GuildData.tryFind e.Guild.Id state.Setting with
-                    | Some permissiveRoles ->
-                        let b = Entities.DiscordMessageBuilder()
-                        let embed = Entities.DiscordEmbedBuilder()
-                        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                        embed.Description <-
-                            [
-                                yield "Permissive roles: "
-                                yield! permissiveRoles.PermissiveRoleIds |> Set.map (sprintf "* <@&%d>")
-                            ] |> String.concat "\n"
-
-                        b.Embed <- embed.Build()
-                        b
-                    | None ->
-                        let b = Entities.DiscordMessageBuilder()
-                        let embed = Entities.DiscordEmbedBuilder()
-                        embed.Description <-
-                            [
-                                "This server doesn't yet have permissive roles. To add them, use the command:"
-                                "```"
-                                ".addPermissiveRole <role_mention|role_id>"
-                                "```"
-                            ] |> String.concat "\n"
-                        b.Embed <- embed.Build()
-                        b
-                awaiti (e.Channel.SendMessageAsync (message))
-
-                state
             | GetUserRoles ->
                 let message =
                     match Map.tryFind e.Guild.Id state.GuildUserRoles with
@@ -957,6 +1050,18 @@ let reducer =
 
                     state
 
+            | PermissiveRoleCmd cmd ->
+                { state with
+                    Setting =
+                        PermissiveRoleList.reducer e state.Setting cmd
+                }
+
+            | PermissiveIconRoleCmd cmd ->
+                { state with
+                    Setting =
+                        PermissiveIconRoleList.reducer e state.Setting cmd
+                }
+
         | ModalHandle e ->
             UserRoleForm.modalHandle e state
 
@@ -998,13 +1103,16 @@ let reducer =
 
                 return! loop state
             }
-
-        let init =
-            {
-                Setting = Setting.GuildData.init Db.database
-                GuildUserRoles = Roles.getAll ()
-            }
-        loop init
+        try
+            let init =
+                {
+                    Setting = Setting.GuildData.init Db.database
+                    GuildUserRoles = Roles.getAll ()
+                }
+            loop init
+        with e ->
+            printfn "%A" e
+            failwithf "%A" e
     )
 
 let guildRoleDeletedHandler (e: EventArgs.GuildRoleDeleteEventArgs) =

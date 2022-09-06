@@ -224,8 +224,9 @@ module TemplateRolesOld =
 module Setting =
     type Version =
         | V0 = 0
+        | V1 = 1
 
-    type MainData =
+    type MainDataV0 =
         {
             IsEnabled: bool
             TemplateRoleId: RoleId option
@@ -238,44 +239,71 @@ module Setting =
                 PermissiveRoleIds = Set.empty
             }
 
-    type Data =
+    type MainData =
         {
-            mutable Id: ObjectId
-            mutable GuildId: GuildId
-            mutable Version: Version
-            mutable Data: MainData
+            IsEnabled: bool
+            TemplateRoleId: RoleId option
+            PermissiveRoleIds: RoleId Set
+            PermissiveIconRoleIds: RoleId Set
         }
-        static member Init(guildId: GuildId) =
+        static member Empty =
+            {
+                IsEnabled = true
+                TemplateRoleId = None
+                PermissiveRoleIds = Set.empty
+                PermissiveIconRoleIds = Set.empty
+            }
+
+    type Data<'MainData> =
+        {
+            Id: ObjectId
+            GuildId: GuildId
+            Version: Version
+            Data: 'MainData
+        }
+        static member Init(data: 'MainData, guildId: GuildId) =
             {
                 Id = ObjectId.Empty
                 GuildId = guildId
-                Version = Version.V0
-                Data = MainData.Empty
+                Version = Version.V1
+                Data = data
             }
 
-    type Collection = IMongoCollection<Data>
+    type Collection = IMongoCollection<BsonDocument>
 
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module Collection =
-        let replace (newData: Data) (welcomeSetting: Collection) =
-            welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
+        let replace (newData: Data<MainData>) (welcomeSetting: Collection) =
+            let doc = newData.ToBsonDocument()
+
+            let el = BsonElement("_id", BsonValue.Create(newData.Id))
+            let i = new BsonDocument(el)
+
+            let filter = FilterDefinition.op_Implicit(i)
+
+            welcomeSetting.ReplaceOne(filter, doc)
             |> ignore
 
-        let insert guildId setAdditionParams (welcomeSetting: Collection) =
+        let insert guildId setAdditionParams (collection: Collection) =
             let x =
-                let data = Data.Init guildId
+                let data = Data.Init(MainData.Empty, guildId)
                 { data with
                     Data = setAdditionParams data.Data
                 }
 
-            welcomeSetting.InsertOne(x)
+            let d = x.ToBsonDocument()
+            collection.InsertOne(d)
 
-            x
+            let newId = d.["_id"].AsObjectId
+
+            { x with
+                Id = newId
+            }
 
     type GuildData =
         {
-            Cache: Map<GuildId, Data>
+            Cache: Map<GuildId, Data<MainData>>
             Collection: Collection
         }
 
@@ -309,7 +337,7 @@ module Setting =
         let collectionName = "userRoleSetting"
 
         let init (db: IMongoDatabase): GuildData =
-            let collection = db.GetCollection<Data>(collectionName)
+            let collection = db.GetCollection<BsonDocument>(collectionName)
 
             if IMongoCollection.isEmpty collection then
                 let guildData =
@@ -360,6 +388,37 @@ module Setting =
                         collection.Find(fun x -> true).ToEnumerable()
                         |> Seq.fold
                             (fun st x ->
+                                let ver =
+                                    match x.["Version"] with
+                                    | null -> failwithf "`Version` but\n%A" x
+                                    | x ->
+                                        if x.IsInt32 then
+                                            enum<Version> x.AsInt32
+                                        else
+                                            failwithf "Version not int32 but %A" x
+                                let x =
+                                    match ver with
+                                    | Version.V1 ->
+                                        Serialization.BsonSerializer.Deserialize<Data<MainData>>(x)
+                                    | Version.V0 ->
+                                        let x = Serialization.BsonSerializer.Deserialize<Data<MainDataV0>>(x)
+
+                                        {
+                                            Id = x.Id
+                                            GuildId = x.GuildId
+                                            Version = Version.V1
+                                            Data =
+                                                let x = x.Data
+                                                {
+                                                    IsEnabled = x.IsEnabled
+                                                    TemplateRoleId = x.TemplateRoleId
+                                                    PermissiveRoleIds = x.PermissiveRoleIds
+                                                    PermissiveIconRoleIds = Set.empty
+                                                }
+                                        }
+                                    | x ->
+                                        failwithf "Version = %A not implemented" x
+
                                 Map.add x.GuildId x st
                             )
                             Map.empty
