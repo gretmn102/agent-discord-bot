@@ -4,6 +4,7 @@ open FsharpMyExtension.Either
 open DSharpPlus
 
 open Types
+open Extensions
 open Model
 
 type SettingMsg =
@@ -48,7 +49,7 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: WomensDaySet
             | Some data ->
                 let b = Entities.DiscordMessageBuilder()
                 let embed = Entities.DiscordEmbedBuilder()
-                embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 embed.Description <-
                     [
                         "```"
@@ -61,7 +62,7 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: WomensDaySet
             | None ->
                 let b = Entities.DiscordMessageBuilder()
                 let embed = Entities.DiscordEmbedBuilder()
-                embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 embed.Description <-
                     [
                         "This server doesn't yet have event setting. To set them, use the command:"

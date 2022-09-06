@@ -4,6 +4,7 @@ open FsharpMyExtension.Either
 open DSharpPlus
 
 open Types
+open Extensions
 open Model
 
 type Request =
@@ -142,7 +143,7 @@ let reduce msg (state: State) =
 
                     b.Embed <-
                         Entities.DiscordEmbedBuilder(
-                            Color = Entities.Optional.FromValue(Entities.DiscordColor "#2f3136"),
+                            Color = Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme),
                             Title = "Вызов на дуэль!",
                             Description = sprintf "<@!%d>, <@!%d> вызывает тебя на бой на 🥚! Соглашаешься?! <:angry:927633404353196113>" userId e.Author.Id
                         ).Build()
@@ -239,7 +240,7 @@ let reduce msg (state: State) =
 
         let embed =
             Entities.DiscordEmbedBuilder()
-                .WithColor(Entities.DiscordColor "#2f3136")
+                .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                 .WithTitle("Итог сражения!")
                 .WithDescription(sprintf "И в схватке на 🥚 между <@!%d> и <@!%d> побеждает... <@!%d>! 🎉" fightState.AttackerId fightState.DefenderId winnerId)
                 .Build()
@@ -346,7 +347,7 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
 
                 let embed =
                     Entities.DiscordEmbedBuilder()
-                        .WithColor(Entities.DiscordColor "#2f3136")
+                        .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                         .WithTitle("Итог сражения!")
                         .WithDescription(sprintf "<@!%d> отказывается биться с <@!%d>! 👎" fightState.DefenderId fightState.AttackerId)
                         .Build()

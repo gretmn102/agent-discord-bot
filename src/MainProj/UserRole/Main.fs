@@ -4,6 +4,7 @@ open FsharpMyExtension.Either
 open DSharpPlus
 
 open Types
+open Extensions
 open Model
 
 type RoleEditModel = {
@@ -146,7 +147,7 @@ module UserRoleForm =
         let embed =
             Entities.DiscordEmbedBuilder()
                 .WithAuthor(sprintf "Пользовательская роль", iconUrl = "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/120/google/313/performing-arts_1f3ad.png")
-                .WithColor(Entities.DiscordColor "#2f3136")
+                .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                 .WithDescription(content)
                 // .WithFooter(sprintf "OwnerId: %d" guildMember.Id)
                 .Build()
@@ -284,7 +285,7 @@ module UserRoleForm =
 
                                             let embed =
                                                 Entities.DiscordEmbedBuilder()
-                                                    .WithColor(Entities.DiscordColor "#2f3136")
+                                                    .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                                                     .WithDescription(
                                                         [
                                                             "Error:"
@@ -409,7 +410,7 @@ module UserRoleForm =
             else
                 let embed =
                     Entities.DiscordEmbedBuilder()
-                        .WithColor(Entities.DiscordColor "#2f3136")
+                        .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                         .WithDescription(
                             sprintf "%s, you do not have these permissive roles: %s."
                                 guildMember.Mention
@@ -424,7 +425,7 @@ module UserRoleForm =
         | None ->
             let embed =
                 Entities.DiscordEmbedBuilder()
-                    .WithColor(Entities.DiscordColor "#2f3136")
+                    .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                     .WithDescription(
                         [
                             "This server doesn't yet have permissive roles. To add them, use the command:"
@@ -532,7 +533,7 @@ module UserRoleForm =
 
                 let embed =
                     Entities.DiscordEmbedBuilder()
-                        .WithColor(Entities.DiscordColor "#2f3136")
+                        .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                         .WithDescription(
                             [f name; f color]
                             |> List.choose id
@@ -743,7 +744,7 @@ let reducer =
                     | Some permissiveRoles ->
                         let b = Entities.DiscordMessageBuilder()
                         let embed = Entities.DiscordEmbedBuilder()
-                        embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                         embed.Description <-
                             [
                                 yield "Permissive roles: "
@@ -773,7 +774,7 @@ let reducer =
                     | Some userRoles ->
                         let b = Entities.DiscordMessageBuilder()
                         let embed = Entities.DiscordEmbedBuilder()
-                        embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                         embed.Description <-
                             [
                                 yield "User roles: "

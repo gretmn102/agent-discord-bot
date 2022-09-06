@@ -3,6 +3,7 @@ open FsharpMyExtension
 open DSharpPlus
 
 open Types
+open Extensions
 
 type Request =
     | GetAvatar of UserId option
@@ -45,7 +46,7 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
                 let embed = Entities.DiscordEmbedBuilder()
                 embed.WithAuthor(user.Username) |> ignore
                 embed.ImageUrl <- user.AvatarUrl
-                embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 let b = Entities.DiscordMessageBuilder()
                 b.Embed <- embed.Build()
                 b
@@ -158,7 +159,7 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
 
                     Entities.DiscordEmbedBuilder()
                         .WithAuthor(user.Username, iconUrl = user.AvatarUrl)
-                        .WithColor(if user.BannerColor.HasValue then user.BannerColor.Value else Entities.DiscordColor "#2f3136" )
+                        .WithColor(if user.BannerColor.HasValue then user.BannerColor.Value else DiscordEmbed.backgroundColorDarkTheme )
                         .AddField("Основная информация", mainInfo, true)
                         .WithThumbnail(user.AvatarUrl)
                         .Build()
@@ -249,7 +250,7 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
 
                     let embed =
                         Entities.DiscordEmbedBuilder()
-                            .WithColor(Entities.DiscordColor "#2f3136")
+                            .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                             .WithThumbnail(guild.IconUrl)
                             .WithImageUrl(guild.BannerUrl)
 

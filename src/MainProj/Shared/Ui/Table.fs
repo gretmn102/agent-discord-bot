@@ -3,6 +3,7 @@ open DSharpPlus
 open FsharpMyExtension
 
 open Types
+open Extensions
 
 type SortByContainer< ^Case when ^Case: enum<int32> and ^Case: comparison and ^Case: (static member op_Explicit:  ^Case -> int32)> =
     {
@@ -106,7 +107,7 @@ let inline createTable
     let embed =
         let b =
             Entities.DiscordEmbedBuilder()
-                .WithColor(Entities.DiscordColor "#2f3136")
+                .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                 .WithTitle(setting.Title)
 
         let b =

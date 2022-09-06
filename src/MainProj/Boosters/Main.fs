@@ -5,6 +5,7 @@ open DSharpPlus
 
 open Shared
 open Types
+open Extensions
 open Model
 
 type Request =
@@ -89,7 +90,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Boosters.GuildSetti
             | Some setting ->
                 let b = Entities.DiscordMessageBuilder()
                 let embed = Entities.DiscordEmbedBuilder()
-                embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 embed.Description <-
                     [
                         "```"

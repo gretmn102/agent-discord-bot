@@ -6,6 +6,7 @@ open DSharpPlus
 
 open Shared
 open Types
+open Extensions
 open Model
 
 type PassMsg =
@@ -151,7 +152,7 @@ let newcomersRolesReduce
                         match roleKeys with
                         | Left notFoundKey ->
                             let embed = Entities.DiscordEmbedBuilder()
-                            embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                             embed.Description <-
                                 sprintf
                                     "Not found \"%s\" key. Available next keys:\n%s"
@@ -229,7 +230,7 @@ let newcomersRolesReduce
                                 awaiti (replyMessage.ModifyAsync (Entities.Optional "Done"))
                     else
                         let embed = Entities.DiscordEmbedBuilder()
-                        embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                         embed.Description <-
                             sprintf
                                 "This command is only allowed for users who have these roles: %s"
@@ -294,7 +295,7 @@ let newcomersRolesReduce
                     | Some passSettings ->
                         let b = Entities.DiscordMessageBuilder()
                         let embed = Entities.DiscordEmbedBuilder()
-                        embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                         embed.Description <-
                             [
                                 "```"
@@ -344,7 +345,7 @@ let newcomersRolesReduce
             | Some newcomersRoles ->
                 let b = Entities.DiscordMessageBuilder()
                 let embed = Entities.DiscordEmbedBuilder()
-                embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 embed.Description <-
                     [
                         yield "Newcomers roles:"

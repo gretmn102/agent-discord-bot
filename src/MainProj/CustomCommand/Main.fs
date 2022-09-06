@@ -4,6 +4,7 @@ open FsharpMyExtension.Either
 open DSharpPlus
 
 open Types
+open Extensions
 
 [<Struct>]
 type Act =
@@ -58,7 +59,7 @@ let cmdBuilder
         let b = Entities.DiscordEmbedBuilder()
         b.Description <- content e.Author.Username whom.Username
 
-        b.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+        b.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
         if not (Array.isEmpty gifs) then
             b.ImageUrl <- gifs.[r.Next(0, gifs.Length)]
 

@@ -6,6 +6,7 @@ open System.Threading.Tasks
 open DSharpPlus.VoiceNext
 
 open Types
+open Extensions
 
 let botEventId = new EventId(42, "Bot-Event")
 
@@ -101,7 +102,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         "`.avatar @user` — аватарка указанного пользователя"
                     ] |> String.concat "\n"
 
-                b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
+                b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 awaiti (client.SendMessageAsync (e.Channel, b.Build()))
             | CommandParser.NumberToWords num ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
@@ -110,7 +111,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         NumberToWords.toNumName num
                     with e ->
                         e.Message
-                b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
+                b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 awaiti (client.SendMessageAsync (e.Channel, b.Build()))
             | CommandParser.EmojiFontCmd msg ->
                 EmojiFont.Main.exec e msg

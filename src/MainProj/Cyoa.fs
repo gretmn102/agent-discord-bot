@@ -1,4 +1,5 @@
 module Cyoa
+open Extensions
 
 module Core =
     type Var =
@@ -24,7 +25,7 @@ module Core =
     let say' (txt:string) =
         let b = DSharpPlus.Entities.DiscordEmbedBuilder()
         b.Description <- txt
-        b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
+        b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
 
         b.Build()
     let say (txt:string) =
@@ -282,7 +283,7 @@ module Scenario =
         let img src =
             let b = DSharpPlus.Entities.DiscordEmbedBuilder()
             b.ImageUrl <- src
-            b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
+            b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
             b.Build()
 
         // https://imgur.com/a/FXkyeUC
@@ -396,7 +397,7 @@ module Scenario2 =
                     | Some x ->
                         let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                         b.Description <- sprintf "%d очков\n\n%s" score x.Description
-                        b.Color <- DSharpPlus.Entities.Optional.FromValue(DSharpPlus.Entities.DiscordColor("#2f3136"))
+                        b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                         match x.ImgSrc with
                         | Some imgSrc ->
                             b.WithImageUrl(imgSrc) |> ignore

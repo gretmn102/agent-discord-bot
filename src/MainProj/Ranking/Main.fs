@@ -3,6 +3,7 @@ open FsharpMyExtension
 open DSharpPlus
 
 open Types
+open Extensions
 open Model
 
 type RankingSettingRequest =
@@ -135,7 +136,7 @@ let updateExp
 
                         let color =
                             match foundRole with
-                            | None -> Entities.DiscordColor "#2f3136"
+                            | None -> DiscordEmbed.backgroundColorDarkTheme
                             | Some x -> x.Color
 
                         let embed =
@@ -299,7 +300,7 @@ let rankingSettingReduce
 
             let b = Entities.DiscordMessageBuilder()
 
-            let color = Entities.DiscordColor "#2f3136"
+            let color = DiscordEmbed.backgroundColorDarkTheme
 
             let embed =
                 Entities.DiscordEmbedBuilder()
@@ -367,7 +368,7 @@ let mostActiveSettingReduce
             let embed =
                 Entities.DiscordEmbedBuilder()
                     .WithDescription(sprintf "<@&%d>" setting.MostActiveRoleId)
-                    .WithColor(Entities.DiscordColor "#2f3136")
+                    .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                     .Build()
 
             b.WithEmbed embed |> ignore
@@ -558,7 +559,7 @@ let requestReduce
 
         let b = Entities.DiscordMessageBuilder()
 
-        let color = Entities.DiscordColor "#2f3136"
+        let color = DiscordEmbed.backgroundColorDarkTheme
 
         let embed =
             Entities.DiscordEmbedBuilder()

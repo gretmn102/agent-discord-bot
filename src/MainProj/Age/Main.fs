@@ -4,6 +4,7 @@ open FsharpMyExtension.Either
 open DSharpPlus
 
 open Types
+open Extensions
 
 type Request =
     | CreateForm
@@ -122,7 +123,7 @@ let reduce (msg: Req) (state: State) =
 
             b.Embed <-
                 Entities.DiscordEmbedBuilder(
-                    Color = Entities.Optional.FromValue(Entities.DiscordColor("#2f3136")),
+                    Color = Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme),
                     Title = "Анонимный опросник возраста"
                 ).Build()
 

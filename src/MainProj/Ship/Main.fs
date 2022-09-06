@@ -4,6 +4,7 @@ open FsharpMyExtension.Either
 open DSharpPlus
 
 open Types
+open Extensions
 
 type ShipOption =
     | Rand
@@ -66,7 +67,7 @@ let cmdBuilder2
             | Rand -> r.Next(0, 101)
 
         let embed = Entities.DiscordEmbedBuilder()
-        embed.Color <- Entities.Optional.FromValue(Entities.DiscordColor("#2f3136"))
+        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
         embed.Description <-
             let nickOrName (user:Entities.DiscordMember) =
                 match user.Nickname with
