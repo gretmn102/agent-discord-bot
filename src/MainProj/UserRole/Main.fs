@@ -460,54 +460,104 @@ module UserRoleForm =
 
                                     guildUserRoles
                                 | Some roleEditModel ->
-                                    let role =
-                                        guild.CreateRoleAsync (
-                                            name = roleEditModel.Name,
-                                            color = System.Nullable roleEditModel.Color,
-                                            permissions = System.Nullable templateRole.Permissions
-                                        )
-                                        |> await
+                                    let res =
+                                        let changeWithoutIcon () =
+                                            try
+                                                guild.CreateRoleAsync (
+                                                    name = roleEditModel.Name,
+                                                    color = System.Nullable(roleEditModel.Color),
+                                                    permissions = System.Nullable templateRole.Permissions
+                                                )
+                                                |> await
+                                                |> Right
+                                            with e ->
+                                                Left e.Message
 
-                                    try
-                                        awaiti <| role.ModifyPositionAsync(templateRole.Position - 1)
-                                    with
-                                        ex ->
-                                            let jsonMessage =
-                                                match ex with
-                                                | :? Exceptions.BadRequestException as x ->
-                                                    x.JsonMessage
-                                                | :? Exceptions.UnauthorizedException as x ->
-                                                    x.JsonMessage
-                                                | x -> x.Message
+                                        let changeWithIcon iconUrl =
+                                            if guild.Features |> Seq.exists ((=) "ROLE_ICONS") then
+                                                let hasPermissiveRole =
+                                                    guildMember.Roles
+                                                    |> Seq.exists (fun role ->
+                                                        Set.contains role.Id setting.PermissiveIconRoleIds)
 
-                                            let embed =
-                                                Entities.DiscordEmbedBuilder()
-                                                    .WithColor(DiscordEmbed.backgroundColorDarkTheme)
-                                                    .WithDescription(
-                                                        [
-                                                            "Error:"
-                                                            "```"
-                                                            sprintf "%s" jsonMessage
-                                                            "```"
-                                                            sprintf "The bot role must be higher than <@&%d>, or move the role yourself" templateRole.Id
-                                                        ] |> String.concat "\n"
-                                                    ).Build()
+                                                if hasPermissiveRole then
+                                                    match WebClientDownloader.getData [] iconUrl with
+                                                    | Left errMsg ->
+                                                        sprintf "Download url by '%s' error:\n%s" iconUrl errMsg
+                                                        |> Left
+                                                    | Right bytes ->
+                                                        try
+                                                            use m = new System.IO.MemoryStream(bytes)
 
-                                            sendMessage embed
+                                                            guild.CreateRoleAsync (
+                                                                name = roleEditModel.Name,
+                                                                color = System.Nullable(roleEditModel.Color),
+                                                                icon = m,
+                                                                permissions = System.Nullable templateRole.Permissions
+                                                            )
+                                                            |> await
+                                                            |> Right
+                                                        with e ->
+                                                            Left e.Message
+                                                else
+                                                    sprintf "You do not have these permissive icon roles: %s."
+                                                        (setting.PermissiveIconRoleIds |> Seq.map (sprintf "<@&%d>") |> String.concat ", ")
+                                                    |> Left
+                                            else
+                                                Left "This guild don't has ROLE_ICONS feature"
 
-                                    guildMember.GrantRoleAsync role
-                                    |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+                                        match roleEditModel.IconUrl with
+                                        | Some iconUrl ->
+                                            changeWithIcon iconUrl
+                                        | None -> changeWithoutIcon ()
 
-                                    roleGranted role.Id
-                                    setContent "Role has been granted"
+                                    match res with
+                                    | Right role ->
+                                        try
+                                            awaiti <| role.ModifyPositionAsync(templateRole.Position - 1)
+                                        with
+                                            ex ->
+                                                let jsonMessage =
+                                                    match ex with
+                                                    | :? Exceptions.BadRequestException as x ->
+                                                        x.JsonMessage
+                                                    | :? Exceptions.UnauthorizedException as x ->
+                                                        x.JsonMessage
+                                                    | x -> x.Message
 
-                                    let x = Roles.insert (guild.Id, guildMember.Id, role.Id)
+                                                let embed =
+                                                    Entities.DiscordEmbedBuilder()
+                                                        .WithColor(DiscordEmbed.backgroundColorDarkTheme)
+                                                        .WithDescription(
+                                                            [
+                                                                "Error:"
+                                                                "```"
+                                                                sprintf "%s" jsonMessage
+                                                                "```"
+                                                                sprintf "The bot role must be higher than <@&%d>, or move the role yourself" templateRole.Id
+                                                            ] |> String.concat "\n"
+                                                        ).Build()
 
-                                    guildUserRoles
-                                    |> Map.addOrModWith
-                                        x.GuildId
-                                        (fun () -> Map.add x.UserId x Map.empty)
-                                        (fun st -> Map.add x.UserId x st)
+                                                sendMessage embed
+
+                                        guildMember.GrantRoleAsync role
+                                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                        roleGranted role.Id
+                                        setContent "Role has been granted"
+
+                                        let x = Roles.insert (guild.Id, guildMember.Id, role.Id)
+
+                                        guildUserRoles
+                                        |> Map.addOrModWith
+                                            x.GuildId
+                                            (fun () -> Map.add x.UserId x Map.empty)
+                                            (fun st -> Map.add x.UserId x st)
+
+                                    | Left errMsg ->
+                                        setContent errMsg
+
+                                        guildUserRoles
                             else
                                 setContent "The number of roles exceeds 250"
 
