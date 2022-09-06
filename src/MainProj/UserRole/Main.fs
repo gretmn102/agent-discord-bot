@@ -360,13 +360,11 @@ module UserRoleForm =
             )
         |]
 
-    let componentInteractionCreateHandle getRoleByUser (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
+    let componentInteractionCreateHandle (existRole: RoleEditModel option) isIconAllowed (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
         if e.Message.Author.Id = client.CurrentUser.Id then
             if e.Id.StartsWith GiveOrChangeRoleButtonId then
                 let ownerId = uint64 e.Id.[GiveOrChangeRoleButtonId.Length..]
                 if e.User.Id = ownerId then
-                    let existRole: RoleEditModel option = getRoleByUser e.User.Id
-
                     let b =
                         Entities.DiscordInteractionResponseBuilder()
                             .WithTitle("Пользовательская роль")
@@ -393,7 +391,10 @@ module UserRoleForm =
                                     value = (match existRole with None -> "" | Some role -> sprintf "#%x" role.Color.Value)
                                 )
                             )
-                            .AddComponents(
+
+                    let b =
+                        if isIconAllowed then
+                            b.AddComponents(
                                 Entities.TextInputComponent(
                                     "Ссылка на иконку",
                                     UserRoleFormModalIconUrl,
@@ -403,6 +404,8 @@ module UserRoleForm =
                                     value = (match existRole with None -> "" | Some role -> match role.IconUrl with None -> "" | Some x -> x)
                                 )
                             )
+                        else
+                            b
 
                     awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b)
                 else
@@ -1116,12 +1119,16 @@ let reducer =
             UserRoleForm.modalHandle e state
 
         | ComponentInteractionCreateHandle(r, client, e) ->
-            let getRoleByUserId userId =
-                Map.tryFind e.Guild.Id state.GuildUserRoles
+            let guild = e.Guild
+            let guildMember = getGuildMember guild e.User
+
+            let existRole =
+                let userId = guildMember.Id
+                Map.tryFind guild.Id state.GuildUserRoles
                 |> Option.bind (fun x ->
                     Map.tryFind userId x
                     |> Option.bind (fun x ->
-                        match e.Guild.GetRole x.RoleId with
+                        match guild.GetRole x.RoleId with
                         | null -> None
                         | role ->
                             Some {
@@ -1136,7 +1143,21 @@ let reducer =
                     )
                 )
 
-            r.Reply <| UserRoleForm.componentInteractionCreateHandle getRoleByUserId client e
+            let isIconAllowed =
+                let isGuildHasRoleIconsFeature () =
+                    guild.Features |> Seq.exists ((=) "ROLE_ICONS")
+
+                let isMemberHasRoleIconPermission () =
+                    match Setting.GuildData.tryFind guild.Id state.Setting with
+                    | Some setting ->
+                        guildMember.Roles
+                        |> Seq.exists (fun role ->
+                            Set.contains role.Id setting.PermissiveIconRoleIds)
+                    | None -> false
+
+                isGuildHasRoleIconsFeature () && isMemberHasRoleIconPermission ()
+
+            r.Reply <| UserRoleForm.componentInteractionCreateHandle existRole isIconAllowed client e
 
             state
 
