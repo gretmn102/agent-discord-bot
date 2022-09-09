@@ -120,6 +120,12 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
                         [
                             sprintf "**Имя:** %s#%s (%d)" user.Username user.Discriminator user.Id
 
+                            match guildMember with
+                            | Some guildMember ->
+                                if not <| System.String.IsNullOrEmpty guildMember.Nickname then
+                                    sprintf "**Ник на сервере:** %s" guildMember.Nickname
+                            | None -> ()
+
                             match status with
                             | Some status ->
                                 sprintf "**Статус:** %s" status
