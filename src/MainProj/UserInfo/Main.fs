@@ -72,7 +72,7 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
         awaiti <| e.Channel.TriggerTypingAsync()
 
         let message =
-            let createMessage (user: Entities.DiscordUser) =
+            let createMessage (user: Entities.DiscordUser) (guildMember: Entities.DiscordMember option) =
 
                 let embed =
                     let status =
@@ -117,45 +117,28 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
                             )
 
                     let mainInfo =
-                        match user with
-                        | :? Entities.DiscordMember as guildMember ->
-                            [
-                                sprintf "**Имя:** %s#%s (%d)" guildMember.Username guildMember.Discriminator guildMember.Id
+                        [
+                            sprintf "**Имя:** %s#%s (%d)" user.Username user.Discriminator user.Id
 
-                                match status with
-                                | Some status ->
-                                    sprintf "**Статус:** %s" status
-                                | None -> ()
+                            match status with
+                            | Some status ->
+                                sprintf "**Статус:** %s" status
+                            | None -> ()
 
-                                match clientStatus with
-                                | Some clientStatus ->
-                                    sprintf "**Пользовательский статус:** %s" clientStatus
-                                | None -> ()
+                            match clientStatus with
+                            | Some clientStatus ->
+                                sprintf "**Пользовательский статус:** %s" clientStatus
+                            | None -> ()
 
-                                let creationTimestamp = DateTime.Unix.toSec user.CreationTimestamp.UtcDateTime
-                                sprintf "**Дата регистрации**: <t:%d:D> (<t:%d:R>)" creationTimestamp creationTimestamp
+                            let creationTimestamp = DateTime.Unix.toSec user.CreationTimestamp.UtcDateTime
+                            sprintf "**Дата регистрации**: <t:%d:D> (<t:%d:R>)" creationTimestamp creationTimestamp
 
+                            match guildMember with
+                            | Some guildMember ->
                                 let joinedAt = DateTime.Unix.toSec guildMember.JoinedAt.UtcDateTime
                                 sprintf "**Присоединился**: <t:%d:D> (<t:%d:R>)" joinedAt joinedAt
-                            ] |> String.concat "\n"
-
-                        | user ->
-                            [
-                                sprintf "**Имя:** %s#%s (%d)" user.Username user.Discriminator user.Id
-
-                                match status with
-                                | Some status ->
-                                    sprintf "**Статус:** %s" status
-                                | None -> ()
-
-                                match clientStatus with
-                                | Some clientStatus ->
-                                    sprintf "**Пользовательский статус:** %s" clientStatus
-                                | None -> ()
-
-                                let creationTimestamp = DateTime.Unix.toSec user.CreationTimestamp.UtcDateTime
-                                sprintf "**Дата регистрации**: <t:%d:D> (<t:%d:R>)" creationTimestamp creationTimestamp
-                            ] |> String.concat "\n"
+                            | None -> ()
+                        ] |> String.concat "\n"
 
                     Entities.DiscordEmbedBuilder()
                         .WithAuthor(user.Username, iconUrl = user.AvatarUrl)
@@ -180,8 +163,23 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
                     let b = Entities.DiscordMessageBuilder()
                     b.Content <- sprintf "User %d not found" userId
                     b
-                | user -> createMessage user
-            | None -> createMessage e.Author
+                | user ->
+                    let guildMember =
+                        try
+                            await (e.Guild.GetMemberAsync userId)
+                            |> Some
+                        with e ->
+                            None
+
+                    createMessage user guildMember
+            | None ->
+                let guildMember =
+                    match e.Author with
+                    | :? Entities.DiscordMember as guildMember ->
+                        Some guildMember
+                    | _ -> None
+
+                createMessage e.Author guildMember
 
         ignore (await (e.Channel.SendMessageAsync message))
 
