@@ -75,204 +75,188 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
             match x with
             | Checkpoint.Channel channelId ->
                 let state' =
-                    state.WelcomeSetting
-                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
-                        { x with OutputChannel = Some channelId.v }
-                    )
-
-                Some { state with WelcomeSetting = state' }, Ok ()
-
-            | Checkpoint.DoorkeeperRole roleId ->
-                let state' =
-                    state.NewcomersRoles
-                    |> NewcomersRoles.GuildNewcomersRoles.setWelcomeSetting guildId.v (fun x ->
+                    state.Settings
+                    |> Setting.GuildData.set guildId.v (fun x ->
                         { x with
-                            PassSettings =
-                                let passSettings =
-                                    x.PassSettings
-                                    |> Option.defaultValue NewcomersRoles.PassSettings.Empty
-
-                                { passSettings with
-                                    PermittedRoles = Set.singleton roleId.v
-                                }
-                                |> Some
+                            Checkpoint = {
+                                x.Checkpoint with
+                                    Channel = EnabledOptionValue.Init channelId.v
+                            }
                         }
                     )
 
-                Some { state with NewcomersRoles = state' }, Ok ()
+                Some { state with Settings = state' }, Ok ()
+
+            | Checkpoint.DoorkeeperRole roleId ->
+                let state' =
+                    state.Settings
+                    |> Setting.GuildData.set guildId.v (fun x ->
+                        { x with
+                            Checkpoint = {
+                                x.Checkpoint with
+                                    DoorkeeperRole = EnabledOptionValue.Init roleId.v
+                            }
+                        }
+                    )
+
+                Some { state with Settings = state' }, Ok ()
 
             | Checkpoint.EnteredUserRole roleId ->
                 let state' =
-                    state.NewcomersRoles
-                    |> NewcomersRoles.GuildNewcomersRoles.setWelcomeSetting guildId.v (fun x ->
-                        { x with RoleIds = Set.singleton roleId.v }
+                    state.Settings
+                    |> Setting.GuildData.set guildId.v (fun x ->
+                        { x with
+                            Checkpoint = {
+                                x.Checkpoint with
+                                    EnteredUserRole = EnabledOptionValue.Init (Set.singleton roleId.v)
+                            }
+                        }
                     )
 
-                Some { state with NewcomersRoles = state' }, Ok ()
+                Some { state with Settings = state' }, Ok ()
 
             | Checkpoint.NewcomerWelcomeMessage msg ->
                 // TODO: check if the message is correct
 
                 let state' =
-                    state.WelcomeSetting
-                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
-                        { x with TemplateMessage = Some msg }
+                    state.Settings
+                    |> Setting.GuildData.set guildId.v (fun x ->
+                        { x with
+                            Checkpoint = {
+                                x.Checkpoint with
+                                    NewcomerWelcomeMessage = EnabledOptionValue.Init msg
+                            }
+                        }
                     )
 
-                Some { state with WelcomeSetting = state' }, Ok ()
+                Some { state with Settings = state' }, Ok ()
 
             | Checkpoint.ReturnedWelcomeMessage msg ->
                 // TODO: check if the message is correct
 
-                match WelcomeSetting.GuildWelcomeSetting.tryFind guildId.v state.WelcomeSetting with
-                | Some welcomeSetting ->
-                    let channelId =
-                        welcomeSetting.OutputChannel
-                        |> Option.orElseWith (fun () ->
-                            welcomeSetting.LeaversChannelMessage
-                            |> Option.map (fun x -> x.ChannelId)
-                        )
+                let state' =
+                    state.Settings
+                    |> Setting.GuildData.set guildId.v (fun x ->
+                        { x with
+                            Checkpoint = {
+                                x.Checkpoint with
+                                    ReturnedWelcomeMessage = EnabledOptionValue.Init msg
+                            }
+                        }
+                    )
 
-                    match channelId with
-                    | Some channelId ->
-                        let state' =
-                            state.WelcomeSetting
-                            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
-                                { x with
-                                    LeaversChannelMessage =
-                                        WelcomeSetting.ChannelMessage.Init channelId msg
-                                        |> Some
-                                }
-                            )
-
-                        Some { state with WelcomeSetting = state' }, Ok ()
-
-                    | None ->
-                        None, Error "Checkpoint.Channel is None"
-                | None ->
-                    None, Error "Checkpoint.Channel is None"
+                Some { state with Settings = state' }, Ok ()
 
         | Inner x ->
             match x with
             | Inner.Channel channelId ->
                 let state' =
-                    state.NewcomersRoles
-                    |> NewcomersRoles.GuildNewcomersRoles.setWelcomeSetting guildId.v (fun x ->
+                    state.Settings
+                    |> Setting.GuildData.set guildId.v (fun x ->
                         { x with
-                            PassSettings =
-                                let passSettings =
-                                    x.PassSettings
-                                    |> Option.defaultValue NewcomersRoles.PassSettings.Empty
-
-                                { passSettings with
-                                    MainChannelId = channelId.v
-                                }
-                                |> Some
+                            Inner = {
+                                x.Inner with
+                                    Channel = EnabledOptionValue.Init channelId.v
+                            }
                         }
                     )
 
-                Some { state with NewcomersRoles = state' }, Ok ()
+                Some { state with Settings = state' }, Ok ()
 
             | Inner.NewcomerWelcomeMessage msg ->
                 // TODO: check if the message is correct
 
                 let state' =
-                    state.NewcomersRoles
-                    |> NewcomersRoles.GuildNewcomersRoles.setWelcomeSetting guildId.v (fun x ->
+                    state.Settings
+                    |> Setting.GuildData.set guildId.v (fun x ->
                         { x with
-                            PassSettings =
-                                let passSettings =
-                                    x.PassSettings
-                                    |> Option.defaultValue NewcomersRoles.PassSettings.Empty
-
-                                { passSettings with
-                                    WelcomeMessage = msg
-                                }
-                                |> Some
+                            Inner = {
+                                x.Inner with
+                                    NewcomerWelcomeMessage = EnabledOptionValue.Init msg
+                            }
                         }
                     )
 
-                Some { state with NewcomersRoles = state' }, Ok ()
+                Some { state with Settings = state' }, Ok ()
 
         | Exit x ->
             match x with
             | Exit.Channel channelId ->
                 let state' =
-                    state.WelcomeSetting
-                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
-                        { x with OutputLeaveChannel = Some channelId.v }
+                    state.Settings
+                    |> Setting.GuildData.set guildId.v (fun x ->
+                        { x with
+                            Exit = {
+                                x.Exit with
+                                    Channel = EnabledOptionValue.Init channelId.v
+                            }
+                        }
                     )
 
-                Some { state with WelcomeSetting = state' }, Ok ()
+                Some { state with Settings = state' }, Ok ()
+
             | Exit.GoodbyeMessage msg ->
                 // TODO: check if the message is correct
 
                 let state' =
-                    state.WelcomeSetting
-                    |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guildId.v (fun x ->
-                        { x with TemplateLeaveMessage = Some msg }
+                    state.Settings
+                    |> Setting.GuildData.set guildId.v (fun x ->
+                        { x with
+                            Exit = {
+                                x.Exit with
+                                    GoodbyeMessage = EnabledOptionValue.Init msg
+                            }
+                        }
                     )
 
-                Some { state with WelcomeSetting = state' }, Ok ()
+                Some { state with Settings = state' }, Ok ()
 
         |> fun (state, x) -> state, Response.Set x
 
     | Request.Get guildId ->
-        let welcomeSetting = WelcomeSetting.GuildWelcomeSetting.tryFind guildId.v state.WelcomeSetting
-        let mewcomersRolesSetting = NewcomersRoles.GuildNewcomersRoles.tryFind guildId.v state.NewcomersRoles
+        let settings = Setting.GuildData.tryFind guildId.v state.Settings
 
         {
             Checkpoint =
                 {|
-                    Channel = welcomeSetting |> Option.bind (fun x -> x.OutputChannel |> Option.map Snowflake.Create)
+                    Channel =
+                        settings |> Option.bind (fun x -> x.Checkpoint.Channel.Value |> Option.map Snowflake.Create)
+
                     DoorkeeperRole =
-                        mewcomersRolesSetting
+                        settings |> Option.bind (fun x -> x.Checkpoint.DoorkeeperRole.Value |> Option.map Snowflake.Create)
+
+                    EnteredUserRole =
+                        settings
                         |> Option.bind (fun x ->
-                            x.PassSettings
-                            |> Option.bind (fun x ->
-                                x.PermittedRoles
-                                |> Set.tryFirst
-                                |> Option.map Snowflake.Create
+                            x.Checkpoint.EnteredUserRole.Value
+                            |> Option.bind (
+                                Set.tryFirst
+                                >> Option.map Snowflake.Create
                             )
                         )
-                    EnteredUserRole =
-                        mewcomersRolesSetting
-                        |> Option.bind (fun x ->
-                            x.RoleIds
-                            |> Set.tryFirst
-                            |> Option.map Snowflake.Create
-                        )
-                    NewcomerWelcomeMessage = welcomeSetting |> Option.bind (fun x -> x.TemplateMessage)
+
+                    NewcomerWelcomeMessage =
+                        settings |> Option.bind (fun x -> x.Checkpoint.NewcomerWelcomeMessage.Value)
+
                     ReturnedWelcomeMessage =
-                        welcomeSetting
-                        |> Option.bind (fun x ->
-                            x.LeaversChannelMessage |> Option.map (fun x -> x.Message))
+                        settings |> Option.bind (fun x -> x.Checkpoint.ReturnedWelcomeMessage.Value)
                 |}
             Inner =
                 {|
                     Channel =
-                        mewcomersRolesSetting
-                        |> Option.bind (fun x ->
-                            x.PassSettings
-                            |> Option.map (fun x ->
-                                x.MainChannelId
-                                |> Snowflake.Create
-                            )
-                        )
+                        settings |> Option.bind (fun x -> x.Inner.Channel.Value |> Option.map Snowflake.Create)
+
                     NewcomerWelcomeMessage =
-                        mewcomersRolesSetting
-                        |> Option.bind (fun x ->
-                            x.PassSettings
-                            |> Option.map (fun x ->
-                                x.WelcomeMessage
-                            )
-                        )
+                        settings |> Option.bind (fun x -> x.Inner.NewcomerWelcomeMessage.Value)
                     // ReturnedWelcomeMessage = MessageTemplate
                 |}
             Exit =
                 {|
-                    Channel = welcomeSetting |> Option.bind (fun x -> x.OutputLeaveChannel |> Option.map Snowflake.Create)
-                    GoodbyeMessage = welcomeSetting |> Option.bind (fun x -> x.TemplateLeaveMessage)
+                    Channel =
+                        settings |> Option.bind (fun x -> x.Exit.Channel.Value |> Option.map Snowflake.Create)
+
+                    GoodbyeMessage =
+                        settings |> Option.bind (fun x -> x.Exit.GoodbyeMessage.Value)
                 |}
         }
         |> fun res -> None, Response.Get res

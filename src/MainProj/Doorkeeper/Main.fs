@@ -9,26 +9,81 @@ open Types
 open Extensions
 open Model
 
-type PassMsg =
+module Builder =
+    let getEnabledOptionValueSilent enabledOptionValue next =
+        let isEnabledDoorkeeperRole next =
+            if enabledOptionValue.IsEnabled then
+                next ()
+            else
+                ()
+
+        let getDoorkeeperRole next =
+            match enabledOptionValue.Value with
+            | Some permittedRole ->
+                next permittedRole
+            | None ->
+                ()
+
+        isEnabledDoorkeeperRole <| fun () ->
+        getDoorkeeperRole <| next
+
+    let sendTemplateMessage (targetUser: Entities.DiscordMember) (channel: Entities.DiscordChannel) templateMessage =
+        MessageTemplate.Message.parse templateMessage
+        |> Either.iter (fun msg ->
+            let msg = MessageTemplate.Message.substitute targetUser.Mention targetUser.Username msg
+            try
+                awaiti <| channel.SendMessageAsync msg
+            with _ -> ()
+        )
+
+    let getChannelSilent (channelId: ChannelId) (guild: Entities.DiscordGuild) next =
+        match guild.GetChannel channelId with
+        | null ->
+            ()
+
+        | mainChannel ->
+            next mainChannel
+
+    let grantRoles (guild: Entities.DiscordGuild) (roles: seq<RoleId>) (targetUser: Entities.DiscordMember) =
+        roles
+        |> Seq.iter (fun roleId ->
+            match guild.Roles.[roleId] with
+            | null -> ()
+            | role ->
+                try
+                    targetUser.GrantRoleAsync(role)
+                    |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
+                with e ->
+                    printfn "%A" e.Message
+        )
+
+    let (^<|) f x = f x
+
+    let isUserNotBot (user: Entities.DiscordMember) next state =
+        if user.IsBot then
+            state
+        else
+            next () state
+
+    let getSettingSilent (guildId: GuildId) settings next state =
+        match Setting.GuildData.tryFind guildId settings with
+        | Some newcomersRoles ->
+            next newcomersRoles state
+        | None ->
+            state
+
+open Builder
+
+type SettingReq =
+    | Set of Result<Setting.MainData, string>
+    | Get
+
+type ActionReq =
     | Pass of UserId * string list
-    | SetPassSetting of Either<string, NewcomersRoles.PassSettings>
-    | GetPassSetting
-
-type NewcomersRolesMsg =
-    | SetNewcomersRoles of RoleId list
-    | GetNewcomersRoles
-    | PassMsg of PassMsg
-
-type WelcomeSettingMsg =
-    | SetWelcomeSetting of ChannelId * MessageTemplate.Message
-    | SetWelcomeLogSetting of ChannelId * MessageTemplate.Message
-    | SetWelcomeLeaverMessage of ChannelId * MessageTemplate.Message
-    | SetWelcomeLeaverLogMessage of ChannelId * MessageTemplate.Message
-    | SetWelcomeLeaveSetting of ChannelId * MessageTemplate.Message
 
 type Request =
-    | NewcomersRolesReq of NewcomersRolesMsg
-    | WelcomeSettingReq of WelcomeSettingMsg
+    | SettingReq of SettingReq
+    | ActionReq of ActionReq
 
 module Parser =
     open FParsec
@@ -37,62 +92,43 @@ module Parser =
 
     type 'Result Parser = Primitives.Parser<'Result, unit>
 
-    let pgetNewcomersRoles: _ Parser =
-        skipStringCI "newcomersRoles"
+    let setSettingName = "setDoorkeeperSettings"
 
-    let psetNewcomersRoles: RoleId list Parser =
-        skipStringCI "setNewcomersRoles" >>. spaces
-        >>. many (pmentionRole <|> puint64 .>> spaces)
+    let psetSetting: _ Parser =
+        skipStringCI setSettingName >>. spaces
+        >>. (pcodeBlock <|> manySatisfy (fun _ -> true))
+        |>> (fun str ->
+            try
+                let passSettings: Setting.MainData = Json.des str
+                Result.Ok passSettings
+            with e ->
+                Result.Error e.Message
+        )
 
-    let pchannelTemplateMessage cmdName =
-        skipStringCI cmdName >>. spaces
-        >>. tuple2
-                (pchannelMention .>> spaces)
-                MessageTemplate.Message.parser
+    let pgetSetting: _ Parser =
+        skipStringCI "getDoorkeeperSettings"
 
-    let start: _ Parser =
-        let ppassCommand =
-            let ppass: _ Parser =
-                skipStringCI "pass" >>. spaces
-                >>. tuple2
-                        (puserMention .>> spaces)
-                        (many (many1Satisfy (fun _ -> true)))
+    let psettings =
+        choice [
+            psetSetting |>> SettingReq.Set
+            pgetSetting >>% SettingReq.Get
+        ]
 
-            let psetPassSetting: _ Parser =
-                skipStringCI "setPassSettings" >>. spaces
-                >>. (pcodeBlock <|> manySatisfy (fun _ -> true))
-                |>> (fun str ->
-                    try
-                        let passSettings: NewcomersRoles.PassSettings = Json.des str
-                        Right(passSettings)
-                    with e ->
-                        Left e.Message
-                )
-
-            choice [
-                psetPassSetting |>> SetPassSetting
-                skipStringCI "getPassSettings" >>% GetPassSetting
-                ppass |>> Pass
-            ]
-
-        let p =
-            choice [
-                psetNewcomersRoles |>> SetNewcomersRoles
-                pgetNewcomersRoles >>% GetNewcomersRoles
-                ppassCommand |>> PassMsg
-            ]
-        let psettings =
-            choice [
-                pchannelTemplateMessage "setWelcomeSetting" |>> SetWelcomeSetting
-                pchannelTemplateMessage "setWelcomeLogSetting" |>> SetWelcomeLogSetting
-                pchannelTemplateMessage "setWelcomeLeaverMessage" |>> SetWelcomeLeaverMessage
-                pchannelTemplateMessage "setWelcomeLeaverLogMessage" |>> SetWelcomeLeaverLogMessage
-                pchannelTemplateMessage "setWelcomeLeaveSetting" |>> SetWelcomeLeaveSetting
-            ]
+    let paction: _ Parser =
+        let ppass: _ Parser =
+            skipStringCI "pass" >>. spaces
+            >>. tuple2
+                    (puserMention .>> spaces)
+                    (many (many1Satisfy (fun _ -> true)))
 
         choice [
-            p |>> NewcomersRolesReq
-            psettings |>> WelcomeSettingReq
+            ppass |>> Pass
+        ]
+
+    let start: _ Parser =
+        choice [
+            paction |>> Request.ActionReq
+            psettings |>> Request.SettingReq
         ]
 
 type Msg =
@@ -101,517 +137,386 @@ type Msg =
     | GuildMemberRemovedHandle of EventArgs.GuildMemberRemoveEventArgs
     | ApiRequest of Api.Request * AsyncReplyChannel<Api.Response>
 
-let newcomersRolesReduce
+let actionReduce
     (e: EventArgs.MessageCreateEventArgs)
-    (msg: NewcomersRolesMsg)
-    (guildNewcomersRoles: NewcomersRoles.GuildNewcomersRoles): NewcomersRoles.GuildNewcomersRoles =
-
-    let passErrorMsg =
-        [
-            "This server doesn't yet have pass settings. To set them, use the command:"
-            "```"
-            ".setPassSettings"
-            NewcomersRoles.PassSettings.SampleJson
-            "```"
-        ] |> String.concat "\n"
+    (msg: ActionReq)
+    (settings: Setting.GuildData): Setting.GuildData =
 
     match msg with
-    | PassMsg msg ->
-        match msg with
-        | Pass (targetUserId, roleKeys) ->
-            let guild = e.Guild
-            let currentMember = getGuildMember guild e.Author
-            let replyMessage =
-                await (e.Channel.SendMessageAsync("Processing..."))
+    | Pass (targetUserId, roleKeys) ->
+        awaiti <| e.Channel.TriggerTypingAsync()
 
-            let sendErrorMessage () =
-                awaiti (replyMessage.ModifyAsync (Entities.Optional passErrorMsg))
+        let sendMessage msg =
+            let embed = Entities.DiscordEmbedBuilder()
+            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+            embed.Description <- msg
 
-            match NewcomersRoles.GuildNewcomersRoles.tryFind e.Guild.Id guildNewcomersRoles with
-            | Some newcomersRoles ->
-                match newcomersRoles.PassSettings with
-                | Some passSetting ->
-                    let permittedRoles = passSetting.PermittedRoles
-                    let isAllowed =
-                        currentMember.Roles
-                        |> Seq.exists (fun x ->
-                            Set.contains x.Id permittedRoles)
-                    if isAllowed then
-                        let roleKeys =
-                            let rec f acc = function
-                                | x::xs ->
-                                    let res =
-                                        passSetting.IssuedRoleIds
-                                        |> Array.tryFind (fun (key', _) -> key' = x)
-                                    match res with
-                                    | Some roleId -> f (roleId::acc) xs
-                                    | None -> Left x
-                                | [] -> Right acc
-                            f [] roleKeys
+            let b = Entities.DiscordMessageBuilder()
+            b.Embed <- embed.Build()
 
-                        match roleKeys with
-                        | Left notFoundKey ->
-                            let embed = Entities.DiscordEmbedBuilder()
-                            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                            embed.Description <-
-                                sprintf
-                                    "Not found \"%s\" key. Available next keys:\n%s"
-                                    notFoundKey
-                                    (passSetting.IssuedRoleIds
-                                     |> Seq.map (fun (k, roleId) ->
-                                        sprintf "* %s <@&%d>" k roleId)
-                                     |> String.concat "\n")
+            awaiti <| e.Channel.SendMessageAsync b
 
-                            let b = Entities.DiscordMessageBuilder()
-                            b.Embed <- embed.Build()
-
-                            awaiti (replyMessage.ModifyAsync b)
-                        | Right roleKeys ->
-                            match await (guild.GetMemberAsync targetUserId) with
-                            | null ->
-                                let msg =
-                                    sprintf "User <@!%d> is not a member of this guild" targetUserId
-
-                                awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
-                            | targetUser ->
-                                newcomersRoles.RoleIds
-                                |> Set.iter (fun roleId ->
-                                    match guild.GetRole roleId with
-                                    | null -> ()
-                                    | role ->
-                                        try
-                                            awaiti <| targetUser.RevokeRoleAsync(role)
-                                        with e ->
-                                            printfn "%A" e
-                                )
-
-                                roleKeys
-                                |> List.iter (fun (_, roleId) ->
-                                    match guild.GetRole roleId with
-                                    | null -> ()
-                                    | role ->
-                                        try
-                                            awaiti <| targetUser.GrantRoleAsync(role)
-                                        with e ->
-                                            printfn "%A" e
-                                )
-
-                                // send welcome message to main channel
-                                match guild.GetChannel passSetting.MainChannelId with
-                                | null ->
-                                    let msg =
-                                        sprintf "Channel %d not found" passSetting.MainChannelId
-
-                                    awaiti (replyMessage.ModifyAsync (Entities.Optional msg))
-
-                                | mainChannel ->
-                                    MessageTemplate.Message.parse passSetting.WelcomeMessage
-                                    |> Either.iter (
-                                        MessageTemplate.Message.substitute targetUser.Mention targetUser.Username
-                                        >> mainChannel.SendMessageAsync
-                                        >> awaiti
-                                    )
-
-                                match passSetting.PassLogMessage with
-                                | Some(channelId, message) ->
-                                    match guild.GetChannel channelId with
-                                    | null -> ()
-                                    | channel ->
-                                        MessageTemplate.Message.parse message
-                                        |> Either.iter (fun msg ->
-                                            let msg = MessageTemplate.Message.substitute targetUser.Mention targetUser.Username msg
-                                            try
-                                                awaiti <| channel.SendMessageAsync msg
-                                            with _ -> ()
-                                        )
-
-                                | None -> ()
-
-                                awaiti (replyMessage.ModifyAsync (Entities.Optional "Done"))
-                    else
-                        let embed = Entities.DiscordEmbedBuilder()
-                        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                        embed.Description <-
-                            sprintf
-                                "This command is only allowed for users who have these roles: %s"
-                                (permittedRoles |> Seq.map (sprintf "<@&%d>") |> String.concat ", ")
-
-                        let b = Entities.DiscordMessageBuilder()
-                        b.Embed <- embed.Build()
-
-                        // let msg =
-                        //     Entities.Optional (embed.Build())
-                        // awaiti (replyMessage.ModifyAsync (Entities.Optional.FromNoValue<string>(), msg))
-                        awaiti (replyMessage.ModifyAsync b)
-                | None ->
-                    sendErrorMessage ()
-
-            | None ->
-                sendErrorMessage ()
-
-            guildNewcomersRoles
-        | SetPassSetting passSettings ->
-            let guild = e.Guild
-            let currentMember = getGuildMember guild e.Author
-            let replyMessage =
-                await (e.Channel.SendMessageAsync("Processing..."))
-
-            match passSettings with
-            | Right passSettings ->
-                if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
-                    let guildNewcomersRoles =
-                        guildNewcomersRoles
-                        |> NewcomersRoles.GuildNewcomersRoles.setWelcomeSetting
-                            e.Guild.Id
-                            (fun newcomersRoles ->
-                                { newcomersRoles with
-                                    PassSettings = Some passSettings }
-                            )
-
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional("Pass settings has been set")))
-
-                    guildNewcomersRoles
+        let getEnabledOptionValue name enabledOptionValue next =
+            let isEnabledDoorkeeperRole next =
+                if enabledOptionValue.IsEnabled then
+                    next ()
                 else
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
-
-                    guildNewcomersRoles
-            | Left errMsg ->
-                awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
-
-                guildNewcomersRoles
-
-        | GetPassSetting ->
-            let message =
-                let sendErrorMessage () =
-                    let b = Entities.DiscordMessageBuilder()
-                    let embed = Entities.DiscordEmbedBuilder()
-                    embed.Description <- passErrorMsg
-                    b.Embed <- embed.Build()
-                    b
-
-                match NewcomersRoles.GuildNewcomersRoles.tryFind e.Guild.Id guildNewcomersRoles with
-                | Some newcomersRoles->
-                    match newcomersRoles.PassSettings with
-                    | Some passSettings ->
-                        let b = Entities.DiscordMessageBuilder()
-                        let embed = Entities.DiscordEmbedBuilder()
-                        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                        embed.Description <-
-                            [
-                                "```"
-                                Json.ser passSettings
-                                "```"
-                            ] |> String.concat "\n"
-
-                        b.Embed <- embed.Build()
-                        b
-                    | None ->
-                        sendErrorMessage ()
-                | None ->
-                    sendErrorMessage ()
-
-            awaiti (e.Channel.SendMessageAsync (message))
-
-            guildNewcomersRoles
-
-    | SetNewcomersRoles roleIds ->
-        let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-
-        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
-           || (currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles) then
-            let guildNewcomersRoles =
-                guildNewcomersRoles
-                |> NewcomersRoles.GuildNewcomersRoles.setWelcomeSetting
-                    e.Guild.Id
-                    (fun newcomersRoles ->
-                        { newcomersRoles with
-                            RoleIds = Set.ofList roleIds }
+                    sendMessage (
+                        sprintf "%s is disabled" name
                     )
 
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("Roles has been set")))
+            let getDoorkeeperRole next =
+                match enabledOptionValue.Value with
+                | Some permittedRole ->
+                    next permittedRole
+                | None ->
+                    sendMessage (
+                        sprintf "%s is not set" name
+                    )
 
-            guildNewcomersRoles
-        else
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+            isEnabledDoorkeeperRole <| fun () ->
+            getDoorkeeperRole <| next
 
-            guildNewcomersRoles
-
-    | GetNewcomersRoles ->
-        let message =
-            match NewcomersRoles.GuildNewcomersRoles.tryFind e.Guild.Id guildNewcomersRoles with
-            | Some newcomersRoles ->
-                let b = Entities.DiscordMessageBuilder()
-                let embed = Entities.DiscordEmbedBuilder()
-                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                embed.Description <-
-                    [
-                        yield "Newcomers roles:"
-                        yield! newcomersRoles.RoleIds |> Set.map (sprintf "* <@&%d>")
-                    ] |> String.concat "\n"
-
-                b.Embed <- embed.Build()
-                b
-            | None ->
-                let b = Entities.DiscordMessageBuilder()
-                let embed = Entities.DiscordEmbedBuilder()
-                embed.Description <-
-                    [
-                        "This server doesn't yet have newcomers roles. To set them, use the command:"
-                        "```"
-                        ".setNewcomersRoles <role1_mention|role1_id> <role2_mention|role2_id> ..."
-                        "```"
-                    ] |> String.concat "\n"
-                b.Embed <- embed.Build()
-                b
-
-        awaiti (e.Channel.SendMessageAsync (message))
-
-        guildNewcomersRoles
-
-let welcomeSettingReduce
-    (e: EventArgs.MessageCreateEventArgs)
-    (msg: WelcomeSettingMsg)
-    (guildWelcomeSetting: WelcomeSetting.GuildWelcomeSetting): WelcomeSetting.GuildWelcomeSetting =
-
-    let apply setWelcomeSetting =
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
 
-        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-            let guildWelcomeSetting = setWelcomeSetting guild
+        let getGuildMember userId next =
+            match await (guild.GetMemberAsync userId) with
+            | null ->
+                sendMessage (
+                    sprintf "User <@!%d> is not a member of this guild" userId
+                )
+            | guildMember ->
+                next guildMember
 
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("Welcome setting has been set")))
+        let getChannel name channelId next =
+            match guild.GetChannel channelId with
+            | null ->
+                sendMessage (
+                    sprintf "%s(<#%d>) not found" name channelId
+                )
 
-            guildWelcomeSetting
-        else
-            awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission to manage roles")))
+            | mainChannel ->
+                next mainChannel
 
-            guildWelcomeSetting
+        let getSetting next =
+            match Setting.GuildData.tryFind guild.Id settings with
+            | Some newcomersRoles ->
+                next newcomersRoles
+            | None ->
+                sendMessage (
+                    [
+                        "This server doesn't yet have doorkeeper settings. To set them, use the command:"
+                        "```"
+                        sprintf ".%s" Parser.setSettingName
+                        Setting.MainData.Sample |> Setting.MainData.Serialize
+                        "```"
+                    ] |> String.concat "\n"
+                )
+
+        let isAllowedUseCommandInThisChannel (allowedChannelId: ChannelId) next =
+            if allowedChannelId = e.Channel.Id then
+                next ()
+            else
+                sendMessage (
+                    sprintf "This command is allowed to use only in <#%d>" allowedChannelId
+                )
+
+        let isCurrentUserHasRight roleId next =
+            let currentMember = Types.getGuildMember guild e.Author
+
+            if currentMember.Roles |> Seq.exists (fun x -> x.Id = roleId) then
+                next ()
+            else
+                sprintf "This command is only allowed for users who have <@&%d> role" roleId
+                |> sendMessage
+
+        let issuedRolesHandle (checkpoint: Setting.Checkpoint) next =
+            let getIssuedRoles (issuedRoleIds: (string * RoleId) []) next =
+                let roleKeys =
+                    let rec f acc = function
+                        | roleKey::roleKeys ->
+                            let res =
+                                issuedRoleIds
+                                |> Array.tryFind (fun (key', _) -> key' = roleKey)
+
+                            match res with
+                            | Some roleId -> f (roleId::acc) roleKeys
+                            | None -> Error roleKey
+
+                        | [] -> Ok acc
+
+                    f [] roleKeys
+
+                match roleKeys with
+                | Ok roleKeys ->
+                    next roleKeys
+
+                | Error notFoundKey ->
+                    sendMessage (
+                        sprintf
+                            "Not found \"%s\" key. Available next keys:\n%s"
+                            notFoundKey
+                            (issuedRoleIds
+                             |> Array.map (fun (k, roleId) ->
+                                sprintf "* %s <@&%d>" k roleId)
+                             |> String.concat "\n")
+                    )
+
+            if List.isEmpty roleKeys then
+                next None
+            else
+                getEnabledOptionValue "checkpoint.IssuedRoleIds" checkpoint.IssuedRoleIds <| fun issuedRoleIds ->
+                getIssuedRoles issuedRoleIds <| fun roleKeys ->
+                next (Some roleKeys)
+
+        let removeNewcomerRoles (enteredUserRole: Set<RoleId>) (targetUser: Entities.DiscordMember) =
+            enteredUserRole
+            |> Set.iter (fun roleId ->
+                match guild.GetRole roleId with
+                | null -> ()
+                | role ->
+                    try
+                        awaiti <| targetUser.RevokeRoleAsync(role)
+                    with e ->
+                        sendMessage (
+                            sprintf "Error when revoked <@&%d>: %s" roleId e.Message
+                        )
+            )
+
+        let addIssuedRoles roleKeys (targetUser: Entities.DiscordMember) =
+            roleKeys
+            |> List.iter (fun (key, roleId) ->
+                match guild.GetRole roleId with
+                | null ->
+                    sendMessage (
+                        sprintf "Role %s (%d) is not exists" key roleId
+                    )
+                | role ->
+                    try
+                        awaiti <| targetUser.GrantRoleAsync(role)
+                    with e ->
+                        sendMessage (
+                            sprintf "Error when grunted <@&%d>: %s" roleId e.Message
+                        )
+            )
+
+        getSetting <| fun setting ->
+        let checkpoint = setting.Checkpoint
+
+        getEnabledOptionValue "checkpoint.Channel" checkpoint.Channel <| fun checkpointChannelId ->
+        isAllowedUseCommandInThisChannel checkpointChannelId <| fun () ->
+
+        getEnabledOptionValue "checkpoint.DoorkeeperRole" checkpoint.DoorkeeperRole <| fun doorkeeperRoleId ->
+        isCurrentUserHasRight doorkeeperRoleId <| fun () ->
+
+        issuedRolesHandle checkpoint <| fun roleKeys ->
+
+        getGuildMember targetUserId <| fun targetUser ->
+
+        getEnabledOptionValue "checkpoint.EnteredUserRole" checkpoint.EnteredUserRole <| fun enteredUserRole ->
+            removeNewcomerRoles enteredUserRole targetUser
+
+        roleKeys
+        |> Option.iter (fun roleKeys ->
+            addIssuedRoles roleKeys targetUser)
+
+        let inner = setting.Inner
+
+        getEnabledOptionValue "Inner.Channel" inner.Channel <| fun innerChannelId ->
+            getChannel "Inner.Channel" innerChannelId <| fun innerChannel ->
+            getEnabledOptionValue "Inner.NewcomerWelcomeMessage" inner.NewcomerWelcomeMessage <| fun templateMessage ->
+            sendTemplateMessage targetUser innerChannel templateMessage
+
+        let log = setting.Log
+
+        getEnabledOptionValueSilent log.Channel <| fun logChannelId ->
+            getChannel "log.Channel" logChannelId <| fun innerChannel ->
+            getEnabledOptionValue "inner.NewcomerWelcomeMessageLog" inner.NewcomerWelcomeMessageLog <| fun templateMessage ->
+            sendTemplateMessage targetUser innerChannel templateMessage
+
+        sendMessage "Done!"
+
+    settings
+
+let settingReduce
+    (e: EventArgs.MessageCreateEventArgs)
+    (msg: SettingReq)
+    (settings: Setting.GuildData): Setting.GuildData =
+
+    awaiti <| e.Channel.TriggerTypingAsync()
+
+    let sendMessage msg =
+        let embed = Entities.DiscordEmbedBuilder()
+        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+        embed.Description <- msg
+
+        let b = Entities.DiscordMessageBuilder()
+        b.Embed <- embed.Build()
+
+        awaiti <| e.Channel.SendMessageAsync b
+
+    let guild = e.Guild
 
     match msg with
-    | SetWelcomeSetting(channelId, template) ->
-        apply (fun guild ->
-            let template = template |> MessageTemplate.Message.toString
+    | SettingReq.Set settingOpt ->
+        match settingOpt with
+        | Ok setting ->
+            let settings =
+                Setting.GuildData.set
+                    guild.Id
+                    (fun _ -> setting)
+                    settings
 
-            guildWelcomeSetting
-            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                { welcomeSettingData with
-                    OutputChannel = Some channelId
-                    TemplateMessage = Some template
-                }
+            sendMessage "Done!"
+
+            settings
+
+        | Error errMsg ->
+            sendMessage errMsg
+
+            settings
+
+    | SettingReq.Get ->
+        let getSetting (guildId: GuildId) next =
+            match Setting.GuildData.tryFind guildId settings with
+            | Some newcomersRoles ->
+                next newcomersRoles
+            | None ->
+                sendMessage (
+                    [
+                        "This server doesn't yet have doorkeeper settings. To set them, use the command:"
+                        "```"
+                        sprintf ".%s" Parser.setSettingName
+                        Setting.MainData.Sample |> Setting.MainData.Serialize
+                        "```"
+                    ] |> String.concat "\n"
+                )
+
+        getSetting guild.Id <| fun setting ->
+            sendMessage (
+                sprintf "```json\n%s\n```" (Setting.MainData.Serialize setting)
             )
-        )
 
-    | SetWelcomeLogSetting(channelId, template) ->
-        apply (fun guild ->
-            let template = template |> MessageTemplate.Message.toString
-
-            guildWelcomeSetting
-            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                { welcomeSettingData with
-                    OutputLogChannel = Some channelId
-                    TemplateLogMessage = Some template
-                }
-            )
-        )
-
-    | SetWelcomeLeaveSetting(channelId, template) ->
-        apply (fun guild ->
-            let template = template |> MessageTemplate.Message.toString
-
-            guildWelcomeSetting
-            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                { welcomeSettingData with
-                    OutputLeaveChannel = Some channelId
-                    TemplateLeaveMessage = Some template
-                }
-            )
-        )
-
-    | SetWelcomeLeaverMessage(channelId, template) ->
-        apply (fun guild ->
-            let template = template |> MessageTemplate.Message.toString
-
-            guildWelcomeSetting
-            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                { welcomeSettingData with
-                    LeaversChannelMessage =
-                        WelcomeSetting.ChannelMessage.Init channelId template
-                        |> Some
-                }
-            )
-        )
-
-    | SetWelcomeLeaverLogMessage(channelId, template) ->
-        apply (fun guild ->
-            let template = template |> MessageTemplate.Message.toString
-
-            guildWelcomeSetting
-            |> WelcomeSetting.GuildWelcomeSetting.setWelcomeSetting guild.Id (fun welcomeSettingData ->
-                { welcomeSettingData with
-                    LeaversLogChannelMessage =
-                        WelcomeSetting.ChannelMessage.Init channelId template
-                        |> Some
-                }
-            )
-        )
+        settings
 
 let reduce (msg: Msg) (state: State): State =
     match msg with
     | GuildMemberAddedHandle e ->
-        if not e.Member.IsBot then
-            let guildId = e.Guild.Id
+        let currentUser = e.Member
+        let guild = e.Guild
+        let guildId = guild.Id
 
-            let grantRoles roles =
-                roles
-                |> Seq.iter (fun roleId ->
-                    match e.Guild.Roles.[roleId] with
-                    | null -> ()
-                    | role ->
-                        try
-                            e.Member.GrantRoleAsync(role)
-                            |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
-                        with e ->
-                            printfn "%A" e.Message
-                )
+        let getUserData next =
+            Map.tryFind guildId state.Leavers
+            |> Option.bind (fun userDatas ->
+                Map.tryFind currentUser.Id userDatas
+                |> Option.map (fun userData -> userData, userDatas)
+            )
+            |> next
 
-            match NewcomersRoles.GuildNewcomersRoles.tryFind guildId state.NewcomersRoles with
-            | Some data ->
-                grantRoles data.RoleIds
-            | None -> ()
+        let send message channel =
+            getEnabledOptionValueSilent message <| fun message ->
+                getEnabledOptionValueSilent channel <| fun channelId ->
+                getChannelSilent channelId guild <| fun channel ->
+                sendTemplateMessage currentUser channel message
 
-            match WelcomeSetting.GuildWelcomeSetting.tryFind guildId state.WelcomeSetting with
-            | Some data ->
-                let send (channelMessage: WelcomeSetting.ChannelMessage) =
-                    match e.Guild.GetChannel channelMessage.ChannelId with
-                    | null -> ()
-                    | outputChannel ->
-                        MessageTemplate.Message.parse channelMessage.Message
-                        |> Either.iter (fun msg ->
-                            let msg = MessageTemplate.Message.substitute e.Member.Mention e.Member.Username msg
+        state
+        |> isUserNotBot currentUser ^<| fun () ->
 
-                            try
-                                awaiti <| outputChannel.SendMessageAsync msg
-                            with e ->
-                                printfn "%A" e
-                        )
+        getSettingSilent guildId state.Settings <| fun setting state ->
+            let checkpoint = setting.Checkpoint
 
-                let sendOption = function
-                    | Some outputChannelId, Some templateMessage ->
-                        send (WelcomeSetting.ChannelMessage.Init outputChannelId templateMessage)
-                    | _ -> ()
+            getEnabledOptionValueSilent checkpoint.EnteredUserRole <| fun roleIds ->
+                grantRoles guild roleIds currentUser
 
-                match Map.tryFind guildId state.Leavers with
-                | Some users ->
-                    match Map.tryFind e.Member.Id users with
-                    | Some user ->
-                        data.LeaversChannelMessage |> Option.iter send
-                        data.LeaversLogChannelMessage |> Option.iter send
+            getUserData <| fun userData ->
 
-                        grantRoles user.RoleIds
-
-                        { state with
-                            Leavers =
-                                Leavers.remove user
-                                let datas = Map.remove e.Member.Id users
-                                Map.add guildId datas state.Leavers
-                        }
-                    | None ->
-                        sendOption (data.OutputChannel, data.TemplateMessage)
-                        sendOption (data.OutputLogChannel, data.TemplateLogMessage)
-
-                        state
-                | None ->
-                    sendOption (data.OutputChannel, data.TemplateMessage)
-                    sendOption (data.OutputLogChannel, data.TemplateLogMessage)
-
-                    state
-
+            match userData with
             | None ->
-                state
+                send checkpoint.NewcomerWelcomeMessage checkpoint.Channel
 
-        else
+                let log = setting.Log
+                send checkpoint.NewcomerWelcomeMessageLog log.Channel
+
+            | Some (userData, userDatas) ->
+                send checkpoint.ReturnedWelcomeMessage checkpoint.Channel
+
+                grantRoles guild userData.RoleIds currentUser
+
+                let log = setting.Log
+                send checkpoint.ReturnedWelcomeMessageLog log.Channel
+
             state
 
     | GuildMemberRemovedHandle e ->
-        if not e.Member.IsBot then
-            let guildId = e.Guild.Id
+        let currentUser = e.Member
+        let guild = e.Guild
+        let guildId = guild.Id
 
-            match WelcomeSetting.GuildWelcomeSetting.tryFind guildId state.WelcomeSetting with
-            | Some data ->
-                let send = function
-                    | Some outputChannelId, Some templateMessage ->
-                        match e.Guild.GetChannel outputChannelId with
-                        | null -> ()
-                        | outputChannel ->
-                            MessageTemplate.Message.parse templateMessage
-                            |> Either.iter (fun msg ->
-                                let msg = MessageTemplate.Message.substitute e.Member.Mention e.Member.Username msg
+        let send message channel =
+            getEnabledOptionValueSilent message <| fun message ->
+                getEnabledOptionValueSilent channel <| fun channelId ->
+                getChannelSilent channelId guild <| fun channel ->
+                sendTemplateMessage currentUser channel message
 
-                                try
-                                    awaiti <| outputChannel.SendMessageAsync msg
-                                with e ->
-                                    printfn "%A" e
-                            )
-                    | _ -> ()
+        state
+        |> isUserNotBot currentUser ^<| fun () ->
 
-                send (data.OutputLeaveChannel, data.TemplateLeaveMessage)
+        getSettingSilent guildId state.Settings ^<| fun setting state ->
 
-                { state with
-                    Leavers =
-                        let roleIds =
-                            e.Member.Roles
-                            |> Seq.map (fun role -> role.Id)
-                            |> Array.ofSeq
+        let exit = setting.Exit
+        send exit.GoodbyeMessage exit.Channel
 
-                        state.Leavers
+        let log = setting.Log
+        send exit.GoodbyeMessageLog log.Channel
+
+        { state with
+            Leavers =
+                let roleIds =
+                    e.Member.Roles
+                    |> Seq.map (fun role -> role.Id)
+                    |> Array.ofSeq
+
+                state.Leavers
+                |> Map.addOrModWith
+                    guildId
+                    (fun () ->
+                        let data = Leavers.insert (guildId, e.Member.Id, roleIds)
+
+                        Map.add e.Member.Id data Map.empty
+                    )
+                    (fun guild ->
+                        guild
                         |> Map.addOrModWith
-                            guildId
+                            e.Member.Id
                             (fun () ->
-                                let data = Leavers.insert (guildId, e.Member.Id, roleIds)
-
-                                Map.add e.Member.Id data Map.empty
+                                Leavers.insert (guildId, e.Member.Id, roleIds)
                             )
-                            (fun guild ->
-                                guild
-                                |> Map.addOrModWith
-                                    e.Member.Id
-                                    (fun () ->
-                                        Leavers.insert (guildId, e.Member.Id, roleIds)
-                                    )
-                                    (fun data ->
-                                        let data =
-                                            { data with
-                                                RoleIds = roleIds
-                                            }
+                            (fun data ->
+                                let data =
+                                    { data with
+                                        RoleIds = roleIds
+                                    }
 
-                                        Leavers.replace data
+                                Leavers.replace data
 
-                                        data
-                                    )
+                                data
                             )
-                }
-            | None ->
-                state
-        else
-            state
+                    )
+        }
 
     | Request(e, cmd) ->
         match cmd with
-        | NewcomersRolesReq cmd ->
+        | Request.ActionReq msg ->
             { state with
-                NewcomersRoles =
-                    newcomersRolesReduce e cmd state.NewcomersRoles
+                Settings =
+                    actionReduce e msg state.Settings
             }
-        | WelcomeSettingReq cmd ->
+
+        | Request.SettingReq msg ->
             { state with
-                WelcomeSetting =
-                    welcomeSettingReduce e cmd state.WelcomeSetting
+                Settings =
+                    settingReduce e msg state.Settings
             }
 
     | ApiRequest (req, replyChannel) ->
@@ -625,8 +530,7 @@ let reduce (msg: Msg) (state: State): State =
 
 let m =
     let init = {
-        NewcomersRoles = NewcomersRoles.GuildNewcomersRoles.getAll Db.database
-        WelcomeSetting = WelcomeSetting.GuildWelcomeSetting.getAll Db.database
+        Settings = Setting.GuildData.init Db.database
         Leavers = Leavers.getAll ()
     }
 

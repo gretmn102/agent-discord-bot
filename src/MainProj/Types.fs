@@ -80,6 +80,33 @@ type MessagePath =
     member this.ToDiscordPath =
         sprintf "https://discord.com/channels/%d/%d/%d" this.GuildId this.ChannelId this.MessageId
 
+type EnabledOptionValue<'Value> =
+    {
+        IsEnabled: bool
+        Value: 'Value option
+    }
+    static member Empty: EnabledOptionValue<'Value> =
+        {
+            IsEnabled = false
+            Value = None
+        }
+    static member Init (v: 'Value) =
+        {
+            IsEnabled = true
+            Value = Some v
+        }
+
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module EnabledOptionValue =
+    let fold folder (st: 'State) (v: EnabledOptionValue<'Value>) =
+        if v.IsEnabled then
+            match v.Value with
+            | Some x -> folder x
+            | None -> st
+        else
+            st
+
 module StandartDiscordEmoji =
     let emojiSheetMapWidth = 42
 

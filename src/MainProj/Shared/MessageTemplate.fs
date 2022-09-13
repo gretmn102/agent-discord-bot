@@ -40,6 +40,8 @@ module Part =
         | UserMention -> userMention
         | UserName -> userName
 
+type MessageRaw = string
+
 type Message = Part list
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -51,7 +53,7 @@ module Message =
     let parse message =
         FParsecUtils.runEither parser message
 
-    let toString (template: Message) =
+    let toString (template: Message): MessageRaw =
         template |> List.map Part.toString |> System.String.Concat
 
     let substitute targetUserMention targetUserUsername (message: Message) =
