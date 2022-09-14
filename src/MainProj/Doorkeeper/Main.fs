@@ -69,6 +69,13 @@ module Builder =
         | None ->
             state
 
+    let isUserHasAdministrativeRight sendMessage (currentMember: Entities.DiscordMember) next state =
+        if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
+            next () state
+        else
+            sendMessage "You don't have administration permission"
+            state
+
 open Builder
 
 type SettingReq =
@@ -355,6 +362,11 @@ let settingReduce
     | SettingReq.Set settingOpt ->
         match settingOpt with
         | Ok setting ->
+            let currentMember = getGuildMember e.Guild e.Author
+
+            settings
+            |> isUserHasAdministrativeRight sendMessage currentMember ^<| fun () settings ->
+
             let settings =
                 Setting.GuildData.set
                     guild.Id
