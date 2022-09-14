@@ -144,7 +144,9 @@ type Msg =
 let actionReduce
     (e: EventArgs.MessageCreateEventArgs)
     (msg: ActionReq)
-    (settings: Setting.GuildData): Setting.GuildData =
+    (state: State): State =
+
+    let settings = state.Settings
 
     match msg with
     | Pass (targetUserId, roleKeys) ->
@@ -301,6 +303,31 @@ let actionReduce
                         )
             )
 
+        let returnAllRoles (checkpoint: Setting.Checkpoint) (targetUser: Entities.DiscordMember) =
+            let getUserData targetUserId next =
+                Map.tryFind guild.Id state.Leavers
+                |> Option.bind (fun userDatas ->
+                    Map.tryFind targetUserId userDatas
+                )
+                |> next
+
+            getUserData targetUser.Id <| fun userData ->
+                userData
+                |> Option.iter (fun userData ->
+                    let isEnteredUserRoleId =
+                        match checkpoint.EnteredUserRole.Value with
+                        | Some enteredUserRoleId ->
+                            (=) enteredUserRoleId
+                        | None ->
+                            fun _ -> false
+
+                    userData.RoleIds
+                    |> Array.iter (fun roleId ->
+                        if not (isEnteredUserRoleId roleId) then
+                            grantRoleSilent guild roleId targetUser
+                    )
+                )
+
         getSetting <| fun setting ->
         let checkpoint = setting.Checkpoint
 
@@ -316,6 +343,8 @@ let actionReduce
 
         getEnabledOptionValue "checkpoint.EnteredUserRole" checkpoint.EnteredUserRole <| fun enteredUserRoleId ->
             revokeRole enteredUserRoleId targetUser
+
+        returnAllRoles checkpoint targetUser
 
         roleKeys
         |> Option.iter (fun roleKeys ->
@@ -337,7 +366,7 @@ let actionReduce
 
         sendMessage "Done!"
 
-    settings
+    state
 
 let settingReduce
     (e: EventArgs.MessageCreateEventArgs)
@@ -447,11 +476,6 @@ let reduce (msg: Msg) (state: State): State =
             | Some (userData, userDatas) ->
                 send checkpoint.ReturnedWelcomeMessage checkpoint.Channel
 
-                userData.RoleIds
-                |> Array.iter (fun roleId ->
-                    grantRoleSilent guild roleId currentUser
-                )
-
                 let log = setting.Log
                 send checkpoint.ReturnedWelcomeMessageLog log.Channel
 
@@ -528,10 +552,7 @@ let reduce (msg: Msg) (state: State): State =
     | Request(e, cmd) ->
         match cmd with
         | Request.ActionReq msg ->
-            { state with
-                Settings =
-                    actionReduce e msg state.Settings
-            }
+            actionReduce e msg state
 
         | Request.SettingReq msg ->
             { state with
