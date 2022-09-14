@@ -240,7 +240,7 @@ module Setting =
             DoorkeeperRole: EnabledOptionValue<RoleId>
             /// dictionary key is the role name that is specified in the pass command
             IssuedRoleIds: EnabledOptionValue<(string * RoleId) []>
-            EnteredUserRole: EnabledOptionValue<Set<RoleId>>
+            EnteredUserRole: EnabledOptionValue<RoleId>
             NewcomerWelcomeMessage: EnabledOptionValue<MessageRaw>
             NewcomerWelcomeMessageLog: EnabledOptionValue<MessageRaw>
             ReturnedWelcomeMessage: EnabledOptionValue<MessageRaw>
@@ -273,10 +273,7 @@ module Setting =
                     |]
                     |> EnabledOptionValue.Init
                 EnteredUserRole =
-                    [|
-                        123456789UL
-                    |]
-                    |> Set.ofArray
+                    123456789UL
                     |> EnabledOptionValue.Init
                 NewcomerWelcomeMessage =
                     "<@userMention>, welcome to our guild!"
@@ -504,7 +501,9 @@ module Setting =
                                                     |> Option.defaultValue EnabledOptionValue.Empty
                                                 EnteredUserRole =
                                                     x.RoleIds
-                                                    |> EnabledOptionValue.Init
+                                                    |> Seq.tryHead
+                                                    |> Option.map EnabledOptionValue.Init
+                                                    |> Option.defaultValue EnabledOptionValue.Empty
                                                 IssuedRoleIds =
                                                     x.PassSettings
                                                     |> Option.map (fun x -> x.IssuedRoleIds)

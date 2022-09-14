@@ -108,7 +108,7 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
                         { x with
                             Checkpoint = {
                                 x.Checkpoint with
-                                    EnteredUserRole = EnabledOptionValue.Init (Set.singleton roleId.v)
+                                    EnteredUserRole = EnabledOptionValue.Init roleId.v
                             }
                         }
                     )
@@ -229,10 +229,7 @@ let requestHandler (state: State) (r: Request): option<_> * Response =
                         settings
                         |> Option.bind (fun x ->
                             x.Checkpoint.EnteredUserRole.Value
-                            |> Option.bind (
-                                Set.tryFirst
-                                >> Option.map Snowflake.Create
-                            )
+                            |> Option.map Snowflake.Create
                         )
 
                     NewcomerWelcomeMessage =

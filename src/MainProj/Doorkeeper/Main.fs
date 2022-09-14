@@ -44,18 +44,15 @@ module Builder =
         | mainChannel ->
             next mainChannel
 
-    let grantRoles (guild: Entities.DiscordGuild) (roles: seq<RoleId>) (targetUser: Entities.DiscordMember) =
-        roles
-        |> Seq.iter (fun roleId ->
-            match guild.Roles.[roleId] with
-            | null -> ()
-            | role ->
-                try
-                    targetUser.GrantRoleAsync(role)
-                    |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
-                with e ->
-                    printfn "%A" e.Message
-        )
+    let grantRoleSilent (guild: Entities.DiscordGuild) (roleId: RoleId) (targetUser: Entities.DiscordMember) =
+        match guild.Roles.[roleId] with
+        | null -> ()
+        | role ->
+            try
+                targetUser.GrantRoleAsync(role)
+                |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
+            with e ->
+                printfn "%A" e.Message
 
     let (^<|) f x = f x
 
@@ -269,19 +266,16 @@ let actionReduce
                 getIssuedRoles issuedRoleIds <| fun roleKeys ->
                 next (Some roleKeys)
 
-        let removeNewcomerRoles (enteredUserRole: Set<RoleId>) (targetUser: Entities.DiscordMember) =
-            enteredUserRole
-            |> Set.iter (fun roleId ->
-                match guild.GetRole roleId with
-                | null -> ()
-                | role ->
-                    try
-                        awaiti <| targetUser.RevokeRoleAsync(role)
-                    with e ->
-                        sendMessage (
-                            sprintf "Error when revoked <@&%d>: %s" roleId e.Message
-                        )
-            )
+        let revokeRole (roleId: RoleId) (targetUser: Entities.DiscordMember) =
+            match guild.GetRole roleId with
+            | null -> ()
+            | role ->
+                try
+                    awaiti <| targetUser.RevokeRoleAsync(role)
+                with e ->
+                    sendMessage (
+                        sprintf "Error when revoked <@&%d>: %s" roleId e.Message
+                    )
 
         let addIssuedRoles roleKeys (targetUser: Entities.DiscordMember) =
             roleKeys
@@ -313,8 +307,8 @@ let actionReduce
 
         getGuildMember targetUserId <| fun targetUser ->
 
-        getEnabledOptionValue "checkpoint.EnteredUserRole" checkpoint.EnteredUserRole <| fun enteredUserRole ->
-            removeNewcomerRoles enteredUserRole targetUser
+        getEnabledOptionValue "checkpoint.EnteredUserRole" checkpoint.EnteredUserRole <| fun enteredUserRoleId ->
+            revokeRole enteredUserRoleId targetUser
 
         roleKeys
         |> Option.iter (fun roleKeys ->
@@ -427,7 +421,7 @@ let reduce (msg: Msg) (state: State): State =
             let checkpoint = setting.Checkpoint
 
             getEnabledOptionValueSilent checkpoint.EnteredUserRole <| fun roleIds ->
-                grantRoles guild roleIds currentUser
+                grantRoleSilent guild roleIds currentUser
 
             getUserData <| fun userData ->
 
@@ -441,7 +435,10 @@ let reduce (msg: Msg) (state: State): State =
             | Some (userData, userDatas) ->
                 send checkpoint.ReturnedWelcomeMessage checkpoint.Channel
 
-                grantRoles guild userData.RoleIds currentUser
+                userData.RoleIds
+                |> Array.iter (fun roleId ->
+                    grantRoleSilent guild roleId currentUser
+                )
 
                 let log = setting.Log
                 send checkpoint.ReturnedWelcomeMessageLog log.Channel
