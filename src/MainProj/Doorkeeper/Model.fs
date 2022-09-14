@@ -245,6 +245,8 @@ module Setting =
             NewcomerWelcomeMessageLog: EnabledOptionValue<MessageRaw>
             ReturnedWelcomeMessage: EnabledOptionValue<MessageRaw>
             ReturnedWelcomeMessageLog: EnabledOptionValue<MessageRaw>
+            GoodbyeMessage: EnabledOptionValue<MessageRaw>
+            GoodbyeMessageLog: EnabledOptionValue<MessageRaw>
         }
         static member Empty =
             {
@@ -256,6 +258,8 @@ module Setting =
                 NewcomerWelcomeMessageLog = EnabledOptionValue.Empty
                 ReturnedWelcomeMessage = EnabledOptionValue.Empty
                 ReturnedWelcomeMessageLog = EnabledOptionValue.Empty
+                GoodbyeMessage = EnabledOptionValue.Empty
+                GoodbyeMessageLog = EnabledOptionValue.Empty
             }
         static member Sample =
             {
@@ -286,6 +290,12 @@ module Setting =
                     |> EnabledOptionValue.Init
                 ReturnedWelcomeMessageLog =
                     "<@userMention> returned to us"
+                    |> EnabledOptionValue.Init
+                GoodbyeMessage =
+                    "<@userMention> has left"
+                    |> EnabledOptionValue.Init
+                GoodbyeMessageLog =
+                    "<@userName> has left"
                     |> EnabledOptionValue.Init
             }
 
@@ -333,10 +343,10 @@ module Setting =
                     124576UL
                     |> EnabledOptionValue.Init
                 GoodbyeMessage =
-                    "<@userMention>, welcome to the club!"
+                    "<@userMention> has left"
                     |> EnabledOptionValue.Init
                 GoodbyeMessageLog =
-                    "<@userName> is let in"
+                    "<@userName> has left"
                     |> EnabledOptionValue.Init
             }
 

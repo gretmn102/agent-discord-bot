@@ -473,11 +473,22 @@ let reduce (msg: Msg) (state: State): State =
 
         getSettingSilent guildId state.Settings ^<| fun setting state ->
 
-        let exit = setting.Exit
-        send exit.GoodbyeMessage exit.Channel
+        getEnabledOptionValueSilent setting.Checkpoint.EnteredUserRole <| fun enteredRole ->
+            let isUserInCheckpoint () =
+                e.Member.Roles
+                |> Seq.exists (fun x -> x.Id = enteredRole)
 
-        let log = setting.Log
-        send exit.GoodbyeMessageLog log.Channel
+            let log = setting.Log
+            if isUserInCheckpoint () then
+                let checkpoint = setting.Checkpoint
+                send checkpoint.GoodbyeMessage checkpoint.Channel
+
+                send checkpoint.GoodbyeMessageLog log.Channel
+            else
+                let exit = setting.Exit
+                send exit.GoodbyeMessage exit.Channel
+
+                send exit.GoodbyeMessageLog log.Channel
 
         { state with
             Leavers =
