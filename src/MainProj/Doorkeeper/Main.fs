@@ -303,30 +303,45 @@ let actionReduce
                         )
             )
 
-        let returnAllRoles (checkpoint: Setting.Checkpoint) (targetUser: Entities.DiscordMember) =
-            let getUserData targetUserId next =
-                Map.tryFind guild.Id state.Leavers
-                |> Option.bind (fun userDatas ->
-                    Map.tryFind targetUserId userDatas
-                )
-                |> next
+        let getUserData targetUserId =
+            Map.tryFind guild.Id state.Leavers
+            |> Option.bind (fun userDatas ->
+                Map.tryFind targetUserId userDatas
+            )
 
-            getUserData targetUser.Id <| fun userData ->
-                userData
-                |> Option.iter (fun userData ->
-                    let isEnteredUserRoleId =
-                        match checkpoint.EnteredUserRole.Value with
-                        | Some enteredUserRoleId ->
-                            (=) enteredUserRoleId
-                        | None ->
-                            fun _ -> false
+        let returnAllRoles (checkpoint: Setting.Checkpoint) (userData: Leavers.Data) (targetUser: Entities.DiscordMember) =
+            let isEnteredUserRoleId =
+                match checkpoint.EnteredUserRole.Value with
+                | Some enteredUserRoleId ->
+                    (=) enteredUserRoleId
+                | None ->
+                    fun _ -> false
 
-                    userData.RoleIds
-                    |> Array.iter (fun roleId ->
-                        if not (isEnteredUserRoleId roleId) then
-                            grantRoleSilent guild roleId targetUser
-                    )
-                )
+            userData.RoleIds
+            |> Array.iter (fun roleId ->
+                if not (isEnteredUserRoleId roleId) then
+                    grantRoleSilent guild roleId targetUser
+            )
+
+        let sendWelcomeMessage targetUser isUserNewcomer (setting: Setting.MainData) =
+            let send message channel =
+                getEnabledOptionValueSilent message <| fun message ->
+                    getEnabledOptionValueSilent channel <| fun channelId ->
+                    getChannelSilent channelId guild <| fun channel ->
+                    sendTemplateMessage targetUser channel message
+
+            if isUserNewcomer then
+                let inner = setting.Inner
+                send inner.NewcomerWelcomeMessage inner.Channel
+
+                let log = setting.Log
+                send inner.NewcomerWelcomeMessageLog log.Channel
+            else
+                let inner = setting.Inner
+                send inner.ReturnedWelcomeMessage inner.Channel
+
+                let log = setting.Log
+                send inner.ReturnedWelcomeMessageLog log.Channel
 
         getSetting <| fun setting ->
         let checkpoint = setting.Checkpoint
@@ -344,25 +359,19 @@ let actionReduce
         getEnabledOptionValue "checkpoint.EnteredUserRole" checkpoint.EnteredUserRole <| fun enteredUserRoleId ->
             revokeRole enteredUserRoleId targetUser
 
-        returnAllRoles checkpoint targetUser
+        let userData = getUserData targetUser.Id
+
+        userData
+        |> Option.iter (fun userData ->
+            returnAllRoles checkpoint userData targetUser
+        )
 
         roleKeys
         |> Option.iter (fun roleKeys ->
             addIssuedRoles roleKeys targetUser)
 
-        let inner = setting.Inner
-
-        getEnabledOptionValue "Inner.Channel" inner.Channel <| fun innerChannelId ->
-            getChannel "Inner.Channel" innerChannelId <| fun innerChannel ->
-            getEnabledOptionValue "Inner.NewcomerWelcomeMessage" inner.NewcomerWelcomeMessage <| fun templateMessage ->
-            sendTemplateMessage targetUser innerChannel templateMessage
-
-        let log = setting.Log
-
-        getEnabledOptionValueSilent log.Channel <| fun logChannelId ->
-            getChannel "log.Channel" logChannelId <| fun innerChannel ->
-            getEnabledOptionValue "inner.NewcomerWelcomeMessageLog" inner.NewcomerWelcomeMessageLog <| fun templateMessage ->
-            sendTemplateMessage targetUser innerChannel templateMessage
+        let isUserNewcomer = Option.isNone userData
+        sendWelcomeMessage targetUser isUserNewcomer (setting: Setting.MainData)
 
         sendMessage "Done!"
 

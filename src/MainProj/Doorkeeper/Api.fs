@@ -89,19 +89,24 @@ module TransferTypes =
             Channel: Optional<EnabledOptionValue<ChannelId>>
             NewcomerWelcomeMessage: Optional<EnabledOptionValue<MessageRaw>>
             NewcomerWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
+            ReturnedWelcomeMessage: Optional<EnabledOptionValue<MessageRaw>>
+            ReturnedWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
         }
-        static member UpdateDbData(newData: Inner, oldData: Setting.Inner) =
-
-            { oldData with
+        static member UpdateDbData(newData: Inner, oldData: Setting.Inner): Setting.Inner =
+            {
                 Channel = UpdateDb.convert newData.Channel oldData.Channel
                 NewcomerWelcomeMessage = UpdateDb.convertMessage newData.NewcomerWelcomeMessage oldData.NewcomerWelcomeMessage
                 NewcomerWelcomeMessageLog = UpdateDb.convertMessage newData.NewcomerWelcomeMessageLog oldData.NewcomerWelcomeMessageLog
+                ReturnedWelcomeMessage = UpdateDb.convertMessage newData.ReturnedWelcomeMessage oldData.ReturnedWelcomeMessage
+                ReturnedWelcomeMessageLog = UpdateDb.convertMessage newData.ReturnedWelcomeMessageLog oldData.ReturnedWelcomeMessageLog
             }
         static member OfDbData(newData: Setting.Inner) =
             {
                 Channel = OfDb.convert newData.Channel
                 NewcomerWelcomeMessage = OfDb.convertMessage newData.NewcomerWelcomeMessage
                 NewcomerWelcomeMessageLog = OfDb.convertMessage newData.NewcomerWelcomeMessageLog
+                ReturnedWelcomeMessage = OfDb.convertMessage newData.ReturnedWelcomeMessage
+                ReturnedWelcomeMessageLog = OfDb.convertMessage newData.ReturnedWelcomeMessageLog
             }
 
     type Exit =

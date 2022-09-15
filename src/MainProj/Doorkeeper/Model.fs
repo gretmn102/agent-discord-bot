@@ -304,12 +304,16 @@ module Setting =
             Channel: EnabledOptionValue<ChannelId>
             NewcomerWelcomeMessage: EnabledOptionValue<MessageRaw>
             NewcomerWelcomeMessageLog: EnabledOptionValue<MessageRaw>
+            ReturnedWelcomeMessage: EnabledOptionValue<MessageRaw>
+            ReturnedWelcomeMessageLog: EnabledOptionValue<MessageRaw>
         }
         static member Empty =
             {
                 Channel = EnabledOptionValue.Empty
                 NewcomerWelcomeMessage = EnabledOptionValue.Empty
                 NewcomerWelcomeMessageLog = EnabledOptionValue.Empty
+                ReturnedWelcomeMessage = EnabledOptionValue.Empty
+                ReturnedWelcomeMessageLog = EnabledOptionValue.Empty
             }
         static member Sample =
             {
@@ -320,6 +324,12 @@ module Setting =
                     "<@userMention>, welcome to the club!"
                     |> EnabledOptionValue.Init
                 NewcomerWelcomeMessageLog =
+                    "<@userName> is let in"
+                    |> EnabledOptionValue.Init
+                ReturnedWelcomeMessage =
+                    "<@userMention> returned to the club!"
+                    |> EnabledOptionValue.Init
+                ReturnedWelcomeMessageLog =
                     "<@userName> is let in"
                     |> EnabledOptionValue.Init
             }
