@@ -65,6 +65,19 @@ module EnabledOptionValue =
         else
             st
 
+    let map mapping (v: EnabledOptionValue<'a>): EnabledOptionValue<'b> =
+        match v.Value with
+        | Some oldValue ->
+            {
+                IsEnabled = v.IsEnabled
+                Value = Some (mapping oldValue)
+            }
+        | None ->
+            {
+                IsEnabled = v.IsEnabled
+                Value = None
+            }
+
 module StandartDiscordEmoji =
     let emojiSheetMapWidth = 42
 
@@ -148,3 +161,10 @@ module IMongoCollection =
             )
 
         0L = collection.CountDocuments((fun _ -> true), countOptions)
+
+module Set =
+    let tryFirst (s: _ Set) =
+        if Set.isEmpty s then
+            None
+        else
+            Some (Seq.head s)

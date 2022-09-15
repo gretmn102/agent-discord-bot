@@ -30,6 +30,30 @@ let snowflakeTests =
             Assert.Equal("", sample, act)
     ]
 
+module Doorkeeper =
+    module ApiTests =
+        open Doorkeeper.Api.TransferTypes
+
+        [<Tests>]
+        let doorkeeperApiSerializeTests =
+            testList "doorkeeperApiSerializeTests" [
+                testCase "undefined NewcomerWelcomeMessageLog" <| fun () ->
+                    let exp =
+                        {
+                            Channel = Some (EnabledOptionValue.Init (Snowflake.Create 42UL))
+                            NewcomerWelcomeMessage = Some EnabledOptionValue.Empty
+                            NewcomerWelcomeMessageLog = None
+                        }
+
+                    let json =
+                        """{"channel":{"isEnabled":true,"value":"42"},"newcomerWelcomeMessage":{"isEnabled":false,"value":null}}"""
+
+                    let act = Serializer.des json
+
+                    Assert.Equal("", exp, act)
+            ]
+        ()
+
 module ApiProtocolTests =
     [<Tests>]
     let apiProtocolSerializeTests =
@@ -52,41 +76,31 @@ module ApiProtocolTests =
                 let sample =
                     let id = "42"
 
-                    let setting: Doorkeeper.Api.Settings =
+                    let setting: Doorkeeper.Api.TransferTypes.MainData =
                         {
-                            Checkpoint =
-                                {|
-                                    Channel = Some (Snowflake.Create 0UL)
-                                    DoorkeeperRole = None
-                                    EnteredUserRole = None
-                                    NewcomerWelcomeMessage = None
-                                    ReturnedWelcomeMessage = Some "1234"
-                                |}
-                            Inner =
-                                {|
-                                    Channel = None
-                                    NewcomerWelcomeMessage = Some "NewcomerWelcomeMessage"
-                                    // ReturnedWelcomeMessage: Message option
-                                |}
-                            Exit =
-                                {|
-                                    Channel = None
-                                    GoodbyeMessage = None
-                                |}
+                            Checkpoint = None
+                            Inner = Some {
+                                Channel = Some <| EnabledOptionValue.Init (Snowflake.Create 0UL)
+                                NewcomerWelcomeMessage = None
+                                NewcomerWelcomeMessageLog = Some <| EnabledOptionValue.Empty
+                            }
+                            Exit = None
+                            Log = None
                         }
 
                     let x =
-                        Api.Response.Doorkeeper (Doorkeeper.Api.Response.Get setting)
+                        Api.Response.Doorkeeper (Doorkeeper.Api.Response.Get (Some setting))
 
                     Api.ApiProtocol.Request.Create(Some id, x)
 
                 let act = sample.Serialize()
 
-                let exp = """{"id":"42","data":{"case":"Doorkeeper","fields":[{"case":"Get","fields":[{"checkpoint":{"channel":"0","doorkeeperRole":null,"enteredUserRole":null,"newcomerWelcomeMessage":null,"returnedWelcomeMessage":"1234"},"inner":{"channel":null,"newcomerWelcomeMessage":"NewcomerWelcomeMessage"},"exit":{"channel":null,"goodbyeMessage":null}}]}]}}"""
+                let exp = """{"id":"42","data":{"case":"Doorkeeper","fields":[{"case":"Get","fields":[{"checkpoint":null,"inner":{"channel":{"isEnabled":true,"value":"0"},"newcomerWelcomeMessage":null,"newcomerWelcomeMessageLog":{"isEnabled":false,"value":null}},"exit":null,"log":null}]}]}}"""
 
                 Assert.Equal("", exp, act)
 
-                let act = Api.ApiProtocol.Request.Deserialize exp
+                let json = """{"id":"42","data":{"case":"Doorkeeper","fields":[{"case":"Get","fields":[{"inner":{"channel":{"isEnabled":true,"value":"0"},"newcomerWelcomeMessageLog":{"isEnabled":false,"value":null}}}]}]}}"""
+                let act = Api.ApiProtocol.Request.Deserialize json
 
                 Assert.Equal("", Ok sample, act)
 

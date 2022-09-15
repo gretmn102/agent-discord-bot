@@ -79,7 +79,7 @@ module Builder =
 open Builder
 
 type SettingReq =
-    | Set of Result<Setting.MainData, string>
+    | Set of Result<Api.TransferTypes.MainData, string>
     | Get
 
 type ActionReq =
@@ -103,7 +103,7 @@ module Parser =
         >>. (pcodeBlock <|> manySatisfy (fun _ -> true))
         |>> (fun str ->
             try
-                let passSettings: Setting.MainData = Json.des str
+                let passSettings: Api.TransferTypes.MainData = Api.Serializer.des str
                 Result.Ok passSettings
             with e ->
                 Result.Error e.Message
@@ -371,7 +371,7 @@ let actionReduce
 let settingReduce
     (e: EventArgs.MessageCreateEventArgs)
     (msg: SettingReq)
-    (settings: Setting.GuildData): Setting.GuildData =
+    (settings: State): State =
 
     awaiti <| e.Channel.TriggerTypingAsync()
 
@@ -397,10 +397,8 @@ let settingReduce
             |> isUserHasAdministrativeRight sendMessage currentMember ^<| fun () settings ->
 
             let settings =
-                Setting.GuildData.set
-                    guild.Id
-                    (fun _ -> setting)
-                    settings
+                settings
+                |> Api.set (Api.Snowflake.Create guild.Id, setting)
 
             sendMessage "Done!"
 
@@ -413,7 +411,7 @@ let settingReduce
 
     | SettingReq.Get ->
         let getSetting (guildId: GuildId) next =
-            match Setting.GuildData.tryFind guildId settings with
+            match Api.get (Api.Snowflake.Create guildId) settings with
             | Some newcomersRoles ->
                 next newcomersRoles
             | None ->
@@ -422,14 +420,14 @@ let settingReduce
                         "This server doesn't yet have doorkeeper settings. To set them, use the command:"
                         "```"
                         sprintf ".%s" Parser.setSettingName
-                        Setting.MainData.Sample |> Setting.MainData.Serialize
+                        Setting.MainData.Sample |> Api.Serializer.ser
                         "```"
                     ] |> String.concat "\n"
                 )
 
         getSetting guild.Id <| fun setting ->
             sendMessage (
-                sprintf "```json\n%s\n```" (Setting.MainData.Serialize setting)
+                sprintf "```json\n%s\n```" (Api.Serializer.ser setting)
             )
 
         settings
@@ -555,10 +553,7 @@ let reduce (msg: Msg) (state: State): State =
             actionReduce e msg state
 
         | Request.SettingReq msg ->
-            { state with
-                Settings =
-                    settingReduce e msg state.Settings
-            }
+            settingReduce e msg state
 
     | ApiRequest (req, replyChannel) ->
         let newState, res = Api.requestHandler state req
