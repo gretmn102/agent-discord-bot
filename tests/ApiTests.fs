@@ -4,6 +4,7 @@ open IO.Ably
 open IO.Ably.Realtime
 
 open Types
+open Shared.Api
 
 [<Tests>]
 let snowflakeTests =

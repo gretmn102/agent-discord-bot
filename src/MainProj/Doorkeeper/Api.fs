@@ -1,5 +1,5 @@
 module Doorkeeper.Api
-open Shared
+open Shared.Api
 open Types
 open Model
 

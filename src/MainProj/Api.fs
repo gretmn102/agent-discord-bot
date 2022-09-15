@@ -1,9 +1,8 @@
 module Api
-open Types
+open Shared
 
 module ApiProtocol =
     open Newtonsoft.Json
-    open FsharpMyExtension
 
     type Id = string
 
@@ -40,33 +39,6 @@ module ApiProtocol =
         static member InternalError data: Error<'D> =
             Error.Create(ErrorCode.InternalError, "Internal error", data)
 
-    module JsonSerializer =
-        open Newtonsoft.Json.Serialization
-
-        let jsonSerializer =
-            JsonSerializer.Create(
-                let x =
-                    new JsonSerializerSettings(
-                        ContractResolver = new CamelCasePropertyNamesContractResolver()
-                    )
-
-                x.Converters.Add (new SnowflakeConverter())
-                x.Converters.Add (new NullableSnowflakeConverter())
-                x.Converters.Add FSharpJsonType.SerializeOption.converter
-                x
-            )
-
-        let ser x =
-            use file = new System.IO.StringWriter()
-            use st = new JsonTextWriter(file)
-            jsonSerializer.Serialize(st, x)
-            file.ToString()
-
-        let des (str: string) =
-            use file = new System.IO.StringReader(str)
-            use st = new JsonTextReader(file)
-            jsonSerializer.Deserialize<_>(st)
-
     type Response<'R, 'ErrorData> = {
         Id: Id
         Result: Option<'R>
@@ -89,14 +61,14 @@ module ApiProtocol =
                 }
 
         member this.Serialize(): string =
-            JsonSerializer.ser this
+            Api.Serializer.ser this
 
         static member Deserialize json: Result<Response<'R, 'ErrorData>, Response<'R, string>> =
             try
-                Ok(JsonSerializer.des json)
+                Ok(Api.Serializer.des json)
             with e ->
                 try
-                    let t: Linq.JToken = JsonSerializer.des json
+                    let t: Linq.JToken = Api.Serializer.des json
                     {
                         Id = t.Value "id" // can be null
                         Result = None
@@ -124,14 +96,14 @@ module ApiProtocol =
             }
 
         member this.Serialize(): string =
-            JsonSerializer.ser this
+            Api.Serializer.ser this
 
         static member Deserialize json: Result<Request<'D>, Response<unit, string>> =
             try
-                Ok(JsonSerializer.des json)
+                Ok(Api.Serializer.des json)
             with e ->
                 try
-                    let t: Linq.JToken = JsonSerializer.des json
+                    let t: Linq.JToken = Api.Serializer.des json
                     {
                         Id = t.Value "id" // can be null
                         Result = None

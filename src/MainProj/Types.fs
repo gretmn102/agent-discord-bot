@@ -23,48 +23,6 @@ type EmojiId = uint64
 type RoleId = uint64
 type WebhookId = uint64
 
-[<Struct>]
-type Snowflake =
-    { v: uint64 }
-    with
-        static member Create v = { v = v }
-
-type SnowflakeConverter() =
-    inherit Newtonsoft.Json.JsonConverter<Snowflake>()
-
-    override x.WriteJson(writer: Newtonsoft.Json.JsonWriter, value: Snowflake, serializer: Newtonsoft.Json.JsonSerializer) =
-        writer.WriteValue(string value.v)
-
-    override x.ReadJson(reader: Newtonsoft.Json.JsonReader, objectType: System.Type, existingValue: Snowflake, hasExistingValue: bool, serializer: Newtonsoft.Json.JsonSerializer): Snowflake =
-        if hasExistingValue then
-            existingValue
-        else
-            let res = reader.Value :?> string
-            match System.UInt64.TryParse res with
-            | true, v -> Snowflake.Create v
-            | false, _ -> failwithf "snowflake parse error: %A" res
-
-type NullableSnowflakeConverter() =
-    inherit Newtonsoft.Json.JsonConverter<System.Nullable<Snowflake>>()
-
-    override x.WriteJson(writer: Newtonsoft.Json.JsonWriter, value: System.Nullable<Snowflake>, serializer: Newtonsoft.Json.JsonSerializer) =
-        if value.HasValue then
-            writer.WriteValue(string value.Value.v)
-        else
-            writer.WriteValue(null: obj)
-
-    override x.ReadJson(reader: Newtonsoft.Json.JsonReader, objectType: System.Type, existingValue: System.Nullable<Snowflake>, hasExistingValue: bool, serializer: Newtonsoft.Json.JsonSerializer): System.Nullable<Snowflake> =
-        if hasExistingValue then
-            existingValue
-        else
-            match reader.Value with
-            | null -> System.Nullable()
-            | :? string as v ->
-                match System.UInt64.TryParse v with
-                | true, v -> System.Nullable(Snowflake.Create v)
-                | false, _ -> failwithf "snowflake parse error: %A" v
-            | x -> failwithf "snowflake parse error: expected string but %A" x
-
 type MessagePath =
     {
         GuildId: GuildId
