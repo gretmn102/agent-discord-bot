@@ -76,6 +76,25 @@ module Builder =
             sendMessage "You don't have administration permission"
             state
 
+    let send guild user message channel =
+        getEnabledOptionValueSilent message <| fun message ->
+            getEnabledOptionValueSilent channel <| fun channelId ->
+            getChannelSilent channelId guild <| fun channel ->
+            sendTemplateMessage user channel message
+
+    let r = System.Random()
+    let sendRandom guild user message channel =
+        getEnabledOptionValueSilent message <| fun messages ->
+            let len = Array.length messages
+            if len > 0 then
+                getEnabledOptionValueSilent channel <| fun channelId ->
+                getChannelSilent channelId guild <| fun channel ->
+
+                let n = r.Next(0, len)
+                let message = messages.[n]
+
+                sendTemplateMessage user channel message
+
 open Builder
 
 type SettingReq =
@@ -324,21 +343,17 @@ let actionReduce
             )
 
         let sendWelcomeMessage targetUser isUserNewcomer (setting: Setting.MainData) =
-            let send message channel =
-                getEnabledOptionValueSilent message <| fun message ->
-                    getEnabledOptionValueSilent channel <| fun channelId ->
-                    getChannelSilent channelId guild <| fun channel ->
-                    sendTemplateMessage targetUser channel message
-
+            let send = send guild targetUser
+            let sendRandom = sendRandom guild targetUser
             if isUserNewcomer then
                 let inner = setting.Inner
-                send inner.NewcomerWelcomeMessage inner.Channel
+                sendRandom inner.NewcomerWelcomeMessage inner.Channel
 
                 let log = setting.Log
                 send inner.NewcomerWelcomeMessageLog log.Channel
             else
                 let inner = setting.Inner
-                send inner.ReturnedWelcomeMessage inner.Channel
+                sendRandom inner.ReturnedWelcomeMessage inner.Channel
 
                 let log = setting.Log
                 send inner.ReturnedWelcomeMessageLog log.Channel
@@ -456,12 +471,6 @@ let reduce (msg: Msg) (state: State): State =
             )
             |> next
 
-        let send message channel =
-            getEnabledOptionValueSilent message <| fun message ->
-                getEnabledOptionValueSilent channel <| fun channelId ->
-                getChannelSilent channelId guild <| fun channel ->
-                sendTemplateMessage currentUser channel message
-
         state
         |> isUserNotBot currentUser ^<| fun () ->
 
@@ -473,17 +482,18 @@ let reduce (msg: Msg) (state: State): State =
 
             getUserData <| fun userData ->
 
+            let send = send guild currentUser
+            let sendRandom = sendRandom guild currentUser
+            let log = setting.Log
             match userData with
             | None ->
-                send checkpoint.NewcomerWelcomeMessage checkpoint.Channel
+                sendRandom checkpoint.NewcomerWelcomeMessage checkpoint.Channel
 
-                let log = setting.Log
                 send checkpoint.NewcomerWelcomeMessageLog log.Channel
 
             | Some (userData, userDatas) ->
-                send checkpoint.ReturnedWelcomeMessage checkpoint.Channel
+                sendRandom checkpoint.ReturnedWelcomeMessage checkpoint.Channel
 
-                let log = setting.Log
                 send checkpoint.ReturnedWelcomeMessageLog log.Channel
 
             state
@@ -492,12 +502,6 @@ let reduce (msg: Msg) (state: State): State =
         let currentUser = e.Member
         let guild = e.Guild
         let guildId = guild.Id
-
-        let send message channel =
-            getEnabledOptionValueSilent message <| fun message ->
-                getEnabledOptionValueSilent channel <| fun channelId ->
-                getChannelSilent channelId guild <| fun channel ->
-                sendTemplateMessage currentUser channel message
 
         state
         |> isUserNotBot currentUser ^<| fun () ->
@@ -509,15 +513,17 @@ let reduce (msg: Msg) (state: State): State =
                 e.Member.Roles
                 |> Seq.exists (fun x -> x.Id = enteredRole)
 
+            let send = send guild currentUser
+            let sendRandom = sendRandom guild currentUser
             let log = setting.Log
             if isUserInCheckpoint () then
                 let checkpoint = setting.Checkpoint
-                send checkpoint.GoodbyeMessage checkpoint.Channel
+                sendRandom checkpoint.GoodbyeMessage checkpoint.Channel
 
                 send checkpoint.GoodbyeMessageLog log.Channel
             else
                 let exit = setting.Exit
-                send exit.GoodbyeMessage exit.Channel
+                sendRandom exit.GoodbyeMessage exit.Channel
 
                 send exit.GoodbyeMessageLog log.Channel
 

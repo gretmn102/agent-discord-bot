@@ -50,11 +50,11 @@ module TransferTypes =
             /// dictionary key is the role name that is specified in the pass command
             IssuedRoleIds: Optional<EnabledOptionValue<(string * RoleId) []>>
             EnteredUserRole: Optional<EnabledOptionValue<RoleId>>
-            NewcomerWelcomeMessage: Optional<EnabledOptionValue<MessageRaw>>
+            NewcomerWelcomeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             NewcomerWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
-            ReturnedWelcomeMessage: Optional<EnabledOptionValue<MessageRaw>>
+            ReturnedWelcomeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             ReturnedWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
-            GoodbyeMessage: Optional<EnabledOptionValue<MessageRaw>>
+            GoodbyeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             GoodbyeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
         }
         static member UpdateDbData(newData: Checkpoint, oldData: Setting.Checkpoint): Setting.Checkpoint =
@@ -87,9 +87,9 @@ module TransferTypes =
     type Inner =
         {
             Channel: Optional<EnabledOptionValue<ChannelId>>
-            NewcomerWelcomeMessage: Optional<EnabledOptionValue<MessageRaw>>
+            NewcomerWelcomeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             NewcomerWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
-            ReturnedWelcomeMessage: Optional<EnabledOptionValue<MessageRaw>>
+            ReturnedWelcomeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             ReturnedWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
         }
         static member UpdateDbData(newData: Inner, oldData: Setting.Inner): Setting.Inner =
@@ -112,7 +112,7 @@ module TransferTypes =
     type Exit =
         {
             Channel: Optional<EnabledOptionValue<ChannelId>>
-            GoodbyeMessage: Optional<EnabledOptionValue<MessageRaw>>
+            GoodbyeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             GoodbyeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
         }
         static member UpdateDbData(newData: Exit, oldData: Setting.Exit): Setting.Exit =

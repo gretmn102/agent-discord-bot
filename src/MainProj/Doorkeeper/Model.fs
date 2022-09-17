@@ -241,11 +241,11 @@ module Setting =
             /// dictionary key is the role name that is specified in the pass command
             IssuedRoleIds: EnabledOptionValue<(string * RoleId) []>
             EnteredUserRole: EnabledOptionValue<RoleId>
-            NewcomerWelcomeMessage: EnabledOptionValue<MessageRaw>
+            NewcomerWelcomeMessage: EnabledOptionValue<MessageRaw []>
             NewcomerWelcomeMessageLog: EnabledOptionValue<MessageRaw>
-            ReturnedWelcomeMessage: EnabledOptionValue<MessageRaw>
+            ReturnedWelcomeMessage: EnabledOptionValue<MessageRaw []>
             ReturnedWelcomeMessageLog: EnabledOptionValue<MessageRaw>
-            GoodbyeMessage: EnabledOptionValue<MessageRaw>
+            GoodbyeMessage: EnabledOptionValue<MessageRaw []>
             GoodbyeMessageLog: EnabledOptionValue<MessageRaw>
         }
         static member Empty =
@@ -281,18 +281,21 @@ module Setting =
                     |> EnabledOptionValue.Init
                 NewcomerWelcomeMessage =
                     "<@userMention>, welcome to our guild!"
+                    |> Array.singleton
                     |> EnabledOptionValue.Init
                 NewcomerWelcomeMessageLog =
                     "<@userMention> entered to guild!"
                     |> EnabledOptionValue.Init
                 ReturnedWelcomeMessage =
                     "<@userMention>, welcome back!"
+                    |> Array.singleton
                     |> EnabledOptionValue.Init
                 ReturnedWelcomeMessageLog =
                     "<@userMention> returned to us"
                     |> EnabledOptionValue.Init
                 GoodbyeMessage =
                     "<@userMention> has left"
+                    |> Array.singleton
                     |> EnabledOptionValue.Init
                 GoodbyeMessageLog =
                     "<@userName> has left"
@@ -302,9 +305,9 @@ module Setting =
     type Inner =
         {
             Channel: EnabledOptionValue<ChannelId>
-            NewcomerWelcomeMessage: EnabledOptionValue<MessageRaw>
+            NewcomerWelcomeMessage: EnabledOptionValue<MessageRaw []>
             NewcomerWelcomeMessageLog: EnabledOptionValue<MessageRaw>
-            ReturnedWelcomeMessage: EnabledOptionValue<MessageRaw>
+            ReturnedWelcomeMessage: EnabledOptionValue<MessageRaw []>
             ReturnedWelcomeMessageLog: EnabledOptionValue<MessageRaw>
         }
         static member Empty =
@@ -322,12 +325,14 @@ module Setting =
                     |> EnabledOptionValue.Init
                 NewcomerWelcomeMessage =
                     "<@userMention>, welcome to the club!"
+                    |> Array.singleton
                     |> EnabledOptionValue.Init
                 NewcomerWelcomeMessageLog =
                     "<@userName> is let in"
                     |> EnabledOptionValue.Init
                 ReturnedWelcomeMessage =
                     "<@userMention> returned to the club!"
+                    |> Array.singleton
                     |> EnabledOptionValue.Init
                 ReturnedWelcomeMessageLog =
                     "<@userName> is let in"
@@ -338,7 +343,7 @@ module Setting =
     type Exit =
         {
             Channel: EnabledOptionValue<ChannelId>
-            GoodbyeMessage: EnabledOptionValue<MessageRaw>
+            GoodbyeMessage: EnabledOptionValue<MessageRaw []>
             GoodbyeMessageLog: EnabledOptionValue<MessageRaw>
         }
         static member Empty =
@@ -354,6 +359,7 @@ module Setting =
                     |> EnabledOptionValue.Init
                 GoodbyeMessage =
                     "<@userMention> has left"
+                    |> Array.singleton
                     |> EnabledOptionValue.Init
                 GoodbyeMessageLog =
                     "<@userName> has left"
@@ -539,7 +545,7 @@ module Setting =
                                                     |> Option.defaultValue EnabledOptionValue.Empty
                                                 NewcomerWelcomeMessage =
                                                     x.PassSettings
-                                                    |> Option.map (fun x -> x.WelcomeMessage)
+                                                    |> Option.map (fun x -> x.WelcomeMessage |> Array.singleton)
                                                     |> Option.map EnabledOptionValue.Init
                                                     |> Option.defaultValue EnabledOptionValue.Empty
                                                 NewcomerWelcomeMessageLog =
@@ -591,6 +597,7 @@ module Setting =
                                                     |> Option.defaultValue EnabledOptionValue.Empty
                                                 NewcomerWelcomeMessage =
                                                     x.TemplateMessage
+                                                    |> Option.map Array.singleton
                                                     |> Option.map EnabledOptionValue.Init
                                                     |> Option.defaultValue EnabledOptionValue.Empty
                                                 NewcomerWelcomeMessageLog =
@@ -600,6 +607,7 @@ module Setting =
                                                 ReturnedWelcomeMessage =
                                                     x.LeaversChannelMessage
                                                     |> Option.map (fun x -> x.Message)
+                                                    |> Option.map Array.singleton
                                                     |> Option.map EnabledOptionValue.Init
                                                     |> Option.defaultValue EnabledOptionValue.Empty
                                                 ReturnedWelcomeMessageLog =
@@ -616,6 +624,7 @@ module Setting =
                                                     |> Option.defaultValue EnabledOptionValue.Empty
                                                 GoodbyeMessage =
                                                     x.TemplateLeaveMessage
+                                                    |> Option.map Array.singleton
                                                     |> Option.map EnabledOptionValue.Init
                                                     |> Option.defaultValue EnabledOptionValue.Empty
                                             }
