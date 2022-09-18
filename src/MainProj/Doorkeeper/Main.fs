@@ -233,7 +233,8 @@ let actionReduce
                         "This server doesn't yet have doorkeeper settings. To set them, use the command:"
                         "```"
                         sprintf ".%s" Parser.setSettingName
-                        Setting.MainData.Sample |> Setting.MainData.Serialize
+                        // todo: exception: max length 4096
+                        // Setting.MainData.Sample |> Setting.MainData.Serialize
                         "```"
                     ] |> String.concat "\n"
                 )
@@ -328,17 +329,27 @@ let actionReduce
                 Map.tryFind targetUserId userDatas
             )
 
-        let returnAllRoles (checkpoint: Setting.Checkpoint) (userData: Leavers.Data) (targetUser: Entities.DiscordMember) =
+        let returnAllRoles (setting: Setting.MainData) (userData: Leavers.Data) (targetUser: Entities.DiscordMember) =
+            let enteredUserRole = EnabledOptionValue.toOption setting.Checkpoint.EnteredUserRole
+            let returnedUserExcludeRoles = EnabledOptionValue.toOption setting.Inner.ReturnedUserExcludeRoles
+
             let isEnteredUserRoleId =
-                match checkpoint.EnteredUserRole.Value with
+                match enteredUserRole with
                 | Some enteredUserRoleId ->
                     (=) enteredUserRoleId
                 | None ->
                     fun _ -> false
 
+            let isReturnedUserExcludeRoleId =
+                match returnedUserExcludeRoles with
+                | Some returnedUserExcludeRoles ->
+                    fun x -> Seq.contains x returnedUserExcludeRoles
+                | None ->
+                    fun _ -> false
+
             userData.RoleIds
             |> Array.iter (fun roleId ->
-                if not (isEnteredUserRoleId roleId) then
+                if not (isEnteredUserRoleId roleId || isReturnedUserExcludeRoleId roleId) then
                     grantRoleSilent guild roleId targetUser
             )
 
@@ -378,7 +389,7 @@ let actionReduce
 
         userData
         |> Option.iter (fun userData ->
-            returnAllRoles checkpoint userData targetUser
+            returnAllRoles setting userData targetUser
         )
 
         roleKeys
@@ -463,13 +474,11 @@ let reduce (msg: Msg) (state: State): State =
         let guild = e.Guild
         let guildId = guild.Id
 
-        let getUserData next =
+        let getUserData targetUserId =
             Map.tryFind guildId state.Leavers
             |> Option.bind (fun userDatas ->
-                Map.tryFind currentUser.Id userDatas
-                |> Option.map (fun userData -> userData, userDatas)
+                Map.tryFind targetUserId userDatas
             )
-            |> next
 
         state
         |> isUserNotBot currentUser ^<| fun () ->
@@ -480,19 +489,27 @@ let reduce (msg: Msg) (state: State): State =
             getEnabledOptionValueSilent checkpoint.EnteredUserRole <| fun roleIds ->
                 grantRoleSilent guild roleIds currentUser
 
-            getUserData <| fun userData ->
-
             let send = send guild currentUser
             let sendRandom = sendRandom guild currentUser
             let log = setting.Log
-            match userData with
+            match getUserData currentUser.Id with
             | None ->
                 sendRandom checkpoint.NewcomerWelcomeMessage checkpoint.Channel
 
                 send checkpoint.NewcomerWelcomeMessageLog log.Channel
 
-            | Some (userData, userDatas) ->
+            | Some userData ->
                 sendRandom checkpoint.ReturnedWelcomeMessage checkpoint.Channel
+
+                match EnabledOptionValue.toOption checkpoint.ReturnedUserIncludeRoles with
+                | None -> ()
+                | Some returnedUserIncludeRoles ->
+                    if not <| Array.isEmpty returnedUserIncludeRoles then
+                        userData.RoleIds
+                        |> Array.iter (fun roleId ->
+                            if Array.contains roleId returnedUserIncludeRoles then
+                                grantRoleSilent guild roleId currentUser
+                        )
 
                 send checkpoint.ReturnedWelcomeMessageLog log.Channel
 

@@ -243,6 +243,8 @@ module Setting =
             EnteredUserRole: EnabledOptionValue<RoleId>
             NewcomerWelcomeMessage: EnabledOptionValue<MessageRaw []>
             NewcomerWelcomeMessageLog: EnabledOptionValue<MessageRaw>
+            /// a list of roles that need to be returned to the returned user if he had such
+            ReturnedUserIncludeRoles: EnabledOptionValue<RoleId []>
             ReturnedWelcomeMessage: EnabledOptionValue<MessageRaw []>
             ReturnedWelcomeMessageLog: EnabledOptionValue<MessageRaw>
             GoodbyeMessage: EnabledOptionValue<MessageRaw []>
@@ -256,6 +258,7 @@ module Setting =
                 EnteredUserRole = EnabledOptionValue.Empty
                 NewcomerWelcomeMessage = EnabledOptionValue.Empty
                 NewcomerWelcomeMessageLog = EnabledOptionValue.Empty
+                ReturnedUserIncludeRoles = EnabledOptionValue.Empty
                 ReturnedWelcomeMessage = EnabledOptionValue.Empty
                 ReturnedWelcomeMessageLog = EnabledOptionValue.Empty
                 GoodbyeMessage = EnabledOptionValue.Empty
@@ -286,6 +289,8 @@ module Setting =
                 NewcomerWelcomeMessageLog =
                     "<@userMention> entered to guild!"
                     |> EnabledOptionValue.Init
+                ReturnedUserIncludeRoles =
+                    EnabledOptionValue.Empty
                 ReturnedWelcomeMessage =
                     "<@userMention>, welcome back!"
                     |> Array.singleton
@@ -307,6 +312,7 @@ module Setting =
             Channel: EnabledOptionValue<ChannelId>
             NewcomerWelcomeMessage: EnabledOptionValue<MessageRaw []>
             NewcomerWelcomeMessageLog: EnabledOptionValue<MessageRaw>
+            ReturnedUserExcludeRoles: EnabledOptionValue<RoleId []>
             ReturnedWelcomeMessage: EnabledOptionValue<MessageRaw []>
             ReturnedWelcomeMessageLog: EnabledOptionValue<MessageRaw>
         }
@@ -315,6 +321,7 @@ module Setting =
                 Channel = EnabledOptionValue.Empty
                 NewcomerWelcomeMessage = EnabledOptionValue.Empty
                 NewcomerWelcomeMessageLog = EnabledOptionValue.Empty
+                ReturnedUserExcludeRoles = EnabledOptionValue.Empty
                 ReturnedWelcomeMessage = EnabledOptionValue.Empty
                 ReturnedWelcomeMessageLog = EnabledOptionValue.Empty
             }
@@ -330,6 +337,8 @@ module Setting =
                 NewcomerWelcomeMessageLog =
                     "<@userName> is let in"
                     |> EnabledOptionValue.Init
+                ReturnedUserExcludeRoles =
+                    EnabledOptionValue.Empty
                 ReturnedWelcomeMessage =
                     "<@userMention> returned to the club!"
                     |> Array.singleton

@@ -30,6 +30,12 @@ module TransferTypes =
 
             newData |> ofSnowflake |> Option.defaultValue oldData
 
+        let convertUInt64Array newData oldData =
+            let ofSnowflake =
+                Option.map (EnabledOptionValue.map (Array.map (fun x -> x.v)))
+
+            newData |> ofSnowflake |> Option.defaultValue oldData
+
     module OfDb =
         let convert newData =
             newData |> toSnowflake |> Some
@@ -43,6 +49,12 @@ module TransferTypes =
 
             newData |> toSnowflake |> Some
 
+        let convertUInt64Array newData =
+            let toSnowflake =
+                EnabledOptionValue.map (Array.map Snowflake.Create)
+
+            newData |> toSnowflake |> Some
+
     type Checkpoint =
         {
             Channel: Optional<EnabledOptionValue<ChannelId>>
@@ -52,6 +64,7 @@ module TransferTypes =
             EnteredUserRole: Optional<EnabledOptionValue<RoleId>>
             NewcomerWelcomeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             NewcomerWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
+            ReturnedUserIncludeRoles: Optional<EnabledOptionValue<RoleId []>>
             ReturnedWelcomeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             ReturnedWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
             GoodbyeMessage: Optional<EnabledOptionValue<MessageRaw []>>
@@ -65,6 +78,7 @@ module TransferTypes =
                 EnteredUserRole = UpdateDb.convert newData.EnteredUserRole oldData.EnteredUserRole
                 NewcomerWelcomeMessage = UpdateDb.convertMessage newData.NewcomerWelcomeMessage oldData.NewcomerWelcomeMessage
                 NewcomerWelcomeMessageLog = UpdateDb.convertMessage newData.NewcomerWelcomeMessageLog oldData.NewcomerWelcomeMessageLog
+                ReturnedUserIncludeRoles = UpdateDb.convertUInt64Array newData.ReturnedUserIncludeRoles oldData.ReturnedUserIncludeRoles
                 ReturnedWelcomeMessage = UpdateDb.convertMessage newData.ReturnedWelcomeMessage oldData.ReturnedWelcomeMessage
                 ReturnedWelcomeMessageLog = UpdateDb.convertMessage newData.ReturnedWelcomeMessageLog oldData.ReturnedWelcomeMessageLog
                 GoodbyeMessage = UpdateDb.convertMessage newData.GoodbyeMessage oldData.GoodbyeMessage
@@ -78,6 +92,7 @@ module TransferTypes =
                 EnteredUserRole = OfDb.convert newData.EnteredUserRole
                 NewcomerWelcomeMessage = OfDb.convertMessage newData.NewcomerWelcomeMessage
                 NewcomerWelcomeMessageLog = OfDb.convertMessage newData.NewcomerWelcomeMessageLog
+                ReturnedUserIncludeRoles = OfDb.convertUInt64Array newData.ReturnedUserIncludeRoles
                 ReturnedWelcomeMessage = OfDb.convertMessage newData.ReturnedWelcomeMessage
                 ReturnedWelcomeMessageLog = OfDb.convertMessage newData.ReturnedWelcomeMessageLog
                 GoodbyeMessage = OfDb.convertMessage newData.GoodbyeMessage
@@ -89,6 +104,7 @@ module TransferTypes =
             Channel: Optional<EnabledOptionValue<ChannelId>>
             NewcomerWelcomeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             NewcomerWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
+            ReturnedUserExcludeRoles: Optional<EnabledOptionValue<UserId []>>
             ReturnedWelcomeMessage: Optional<EnabledOptionValue<MessageRaw []>>
             ReturnedWelcomeMessageLog: Optional<EnabledOptionValue<MessageRaw>>
         }
@@ -97,6 +113,7 @@ module TransferTypes =
                 Channel = UpdateDb.convert newData.Channel oldData.Channel
                 NewcomerWelcomeMessage = UpdateDb.convertMessage newData.NewcomerWelcomeMessage oldData.NewcomerWelcomeMessage
                 NewcomerWelcomeMessageLog = UpdateDb.convertMessage newData.NewcomerWelcomeMessageLog oldData.NewcomerWelcomeMessageLog
+                ReturnedUserExcludeRoles = UpdateDb.convertMessage newData.ReturnedUserExcludeRoles oldData.ReturnedUserExcludeRoles
                 ReturnedWelcomeMessage = UpdateDb.convertMessage newData.ReturnedWelcomeMessage oldData.ReturnedWelcomeMessage
                 ReturnedWelcomeMessageLog = UpdateDb.convertMessage newData.ReturnedWelcomeMessageLog oldData.ReturnedWelcomeMessageLog
             }
@@ -105,6 +122,7 @@ module TransferTypes =
                 Channel = OfDb.convert newData.Channel
                 NewcomerWelcomeMessage = OfDb.convertMessage newData.NewcomerWelcomeMessage
                 NewcomerWelcomeMessageLog = OfDb.convertMessage newData.NewcomerWelcomeMessageLog
+                ReturnedUserExcludeRoles = OfDb.convertMessage newData.ReturnedUserExcludeRoles
                 ReturnedWelcomeMessage = OfDb.convertMessage newData.ReturnedWelcomeMessage
                 ReturnedWelcomeMessageLog = OfDb.convertMessage newData.ReturnedWelcomeMessageLog
             }

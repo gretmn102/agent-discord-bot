@@ -78,6 +78,12 @@ module EnabledOptionValue =
                 Value = None
             }
 
+    let toOption (v: EnabledOptionValue<'a>): 'a option =
+        if v.IsEnabled then
+            v.Value
+        else
+            None
+
 module StandartDiscordEmoji =
     let emojiSheetMapWidth = 42
 
