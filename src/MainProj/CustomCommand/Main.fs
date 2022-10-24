@@ -16,6 +16,7 @@ type Act =
     | Battery
     | Catch
     | Angry
+    | FortuneCookies
 
 type Msg = Act * UserId option
 
@@ -36,6 +37,7 @@ module Parser =
             skipStringCI "battery" >>% Battery
             skipStringCI "catch" >>% Catch
             skipStringCI "angry" >>% Angry
+            skipStringCI "печенье" >>% FortuneCookies
         ]
 
     let start: Msg Parser =
@@ -202,3 +204,88 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) ((msg, wh
             (sprintf "**%s** злится на **%s**")
             "На самого себя нельзя злиться, ну в самом деле!"
             "На меня не надо злиться, я хороший!"
+    | FortuneCookies ->
+        let predictions =
+            [|
+                "Всё будет хорошо <:Demon_Kingsmile:877678191693692969>"
+                "Некто из прошлого встретится с тобой в этом месяце 🖖"
+                "Сегодня свободное время лучше всего уделить учёбе ✍️"
+                "Не пей на ночь много жидкости, даже если это ром, арр! 🏴‍☠️"
+                "Сегодня лучший день, чтобы отведать новое блюдо!"
+                "Прогулка по палубе и хорошая пиратская музыка — вот что приведёт твои мысли в порядок, арр! 🏴‍☠️"
+                "Котан, сегодня особый риск — береги хвост!"
+                "После сильного шторма обязательно наступает безветрие — будь силён и терпелив"
+                "Какую бы русалку или сирену ты не встретил, не позволяй ей собой командовать! 🧜‍♀️"
+                "Богиня печенек не одобрит того, что ты делаешь с печеньем <:satana:901368411295215636>"
+                "Берегись чаек: эти ворюги утащат весь улов"
+                "Держись за мачту во время шторма! 🌪️"
+                "С крякеном можно дружить, даже если он размером с корабль и готов потопить всё на свете! <:satana:901368411295215636>"
+                "Бойся дождя из печенек! <:satana:901368411295215636>"
+
+                [
+                    "Бывает Лу́ня милой,"
+                    "Бывает Луня злой,"
+                    "Бывает нетерпимой,"
+                    "Беги, пока живой <:Demon_Kingsmile:877678191693692969>"
+                ] |> String.concat "\n"
+            |]
+
+        let send whomId =
+            let whom =
+                whomId
+                |> Option.map (fun whomId ->
+                    try
+                        await (client.GetUserAsync whomId)
+                        |> Some
+                        |> Ok
+                    with e ->
+                        sprintf "Пользователя %d не существует" whomId
+                        |> Error
+                )
+                |> Option.defaultValue (Ok None)
+
+            let mkContent prediction =
+                match whom with
+                | Ok whom ->
+                    match whom with
+                    | None ->
+                        sprintf "<@%d>, печенька с предсказанием гласит:\n\n%s"
+                            e.Author.Id
+                            prediction
+                    | Some whom ->
+                        let authorId = e.Author.Id
+                        let botId = client.CurrentUser.Id
+
+                        if whom.Id = authorId then
+                            sprintf "<@%d>, печенька с предсказанием гласит:\n\n%s"
+                                authorId
+                                prediction
+                        elif whom.Id = botId then
+                            sprintf "<@%d>, мне предсказания не нужны: я и так знаю, что кожанные мешки проиграют машинам 🤖"
+                                authorId
+                        else
+                            sprintf "<@%d> зачитывает печеньку с предсказанием <@%d>:\n\n%s"
+                                authorId
+                                whom.Id
+                                prediction
+                | Error errMsg -> errMsg
+
+            let prediction =
+                predictions.[r.Next(0, predictions.Length)]
+
+            let b = Entities.DiscordEmbedBuilder()
+            b.Description <- mkContent prediction
+            b.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+            b.ImageUrl <- "https://cdn.discordapp.com/attachments/912291464074117161/1034055256432193637/l-intro-1608226504-removebg-preview.png"
+
+            awaiti (client.SendMessageAsync (e.Channel, b.Build()))
+
+        match whomId with
+        | Some whomId ->
+            send (Some whomId)
+        | None ->
+            match e.Message.ReferencedMessage with
+            | null ->
+                send whomId
+            | referencedMessage ->
+                send (Some referencedMessage.Author.Id)
