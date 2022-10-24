@@ -25,7 +25,7 @@ let calc =
         match op with
         | Plus -> (+)
         | Minus -> (-)
-        | Times -> (+)
+        | Times -> (*)
         | Divide -> (/)
         | Pow -> fun x y -> System.Math.Pow(x, y)
 
