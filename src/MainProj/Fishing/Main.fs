@@ -1,0 +1,285 @@
+module Fishing.Main
+open DSharpPlus
+
+open Types
+open Extensions
+open Model
+
+type State =
+    {
+        Players: Players.GuildData
+    }
+
+type ActionReq =
+    | ToFish of bait: ItemId option
+    | Inventory
+
+type Request =
+    | ActionReq of ActionReq
+
+module Parser =
+    open FParsec
+
+    open DiscordMessage.Parser
+
+    type 'Result Parser = Primitives.Parser<'Result, unit>
+
+    let paction: _ Parser =
+        let toFish =
+            skipStringCI "рыбачить" .>> spaces
+            >>. opt (many1Satisfy (fun _ -> true))
+
+        choice [
+            toFish |>> ToFish
+            skipStringCI "инвентарь" >>% Inventory
+        ]
+
+    let start: _ Parser =
+        choice [
+            paction |>> Request.ActionReq
+        ]
+
+type Msg =
+    | Request of EventArgs.MessageCreateEventArgs * Request
+    | GetState of AsyncReplyChannel<State>
+
+module InventoryTable =
+    open Shared.Ui.Table
+
+    type SortBy =
+        | SortByName = 0
+        | SortByCount = 1
+
+    let initSetting (state: Inventory): Setting<_, SortBy> =
+        {
+            Id = "InventoryTable"
+
+            Title = "Инвентарь"
+
+            GetHeaders = fun sortBy ->
+                match sortBy with
+                | SortBy.SortByName ->
+                    [| "Название▼"; "ОбщОпыт" |]
+                | SortBy.SortByCount ->
+                    [| "Учасники"; "Кол-во▼" |]
+                | x ->
+                    failwithf "InventoryTable.SortBy %A" x
+
+            GetItems = fun () ->
+                state
+                |> Map.toArray
+
+            ItemsCountPerPage = 10
+
+            SortBy = SortByContainer.Init [|
+                SortBy.SortByName, "Отсортировать по названию"
+                SortBy.SortByCount, "Отсортировать по количеству"
+            |]
+
+            SortFunction = fun sortBy items ->
+                match sortBy with
+                | SortBy.SortByName -> items
+                | SortBy.SortByCount ->
+                    Array.sortByDescending (fun (_, data) -> data.Count) items
+                | x ->
+                    failwithf "MostActiveTable.SortBy %A" x
+
+            MapFunction =
+                fun i (userId, user) ->
+                    [|
+                        userId
+                        string user.Count
+                    |]
+        }
+
+    let createTable
+        (addComponents: Entities.DiscordComponent [] -> _)
+        addEmbed
+        userRanks =
+
+        createTable addComponents addEmbed 1 None (initSetting userRanks)
+
+    let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
+        let state: State = getState ()
+
+        let userRanks =
+            match Players.GuildData.tryFind e.User.Id state.Players with
+            | Some ranking -> ranking.Inventory
+            | None -> Map.empty
+
+        componentInteractionCreateHandle client e (initSetting userRanks)
+
+
+let r = new System.Random()
+
+let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: State) =
+    match msg with
+    | ToFish baitName ->
+        awaiti <| e.Channel.TriggerTypingAsync()
+
+        let send msg =
+            let embed = Entities.DiscordEmbedBuilder()
+            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+            embed.Description <- msg
+
+            let b = Entities.DiscordMessageBuilder()
+            b.Embed <- embed.Build()
+
+            awaiti <| e.Channel.SendMessageAsync b
+
+        let sendCatched (catch: Item) =
+            let msg = sprintf "Поймано \"%s\"!" catch.Name
+            send msg
+
+        let useBaseBaitOrContinue next =
+            match baitName with
+            | Some baitName ->
+                next baitName
+            | None ->
+                let player =
+                    match Players.GuildData.tryFind e.Author.Id state.Players with
+                    | Some player -> player
+                    | None -> Players.MainData.Empty
+
+                let inventory: Inventory =
+                    player.Inventory
+                    |> Inventory.update baseItemId ((+) 1)
+
+                let state =
+                    {
+                        Players =
+                            state.Players
+                            |> Players.GuildData.set
+                                e.Author.Id
+                                (fun p -> { p with Inventory = inventory })
+                    }
+
+                sendCatched items.[baseItemId]
+
+                state
+
+        let getBait baitName next =
+            match Map.tryFind baitName items with
+            | Some bait ->
+                if Array.isEmpty bait.Loot then
+                    let msg = sprintf "На \"%s\" больше ничего словить нельзя." baitName
+                    send msg
+
+                    state
+                else
+                    next bait
+
+            | None ->
+                let msg = sprintf "Предмет \"%s\" в игре не найден." baitName
+                send msg
+
+                state
+
+        let sendThereIsNoMoreBait (bait: Item) =
+            let msg = sprintf "Наживок \"%s\" в инвентаре больше нет." bait.Name
+            send msg
+
+            state
+
+        let getCurrentPlayer bait next =
+            match Players.GuildData.tryFind e.Author.Id state.Players with
+            | Some player ->
+                next player
+            | None ->
+                sendThereIsNoMoreBait bait
+
+        let getBaitFromInventory (bait: Item) (player: Players.MainData) next =
+            match Map.tryFind bait.ItemId player.Inventory with
+            | Some baitInInventory ->
+                if baitInInventory.Count > 0 then
+                    next baitInInventory
+                else
+                    sendThereIsNoMoreBait bait
+            | None ->
+                sendThereIsNoMoreBait bait
+
+        useBaseBaitOrContinue <| fun baitName ->
+        getBait baitName <| fun bait ->
+        getCurrentPlayer bait <| fun player ->
+        getBaitFromInventory bait player <| fun baitInInventory ->
+        // remove bait from inventory
+        let inventory: Inventory =
+            player.Inventory
+            |> Inventory.update bait.ItemId (fun count -> count - 1)
+
+        let loot = bait.Loot
+        let catchId = loot.[r.Next(0, loot.Length)]
+
+        let inventory: Inventory =
+            inventory
+            |> Inventory.update catchId ((+) 1)
+
+        let state =
+            {
+                Players =
+                    state.Players
+                    |> Players.GuildData.set
+                        e.Author.Id
+                        (fun p -> { p with Inventory = inventory })
+            }
+
+        sendCatched items.[catchId]
+
+        state
+
+    | Inventory ->
+        awaiti <| e.Channel.TriggerTypingAsync()
+
+        let b = Entities.DiscordMessageBuilder()
+
+        let userRanks =
+            match Players.GuildData.tryFind e.Author.Id state.Players with
+            | Some ranking -> ranking.Inventory
+            | None -> Map.empty
+
+        InventoryTable.createTable b.AddComponents b.AddEmbed userRanks
+
+        awaiti <| e.Channel.SendMessageAsync b
+        state
+
+let reduce (msg: Msg) (state: State): State =
+    match msg with
+    | Request(e, cmd) ->
+        match cmd with
+        | Request.ActionReq msg ->
+            actionReduce e msg state
+
+    | GetState r ->
+        r.Reply state
+
+        state
+
+let m =
+    let init: State = {
+        Players = Players.GuildData.init Db.database
+    }
+
+    MailboxProcessor.Start (fun mail ->
+        let rec loop (state: State) =
+            async {
+                let! msg = mail.Receive()
+                let state =
+                    try
+                        reduce msg state
+                    with e ->
+                        printfn "%A" e
+                        state
+
+                return! loop state
+            }
+        loop init
+    )
+
+let exec e msg =
+    m.Post (Request (e, msg))
+
+let componentInteractionCreateHandle client e =
+    InventoryTable.componentInteractionCreateHandle
+        (fun () -> m.PostAndReply GetState)
+        client
+        e

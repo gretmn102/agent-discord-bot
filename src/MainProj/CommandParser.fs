@@ -57,6 +57,8 @@ type Cmd =
 
     | CalcCmd of Calc.Main.Request
 
+    | FishingCmd of Fishing.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -117,6 +119,8 @@ let pcommand: _ Parser =
         EmojiFont.Main.Parser.start |>> EmojiFontCmd
 
         Calc.Main.Parser.start |>> CalcCmd
+
+        Fishing.Main.Parser.start |>> FishingCmd
     ]
 
 let start botId str =
