@@ -114,14 +114,20 @@ type Inventory = Map<ItemId, InventoryItem>
 [<RequireQualifiedAccess>]
 module Inventory =
     let update itemId upd (inventory: Inventory) =
-        let inventoryItem =
-            match Map.tryFind itemId inventory with
-            | Some inventoryItem ->
-                InventoryItem.updateCount upd inventoryItem
-            | None ->
-                InventoryItem.init itemId (upd 0)
+        match Map.tryFind itemId inventory with
+        | Some inventoryItem ->
+            let item = InventoryItem.updateCount upd inventoryItem
+            if item.Count > 0 then
+                Map.add itemId item inventory
+            else
+                Map.remove itemId inventory
 
-        Map.add itemId inventoryItem inventory
+        | None ->
+            let item = InventoryItem.init itemId (upd 0)
+            if item.Count > 0 then
+                Map.add itemId item inventory
+            else
+                inventory
 
 MongoDB.Bson.Serialization.BsonSerializer.RegisterSerializer(typeof<Inventory>, new Db.MapSerializer<ItemId, InventoryItem>())
 
