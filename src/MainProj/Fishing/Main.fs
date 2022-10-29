@@ -1,5 +1,6 @@
 module Fishing.Main
 open DSharpPlus
+open FsharpMyExtension
 
 open Types
 open Extensions
@@ -24,14 +25,18 @@ module Parser =
 
     type 'Result Parser = Primitives.Parser<'Result, unit>
 
+    module CommandNames =
+        let toFish = "рыбачить"
+        let inventory = "инвентарь"
+
     let paction: _ Parser =
         let toFish =
-            skipStringCI "рыбачить" .>> spaces
+            skipStringCI CommandNames.toFish .>> spaces
             >>. opt (many1Satisfy (fun _ -> true))
 
         choice [
             toFish |>> ToFish
-            skipStringCI "инвентарь" >>% Inventory
+            skipStringCI CommandNames.inventory >>% Inventory
         ]
 
     let start: _ Parser =
@@ -41,6 +46,7 @@ module Parser =
 
 type Msg =
     | Request of EventArgs.MessageCreateEventArgs * Request
+    | ToFishHandle of EventArgs.ComponentInteractionCreateEventArgs * bait: ItemId option
     | GetState of AsyncReplyChannel<State>
 
 module InventoryTable =
@@ -109,24 +115,120 @@ module InventoryTable =
 
         componentInteractionCreateHandle client e (initSetting userRanks)
 
+module BaitChoiceUi =
+    type ComponentId =
+        | BaitChoiseId = 0
+
+    type ComponentState<'Data> =
+        {
+            Id: string
+            ComponentId: ComponentId
+            Data: 'Data
+        }
+        static member Serialize (x: ComponentState<'Data>) =
+            Json.serNotIndent x
+        static member Deserialize (s: string): Result<ComponentState<'Data>, string> =
+            try
+                Ok(Json.des s)
+            with e ->
+                Error(e.Message)
+
+    type Data =
+        {
+            OwnerId: UserId
+        }
+
+    type BaitComponentState = ComponentState<Data>
+
+    let componentId = "BaitChoiceComponentId"
+
+    let init (baits: Item list) (e: EventArgs.MessageCreateEventArgs) =
+        let userId = e.Author.Id
+
+        let embed = Entities.DiscordEmbedBuilder()
+        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+        embed.Description <- sprintf "<@%d>, выбери наживку:" userId
+
+        let b = DSharpPlus.Entities.DiscordMessageBuilder()
+        b.Embed <- embed.Build()
+
+        let options =
+            withoutBait::baits
+            |> List.mapi (fun i item ->
+                DSharpPlus.Entities.DiscordSelectComponentOption(item.Name, item.ItemId)
+            )
+
+        let componentState =
+            let state: BaitComponentState =
+                {
+                    Id = componentId
+                    ComponentId = ComponentId.BaitChoiseId
+                    Data = {
+                        OwnerId = userId
+                    }
+                }
+            state
+            |> ComponentState.Serialize
+
+        let c = Entities.DiscordSelectComponent(componentState, "Выбери наживку...", options)
+        b.AddComponents c |> ignore
+
+        awaiti <| e.Channel.SendMessageAsync b
+
+    let handle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) next =
+        let restartComponent errMsg =
+            DiscordMessage.Ext.clearComponents e.Message
+
+            let b = Entities.DiscordInteractionResponseBuilder()
+            b.Content <-
+                [
+                    sprintf "Вызовите комманду `.%s` еще раз, потому что-то пошло не так:" Parser.CommandNames.toFish
+                    "```"
+                    sprintf "%s" errMsg
+                    "```"
+                ] |> String.concat "\n"
+            b.IsEphemeral <- true
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+
+        if e.Message.Author.Id = client.CurrentUser.Id then
+            match ComponentState.Deserialize e.Id with
+            | Ok (data: BaitComponentState) ->
+                if data.Id = componentId then
+                    match data.ComponentId with
+                    | ComponentId.BaitChoiseId ->
+                        if data.Data.OwnerId = e.User.Id then
+                            let selected = e.Values.[0]
+
+                            let selectedBait =
+                                if selected = withoutBait.ItemId then
+                                    None
+                                else
+                                    Some selected
+
+                            next selectedBait
+                        else
+                            let b = Entities.DiscordInteractionResponseBuilder()
+                            b.Content <-
+                                sprintf "Здесь рыбачит <@%d>. Начните рыбачить сами командой `.%s`"
+                                    data.Data.OwnerId
+                                    Parser.CommandNames.toFish
+                            b.IsEphemeral <- true
+                            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                    | x ->
+                        sprintf "expected data.ComponentId but %A" x
+                        |> restartComponent
+
+                    true
+                else
+                    false
+            | _ -> false
+        else
+            false
 
 let r = new System.Random()
 
-let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: State) =
-    match msg with
-    | ToFish baitName ->
-        awaiti <| e.Channel.TriggerTypingAsync()
-
-        let send msg =
-            let embed = Entities.DiscordEmbedBuilder()
-            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-            embed.Description <- msg
-
-            let b = Entities.DiscordMessageBuilder()
-            b.Embed <- embed.Build()
-
-            awaiti <| e.Channel.SendMessageAsync b
-
+module Actions =
+    let toFish baitName send (userId: UserId) (state: State) =
         let sendCatched (catch: Item) =
             let msg = sprintf "Поймано \"%s\"!" catch.Name
             send msg
@@ -137,7 +239,7 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
                 next baitName
             | None ->
                 let player =
-                    match Players.GuildData.tryFind e.Author.Id state.Players with
+                    match Players.GuildData.tryFind userId state.Players with
                     | Some player -> player
                     | None -> Players.MainData.Empty
 
@@ -150,7 +252,7 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
                         Players =
                             state.Players
                             |> Players.GuildData.set
-                                e.Author.Id
+                                userId
                                 (fun p -> { p with Inventory = inventory })
                     }
 
@@ -182,7 +284,7 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
             state
 
         let getCurrentPlayer bait next =
-            match Players.GuildData.tryFind e.Author.Id state.Players with
+            match Players.GuildData.tryFind userId state.Players with
             | Some player ->
                 next player
             | None ->
@@ -219,13 +321,56 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
                 Players =
                     state.Players
                     |> Players.GuildData.set
-                        e.Author.Id
+                        userId
                         (fun p -> { p with Inventory = inventory })
             }
 
         sendCatched items.[catchId]
 
         state
+
+let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: State) =
+    match msg with
+    | ToFish baitName ->
+        awaiti <| e.Channel.TriggerTypingAsync()
+
+        match baitName with
+        | Some _ ->
+            let send msg =
+                let embed = Entities.DiscordEmbedBuilder()
+                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                embed.Description <- msg
+
+                let b = Entities.DiscordMessageBuilder()
+                b.Embed <- embed.Build()
+
+                awaiti <| e.Channel.SendMessageAsync b
+
+            Actions.toFish baitName send e.Author.Id state
+
+        | None ->
+            let player =
+                match Players.GuildData.tryFind e.Author.Id state.Players with
+                | Some player -> player
+                | None -> Players.MainData.Empty
+
+            let baits =
+                player.Inventory
+                |> Seq.choose (fun (KeyValue(k, v)) ->
+                    if v.Count > 0 then
+                        let item = items.[v.ItemId]
+                        if Array.isEmpty item.Loot then
+                            None
+                        else
+                            Some item
+                    else
+                        None
+                )
+                |> List.ofSeq
+
+            BaitChoiceUi.init baits e
+
+            state
 
     | Inventory ->
         awaiti <| e.Channel.TriggerTypingAsync()
@@ -248,6 +393,17 @@ let reduce (msg: Msg) (state: State): State =
         match cmd with
         | Request.ActionReq msg ->
             actionReduce e msg state
+
+    | ToFishHandle(e, baitId) ->
+        let send msg =
+            let embed = Entities.DiscordEmbedBuilder()
+            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+            embed.Description <- msg
+            let b = Entities.DiscordInteractionResponseBuilder()
+            b.AddEmbed(embed.Build()) |> ignore
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+
+        Actions.toFish baitId send e.User.Id state
 
     | GetState r ->
         r.Reply state
@@ -283,3 +439,6 @@ let componentInteractionCreateHandle client e =
         (fun () -> m.PostAndReply GetState)
         client
         e
+    || BaitChoiceUi.handle client e (fun st ->
+        m.Post (ToFishHandle(e, st))
+    )
