@@ -65,7 +65,7 @@ module InventoryTable =
             GetHeaders = fun sortBy ->
                 match sortBy with
                 | SortBy.SortByName ->
-                    [| "Название▼"; "ОбщОпыт" |]
+                    [| "Название▼"; "Кол-во" |]
                 | SortBy.SortByCount ->
                     [| "Учасники"; "Кол-во▼" |]
                 | x ->
@@ -117,30 +117,16 @@ module InventoryTable =
 
 module BaitChoiceUi =
     type ComponentId =
-        | BaitChoiseId = 0
-
-    type ComponentState<'Data> =
-        {
-            Id: string
-            ComponentId: ComponentId
-            Data: 'Data
-        }
-        static member Serialize (x: ComponentState<'Data>) =
-            Json.serNotIndent x
-        static member Deserialize (s: string): Result<ComponentState<'Data>, string> =
-            try
-                Ok(Json.des s)
-            with e ->
-                Error(e.Message)
+        | BaitChoiceId = 0
 
     type Data =
         {
             OwnerId: UserId
         }
 
-    type BaitComponentState = ComponentState<Data>
+    type BaitComponentState = Interaction.ComponentState<ComponentId, Data>
 
-    let componentId = "BaitChoiceComponentId"
+    let messageTypeId = "BaitChoiceComponentId"
 
     let init (baits: Item list) (e: EventArgs.MessageCreateEventArgs) =
         let userId = e.Author.Id
@@ -161,14 +147,14 @@ module BaitChoiceUi =
         let componentState =
             let state: BaitComponentState =
                 {
-                    Id = componentId
-                    ComponentId = ComponentId.BaitChoiseId
+                    Id = messageTypeId
+                    ComponentId = ComponentId.BaitChoiceId
                     Data = {
                         OwnerId = userId
                     }
                 }
             state
-            |> ComponentState.Serialize
+            |> Interaction.ComponentState.Serialize
 
         let c = Entities.DiscordSelectComponent(componentState, "Выбери наживку...", options)
         b.AddComponents c |> ignore
@@ -191,11 +177,12 @@ module BaitChoiceUi =
             awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
         if e.Message.Author.Id = client.CurrentUser.Id then
-            match ComponentState.Deserialize e.Id with
-            | Ok (data: BaitComponentState) ->
-                if data.Id = componentId then
+            match Interaction.ComponentState.TryDeserialize messageTypeId e.Id with
+            | Some res ->
+                match res with
+                | Ok (data: BaitComponentState) ->
                     match data.ComponentId with
-                    | ComponentId.BaitChoiseId ->
+                    | ComponentId.BaitChoiceId ->
                         if data.Data.OwnerId = e.User.Id then
                             let selected = e.Values.[0]
 
@@ -219,8 +206,10 @@ module BaitChoiceUi =
                         |> restartComponent
 
                     true
-                else
-                    false
+                | Error errMsg ->
+                    restartComponent errMsg
+
+                    true
             | _ -> false
         else
             false

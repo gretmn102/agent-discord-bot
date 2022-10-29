@@ -52,19 +52,7 @@ type ComponentId =
     | RightArrowButtonId = 3
     | SelectSortId = 4
 
-type ComponentState<'Data> =
-    {
-        Id: string
-        ComponentId: ComponentId
-        Data: 'Data
-    }
-    static member Serialize (x: ComponentState<'Data>) =
-        Json.serNotIndent x
-    static member Deserialize (s: string): Result<ComponentState<'Data>, string> =
-        try
-            Ok(Json.des s)
-        with e ->
-            Error(e.Message)
+type ComponentState<'SortBy> = Interaction.ComponentState<ComponentId, 'SortBy>
 
 let inline createTable
     (addComponents: Entities.DiscordComponent [] -> _)
@@ -133,14 +121,14 @@ let inline createTable
             Entities.DiscordSelectComponentOption(label, setting.SortBy.ToString sortBy)
         )
 
-
     let createId k =
-        {
-            Id = componentId
-            ComponentId = k
-            Data = sortBy |> Option.defaultValue setting.SortBy.DefaultCase |> setting.SortBy.ToString
-        }
-        |> ComponentState.Serialize
+        let x: ComponentState<_> =
+            {
+                Id = componentId
+                ComponentId = k
+                Data = sortBy |> Option.defaultValue setting.SortBy.DefaultCase |> setting.SortBy.ToString
+            }
+        ComponentState.Serialize x
 
     addComponents [|
         Entities.DiscordSelectComponent(
@@ -195,9 +183,10 @@ let inline componentInteractionCreateHandle
             |> Seq.tryPick (fun x ->
                 let id = x.CustomId
 
-                match ComponentState.Deserialize id with
-                | Ok (state: ComponentState<'SortBy>) ->
-                    if state.Id = setting.Id then
+                match Interaction.ComponentState.TryDeserialize setting.Id id with
+                | Some res ->
+                    match res with
+                    | Ok (state: ComponentState<'SortBy>) ->
                         match state.ComponentId with
                         | ComponentId.PaginationButtonId ->
                             let paginationButton = x :?> Entities.DiscordButtonComponent
@@ -208,7 +197,7 @@ let inline componentInteractionCreateHandle
                             Some page
                         | x ->
                             None
-                    else
+                    | _ ->
                         None
                 | _ -> None
             )
@@ -244,9 +233,10 @@ let inline componentInteractionCreateHandle
         awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
     if e.Message.Author.Id = client.CurrentUser.Id then
-        match ComponentState.Deserialize e.Id with
-        | Ok (data: ComponentState<'SortBy>) ->
-            if data.Id = setting.Id then
+        match Interaction.ComponentState.TryDeserialize setting.Id e.Id with
+        | Some res ->
+            match res with
+            | Ok (data: ComponentState<'SortBy>) ->
                 match data.ComponentId with
                 | ComponentId.RefreshButtonId ->
                     update id (Some data.Data)
@@ -274,8 +264,10 @@ let inline componentInteractionCreateHandle
                     |> restartComponent
 
                     true
-            else
-                false
+            | Error errMsg ->
+                restartComponent errMsg
+
+                true
         | _ -> false
     else
         false
