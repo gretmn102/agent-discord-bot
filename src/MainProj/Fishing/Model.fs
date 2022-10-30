@@ -135,10 +135,12 @@ module Players =
     type MainData =
         {
             Inventory: Inventory
+            Catches: Set<ItemId>
         }
         static member Empty =
             {
                 Inventory = Map.empty
+                Catches = Set.empty
             }
         static member Serialize (data: MainData) =
             data |> Json.ser

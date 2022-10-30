@@ -218,9 +218,16 @@ let r = new System.Random()
 
 module Actions =
     let toFish baitName send (userId: UserId) (state: State) =
-        let sendCatched (catch: Item) =
-            let msg = sprintf "Поймано \"%s\"!" catch.Name
-            send msg
+        let sendCatched (newCatchSetting: option<{| TotalCatchesCount: int |}>) (catch: Item) =
+            match newCatchSetting with
+            | Some newCatchSetting ->
+                sprintf "Поймано \"%s\"!\nНайдено %d обитателей морских глубин из %d."
+                    catch.Name
+                    newCatchSetting.TotalCatchesCount
+                    items.Count
+            | None ->
+                sprintf "Поймано \"%s\"!" catch.Name
+            |> send
 
         let useBaseBaitOrContinue next =
             match baitName with
@@ -245,7 +252,7 @@ module Actions =
                                 (fun p -> { p with Inventory = inventory })
                     }
 
-                sendCatched items.[baseItemId]
+                sendCatched None items.[baseItemId]
 
                 state
 
@@ -305,16 +312,30 @@ module Actions =
             inventory
             |> Inventory.update catchId ((+) 1)
 
+        let catches, newCatchSetting =
+
+            if Set.contains catchId player.Catches then
+                player.Catches, None
+            else
+                let catches = player.Catches |> Set.add catchId
+                let res = {| TotalCatchesCount = catches.Count |}
+                catches, Some res
+
         let state =
             {
                 Players =
                     state.Players
                     |> Players.GuildData.set
                         userId
-                        (fun p -> { p with Inventory = inventory })
+                        (fun p ->
+                            { p with
+                                Inventory = inventory
+                                Catches = catches
+                            }
+                        )
             }
 
-        sendCatched items.[catchId]
+        sendCatched newCatchSetting items.[catchId]
 
         state
 
