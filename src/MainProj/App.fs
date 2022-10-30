@@ -122,6 +122,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.FishingCmd msg ->
                 Fishing.Main.exec e msg
 
+            | CommandParser.RollCmd msg ->
+                Roll.Main.exec e msg
+
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 

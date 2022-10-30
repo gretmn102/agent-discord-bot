@@ -59,6 +59,8 @@ type Cmd =
 
     | FishingCmd of Fishing.Main.Request
 
+    | RollCmd of Roll.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -121,6 +123,8 @@ let pcommand: _ Parser =
         Calc.Main.Parser.start |>> CalcCmd
 
         Fishing.Main.Parser.start |>> FishingCmd
+
+        Roll.Main.Parser.start |>> RollCmd
     ]
 
 let start botId str =
