@@ -57,7 +57,7 @@ type Cmd =
 
     | CalcCmd of Calc.Main.Request
 
-    | FishingCmd of Fishing.Main.Request
+    // | FishingCmd of Fishing.Main.Request
 
     | RollCmd of Roll.Main.Request
 
@@ -122,7 +122,7 @@ let pcommand: _ Parser =
 
         Calc.Main.Parser.start |>> CalcCmd
 
-        Fishing.Main.Parser.start |>> FishingCmd
+        // Fishing.Main.Parser.start |>> FishingCmd
 
         Roll.Main.Parser.start |>> RollCmd
     ]

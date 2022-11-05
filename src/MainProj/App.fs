@@ -119,8 +119,8 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.CalcCmd msg ->
                 Calc.Main.exec e msg
 
-            | CommandParser.FishingCmd msg ->
-                Fishing.Main.exec e msg
+            // | CommandParser.FishingCmd msg ->
+            //     Fishing.Main.exec e msg
 
             | CommandParser.RollCmd msg ->
                 Roll.Main.exec e msg
@@ -218,7 +218,7 @@ let main argv =
                 || Ranking.Main.componentInteractionCreateHandle client e
                 || Doorkeeper.Invites.componentInteractionCreateHandle client e
                 || EggBattle.Main.componentInteractionCreateHandle client e
-                || Fishing.Main.componentInteractionCreateHandle client e
+                // || Fishing.Main.componentInteractionCreateHandle client e
 
             if not isHandled then
                 AppsHub.resp client e
