@@ -9,37 +9,37 @@ open FsharpMyExtension.Either
 #endif
 open CommandParser
 
-[<Tests>]
-let commandParserTests =
-    testList "commandParserTests" [
-        testCase "testCase1" (fun _ ->
-            let botId = 0UL
-            Assert.Equal("msg1", Right Pass, start botId "")
-            Assert.Equal("msg2", Right Unknown, start botId (sprintf "<@%d>" botId))
-            Assert.Equal("msg3", Right (CustomCommandCmd (CustomCommand.Main.Take, None)), start botId ".take")
+// [<Tests>]
+// let commandParserTests =
+//     testList "commandParserTests" [
+//         testCase "testCase1" (fun _ ->
+//             let botId = 0UL
+//             Assert.Equal("msg1", Right Pass, start botId "")
+//             Assert.Equal("msg2", Right Unknown, start botId (sprintf "<@%d>" botId))
+//             Assert.Equal("msg3", Right (CustomCommandCmd (CustomCommand.Main.Take, None)), start botId ".take")
 
-            let whom = 1UL
-            Assert.Equal("msg4", Right (CustomCommandCmd (CustomCommand.Main.Take, Some whom)), start botId (sprintf ".take <@%d>" whom))
-            Assert.Equal("msg5", Right Pass, start botId ".unknown")
+//             let whom = 1UL
+//             Assert.Equal("msg4", Right (CustomCommandCmd (CustomCommand.Main.Take, Some whom)), start botId (sprintf ".take <@%d>" whom))
+//             Assert.Equal("msg5", Right Pass, start botId ".unknown")
 
-            let exp =
-                [
-                    "Error in Ln: 1 Col: 7"
-                    sprintf "<@%d> .unknown" botId
-                    "      ^"
-                    "Expecting:"
-                ] |> String.concat "\r\n"
+//             let exp =
+//                 [
+//                     "Error in Ln: 1 Col: 7"
+//                     sprintf "<@%d> .unknown" botId
+//                     "      ^"
+//                     "Expecting:"
+//                 ] |> String.concat "\r\n"
 
-            match start botId (sprintf "<@%d> .unknown" botId) with
-            | Left errMsg ->
-                Assert.StringContains("msg6", exp, errMsg)
-            | Right _ as act ->
-                failwithf "Expected:\n%A\nActual:\n%A" (Left exp) act
+//             match start botId (sprintf "<@%d> .unknown" botId) with
+//             | Left errMsg ->
+//                 Assert.StringContains("msg6", exp, errMsg)
+//             | Right _ as act ->
+//                 failwithf "Expected:\n%A\nActual:\n%A" (Left exp) act
 
-            Assert.Equal("not mention bot", Right Pass, start botId "<@1234567> .unknown")
-            Assert.Equal("not mention bang bot", Right Pass, start botId "<@!1234567> .unknown")
-        )
-    ]
+//             Assert.Equal("not mention bot", Right Pass, start botId "<@1234567> .unknown")
+//             Assert.Equal("not mention bang bot", Right Pass, start botId "<@!1234567> .unknown")
+//         )
+//     ]
 
 [<Tests>]
 let pshipTests =
@@ -88,9 +88,7 @@ let ballotBoxTests =
                 ] |> String.concat "\n"
             let exp =
                 Right
-                  (BallotBox
-                     ("Нужны ли нам такие голосовалки?",
-                      ["Да"; "Нет"; "Удоли!11"; "Vox Populi, Vox Dei"]))
+                  ("Нужны ли нам такие голосовалки?", ["Да"; "Нет"; "Удоли!11"; "Vox Populi, Vox Dei"])
             Assert.Equal("", exp, FParsecUtils.runEither pballotBox input)
         )
         testCase "ballotBoxTests2" (fun _ ->
@@ -104,8 +102,7 @@ let ballotBoxTests =
                 ] |> String.concat "\n"
             let exp =
                 Right
-                  (BallotBox
-                     ("Нужны ли нам такие голосовалки?", ["Да"; "Нет"; "Vox Populi, Vox Dei"]))
+                  ("Нужны ли нам такие голосовалки?", ["Да"; "Нет"; "Vox Populi, Vox Dei"])
             Assert.Equal("", exp, FParsecUtils.runEither pballotBox input)
         )
     ]

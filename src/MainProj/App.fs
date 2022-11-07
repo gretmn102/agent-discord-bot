@@ -81,16 +81,13 @@ let main argv =
             #else
             "AblyToken"
             #endif
-        match getEnvironmentVariable serverConnectionVarName with
-        | Some value -> value
-        | None ->
-            failwithf "Environment variable `%s` not setup" serverConnectionVarName
+        getEnvironmentVariable serverConnectionVarName
 
     Api.start ablyToken
 
-    match getEnvironmentVariable tokenEnvVar with
+    match tryGetEnvironmentVariable tokenEnvVar with
     | None ->
-        printfn "Environment variable `%s` not setup" tokenEnvVar
+        printfn "Environment variable `%s` is not set!" tokenEnvVar
         1
     | Some token ->
         let config = DSharpPlus.DiscordConfiguration()

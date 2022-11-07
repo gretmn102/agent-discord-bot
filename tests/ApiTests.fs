@@ -38,11 +38,19 @@ module Doorkeeper =
         let doorkeeperApiSerializeTests =
             testList "doorkeeperApiSerializeTests" [
                 testCase "undefined NewcomerWelcomeMessageLog" <| fun () ->
-                    let exp =
+                    let exp: Checkpoint =
                         {
                             Channel = Some (EnabledOptionValue.Init (Snowflake.Create 42UL))
+                            DoorkeeperRole = None
+                            IssuedRoleIds = None
+                            EnteredUserRole = None
                             NewcomerWelcomeMessage = Some EnabledOptionValue.Empty
                             NewcomerWelcomeMessageLog = None
+                            ReturnedUserIncludeRoles = None
+                            ReturnedWelcomeMessage = None
+                            ReturnedWelcomeMessageLog = None
+                            GoodbyeMessage = None
+                            GoodbyeMessageLog = None
                         }
 
                     let json =
@@ -82,7 +90,10 @@ module ApiProtocolTests =
                             Inner = Some {
                                 Channel = Some <| EnabledOptionValue.Init (Snowflake.Create 0UL)
                                 NewcomerWelcomeMessage = None
-                                NewcomerWelcomeMessageLog = Some <| EnabledOptionValue.Empty
+                                NewcomerWelcomeMessageLog = Some EnabledOptionValue.Empty
+                                ReturnedUserExcludeRoles = None
+                                ReturnedWelcomeMessage = None
+                                ReturnedWelcomeMessageLog = None
                             }
                             Exit = None
                             Log = None
@@ -95,7 +106,7 @@ module ApiProtocolTests =
 
                 let act = sample.Serialize()
 
-                let exp = """{"id":"42","data":{"case":"Doorkeeper","fields":[{"case":"Get","fields":[{"checkpoint":null,"inner":{"channel":{"isEnabled":true,"value":"0"},"newcomerWelcomeMessage":null,"newcomerWelcomeMessageLog":{"isEnabled":false,"value":null}},"exit":null,"log":null}]}]}}"""
+                let exp = """{"id":"42","data":{"case":"Doorkeeper","fields":[{"case":"Get","fields":[{"checkpoint":null,"inner":{"channel":{"isEnabled":true,"value":"0"},"newcomerWelcomeMessage":null,"newcomerWelcomeMessageLog":{"isEnabled":false,"value":null},"returnedUserExcludeRoles":null,"returnedWelcomeMessage":null,"returnedWelcomeMessageLog":null},"exit":null,"log":null}]}]}}"""
 
                 Assert.Equal("", exp, act)
 
@@ -155,9 +166,7 @@ let pingTests =
     testList "pingTests" [
         testCase "base" <| fun () ->
             let token =
-                let tokenVarName = "AblyToken"
-                getEnvironmentVariable tokenVarName
-                |> Option.defaultWith (fun () -> failwithf "'%s' not set" tokenVarName)
+                getEnvironmentVariable "AblyToken"
 
             Api.start token
 

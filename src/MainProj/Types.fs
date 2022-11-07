@@ -144,7 +144,7 @@ let getGuildMember (guild: DSharpPlus.Entities.DiscordGuild) (user: DSharpPlus.E
 
 open dotenv.net
 
-let getEnvironmentVariable =
+let tryGetEnvironmentVariable =
     DotEnv.Load()
 
     let envVars = DotEnv.Read()
@@ -156,6 +156,12 @@ let getEnvironmentVariable =
             | null -> None
             | value -> Some value
         | true, value -> Some value
+
+let getEnvironmentVariable varName =
+    tryGetEnvironmentVariable varName
+    |> Option.defaultWith (fun () ->
+        failwithf "Environment variable `%s` is not set!" varName
+    )
 
 open MongoDB.Driver
 

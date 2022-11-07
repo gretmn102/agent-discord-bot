@@ -25,8 +25,8 @@ type MapSerializer<'Key, 'Value when 'Key : comparison>() =
         let serializer = BsonSerializer.LookupSerializer(typeof<BsonDocument>)
         serializer.Serialize(context, bsonDocument.AsBsonValue)
 
-let login = System.Environment.GetEnvironmentVariable "BotDbL"
-let password = System.Environment.GetEnvironmentVariable "BotDbP"
+let login = getEnvironmentVariable "BotDbL"
+let password = getEnvironmentVariable "BotDbP"
 
 let settings =
     MongoClientSettings.FromConnectionString (
@@ -39,12 +39,7 @@ let settings =
 let client = new MongoClient(settings)
 let database =
     let dataBaseName =
-        let varName = "DataBaseName"
-
-        match getEnvironmentVariable varName with
-        | Some value -> value
-        | None ->
-            failwithf "Environment variable `%s` not setup" varName
+        getEnvironmentVariable "DataBaseName"
 
     client.GetDatabase(dataBaseName)
 

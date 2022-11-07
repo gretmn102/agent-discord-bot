@@ -25,7 +25,6 @@ let pballotBox =
     pstring "ballotBox"
     >>. many1Satisfy ((=) ' ') >>. many1Satisfy ((<>) '\n') .>> spaces
     .>>. many1 (many1Satisfy ((<>) '\n') .>> spaces)
-    |>> BallotBox
 
 let pcommand: _ Parser =
     let pmessageCreateEventHandler = choice [
@@ -65,7 +64,7 @@ let pcommand: _ Parser =
 
         pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
 
-        pballotBox
+        pballotBox |>> BallotBox
     ]
 
 let start botId str =
