@@ -14,6 +14,7 @@ type State =
 type ActionReq =
     | ToFish of bait: ItemId option
     | Inventory
+    | Progress
 
 type Request =
     | ActionReq of ActionReq
@@ -28,6 +29,7 @@ module Parser =
     module CommandNames =
         let toFish = "рыбачить"
         let inventory = "инвентарь"
+        let progress = "прогресс"
 
     let paction: _ Parser =
         let toFish =
@@ -37,6 +39,7 @@ module Parser =
         choice [
             toFish |>> ToFish
             skipStringCI CommandNames.inventory >>% Inventory
+            skipStringCI CommandNames.progress >>% Progress
         ]
 
     let start: _ Parser =
@@ -114,6 +117,11 @@ module InventoryTable =
             | None -> Map.empty
 
         componentInteractionCreateHandle client e (initSetting userRanks)
+
+let createProgressMessage totalCatchesCount =
+    sprintf "Найдено %d обитателей морских глубин из %d."
+        totalCatchesCount
+        items.Count
 
 module BaitChoiceUi =
     type ComponentId =
@@ -219,14 +227,14 @@ let r = new System.Random()
 module Actions =
     let toFish baitName send (userId: UserId) (state: State) =
         let sendCatched (newCatchSetting: option<{| TotalCatchesCount: int |}>) (catch: Item) =
-            match newCatchSetting with
-            | Some newCatchSetting ->
-                sprintf "Поймано \"%s\"!\nНайдено %d обитателей морских глубин из %d."
-                    catch.Name
-                    newCatchSetting.TotalCatchesCount
-                    items.Count
-            | None ->
+            [
                 sprintf "Поймано \"%s\"!" catch.Name
+                match newCatchSetting with
+                | Some newCatchSetting ->
+                    createProgressMessage newCatchSetting.TotalCatchesCount
+                | None -> ()
+            ]
+            |> String.concat "\n"
             |> send
 
         let useBaseBaitOrContinue next =
@@ -395,6 +403,30 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
         InventoryTable.createTable b.AddComponents b.AddEmbed userRanks
 
         awaiti <| e.Channel.SendMessageAsync b
+        state
+
+    | Progress ->
+        awaiti <| e.Channel.TriggerTypingAsync()
+
+        let send msg =
+            let embed = Entities.DiscordEmbedBuilder()
+            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+            embed.Description <- msg
+
+            let b = Entities.DiscordMessageBuilder()
+            b.Embed <- embed.Build()
+
+            awaiti <| e.Channel.SendMessageAsync b
+
+        let msg =
+            match Players.GuildData.tryFind e.Author.Id state.Players with
+            | None ->
+                createProgressMessage 0
+            | Some p ->
+                createProgressMessage p.Catches.Count
+
+        send msg
+
         state
 
 let reduce (msg: Msg) (state: State): State =
