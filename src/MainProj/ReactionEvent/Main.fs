@@ -22,10 +22,12 @@ module Parser =
                 (pemoji .>> spaces)
                 (many (pmentionRole <|> puint64 .>> spaces))
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             psetReactionEvent |>> SetReactionEvent
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 [<Struct>]
 type Changed = Added | Removed
@@ -203,8 +205,10 @@ let m =
 let handle e =
     m.Post (GuildReactionHandle e)
 
-let exec e msg =
-    m.Post (Request (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request (e, msg))
+    )
 
 let messageDeletedHandle e =
     m.Post (MessageDeletedHandle e)

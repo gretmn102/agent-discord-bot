@@ -44,7 +44,7 @@ module Parser =
 
     let getInvitesName = "invites"
 
-    let start: _ Parser =
+    let start f: _ Parser =
         let psetSetting =
             skipStringCI setSettingName >>. spaces
              >>. spaces
@@ -62,6 +62,8 @@ module Parser =
             skipStringCI getSettingName >>% GetSetting
             skipStringCI getInvitesName >>% GetInvites
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 module InviteTable =
     open Shared.Ui.Table
@@ -378,8 +380,10 @@ let inviteDeletedHandle e =
     m.Post (InviteDeletedHandle e)
 let guildAvailableHandle e =
     m.Post (GuildAvailableHandle e)
-let exec e r =
-    m.Post (Request(e, r))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request(e, msg))
+    )
 let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
     InviteTable.componentInteractionCreateHandle
         (fun () -> m.PostAndReply GetState)

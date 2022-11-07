@@ -24,11 +24,13 @@ module Parser =
         skipStringCI challangeToDuelName >>. spaces
         >>. (puserMention <|> puint64)
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             pchannelToDuel |>> ChallengeToDuel
             skipStringCI "лидеры" >>% CreateRatingTable
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 type State =
     {
@@ -281,8 +283,10 @@ let m =
         loop init
     )
 
-let handle e msg =
-    m.Post (Request (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request (e, msg))
+    )
 
 let (|StartsWith|_|) (value: string) (str: string) =
     if str.StartsWith value then

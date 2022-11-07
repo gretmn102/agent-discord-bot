@@ -35,11 +35,13 @@ module Parser =
                 (puint64 <|> pmentionRole .>> spaces)
                 ((pstringCI "true" >>% true) <|> (pstring "false" >>% false))
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             psetEvent |>> SetEventSetting
             pstringCI "getEvent" >>% GetEventSetting
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: WomensDaySetting.GuildWomensDaySetting) =
     match msg with
@@ -172,5 +174,7 @@ let m =
 let handle (e: EventArgs.MessageCreateEventArgs) =
     m.Post (NewMessageHandle e)
 
-let exec e msg =
-    m.Post (SettingMsg (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (SettingMsg (e, msg))
+    )

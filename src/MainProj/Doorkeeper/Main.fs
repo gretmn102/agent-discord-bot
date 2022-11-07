@@ -148,11 +148,13 @@ module Parser =
             ppass |>> Pass
         ]
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             paction |>> Request.ActionReq
             psettings |>> Request.SettingReq
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 type Msg =
     | Request of EventArgs.MessageCreateEventArgs * Request
@@ -624,8 +626,10 @@ let guildMemberAddHandle (e: EventArgs.GuildMemberAddEventArgs) =
 let guildMemberRemoveHandle (e: EventArgs.GuildMemberRemoveEventArgs) =
     m.Post (GuildMemberRemovedHandle e)
 
-let execNewcomersRolesCmd e msg =
-    m.Post (Request (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request (e, msg))
+    )
 
 let apiRequestHandle req =
     m.PostAndReply (fun r -> ApiRequest(req, r))

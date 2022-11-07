@@ -29,14 +29,16 @@ module Parser =
         skipStringCI "guild" >>. spaces
         >>. opt puint64
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             pgetAvatar |>> GetAvatar
             pgetUserInfo |>> GetUserInfo
             pgetGuildInfo |>> GetGuildInfo
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
-let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Request) =
+let reduce (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Request) =
     match msg with
     | GetAvatar otherUserIdOrSelf ->
         awaiti <| e.Channel.TriggerTypingAsync()
@@ -288,3 +290,8 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Req
             | None -> createMessage e.Guild
 
         ignore (await (e.Channel.SendMessageAsync message))
+
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        reduce client e msg
+    )

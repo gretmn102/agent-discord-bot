@@ -13,10 +13,12 @@ module Parser =
     let pexpr: _ Parser =
         Core.Parser.pexpr
 
-    let start: Request Parser =
+    let start f: _ Parser =
         pstring "calc" >>. spaces >>. pexpr |>> Core.calc
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
-let exec (e: EventArgs.MessageCreateEventArgs) (r: Request) =
+let reduce (e: EventArgs.MessageCreateEventArgs) (r: Request) =
     awaiti <| e.Channel.TriggerTypingAsync()
 
     let floatToString (x: float) =
@@ -26,3 +28,8 @@ let exec (e: EventArgs.MessageCreateEventArgs) (r: Request) =
             sprintf "%A" x
 
     awaiti <| e.Channel.SendMessageAsync (floatToString r)
+
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        reduce e msg
+    )

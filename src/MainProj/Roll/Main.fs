@@ -23,7 +23,7 @@ module Parser =
     module CommandNames =
         let roll = "roll"
 
-    let start: _ Parser =
+    let start f: _ Parser =
         let proll =
             let pdice =
                 tuple2
@@ -45,6 +45,8 @@ module Parser =
         choice [
             proll |>> Roll
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 let r = System.Random ()
 
@@ -74,9 +76,14 @@ let roll (setting: RollSetting) =
     | Some description ->
         sprintf "%s %s." description throwResultString
 
-let exec (e: EventArgs.MessageCreateEventArgs) (req: Request) =
+let reduce (e: EventArgs.MessageCreateEventArgs) (req: Request) =
     match req with
     | Roll setting ->
         let res = roll setting
 
         awaiti <| e.Channel.SendMessageAsync(res)
+
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        reduce e msg
+    )

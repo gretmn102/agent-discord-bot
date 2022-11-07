@@ -19,8 +19,6 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
         | Right res ->
             match res with
             | CommandParser.Pass -> ()
-            | CommandParser.CustomCommandCmd msg ->
-                CustomCommand.Main.exec client e msg
 
             | CommandParser.Cyoa x ->
                 AppsHub.start (AppsHub.Hub.InitCyoa x) client e
@@ -28,60 +26,6 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 AppsHub.start AppsHub.Hub.InitQuiz client e
             | CommandParser.BallotBox(description, choices) ->
                 AppsHub.start (AppsHub.Hub.InitBallotBox(description, choices)) client e
-
-            | CommandParser.UserRoleCmd msg ->
-                UserRole.Main.exec e msg
-
-            | CommandParser.Doorkeeper newcomersRolesMsg ->
-                Doorkeeper.Main.execNewcomersRolesCmd e newcomersRolesMsg
-
-            | CommandParser.VoiceChannelNotification msg ->
-                VoiceChannelNotification.Main.execVoiceNotificationCmd e msg
-
-            | CommandParser.MusicCmd msg ->
-                Music.Main.exec client e msg
-
-            | CommandParser.RankingCmd msg ->
-                Ranking.Main.execSettingCmd e msg
-
-            | CommandParser.MessageManagerCmd msg ->
-                MessageManager.exec client e msg
-
-            | CommandParser.ReactionEventCmd msg ->
-                ReactionEvent.Main.exec e msg
-
-            | CommandParser.BirthdayCmd msg ->
-                Birthday.Main.exec e msg
-
-            | CommandParser.EventsCmd msg ->
-                Events.Main.exec e msg
-
-            | CommandParser.ShipCmd msg ->
-                Ship.Main.exec e client.CurrentUser.Id msg
-
-            | CommandParser.ChatVoiceCmd msg ->
-                ChatVoice.Main.exec e msg
-
-            | CommandParser.DiscordWebhookCmd msg ->
-                DiscordWebhook.Main.exec e msg
-
-            | CommandParser.BoostersCmd msg ->
-                Boosters.Main.exec e msg
-
-            | CommandParser.InvitesCmd msg ->
-                Doorkeeper.Invites.exec e msg
-
-            | CommandParser.UserInfoCmd msg ->
-                UserInfo.Main.exec client e msg
-
-            | CommandParser.AgeCmd msg ->
-                Age.Main.exec e msg
-
-            | CommandParser.EggBattleCmd msg ->
-                EggBattle.Main.handle e msg
-
-            | CommandParser.ModerationCmd msg ->
-                Moderation.Main.exec e msg
 
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
@@ -104,6 +48,7 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
 
                 b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 awaiti (client.SendMessageAsync (e.Channel, b.Build()))
+
             | CommandParser.NumberToWords num ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -113,20 +58,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                         e.Message
                 b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 awaiti (client.SendMessageAsync (e.Channel, b.Build()))
-            | CommandParser.EmojiFontCmd msg ->
-                EmojiFont.Main.exec e msg
 
-            | CommandParser.CalcCmd msg ->
-                Calc.Main.exec e msg
-
-            // | CommandParser.FishingCmd msg ->
-            //     Fishing.Main.exec e msg
-
-            | CommandParser.RollCmd msg ->
-                Roll.Main.exec e msg
-
-            | CommandParser.SimpleQuizCmd msg ->
-                SimpleQuiz.Main.exec e msg
+            | CommandParser.MessageCreateEventHandler exec ->
+                exec (client, e)
 
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))

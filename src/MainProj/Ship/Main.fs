@@ -37,12 +37,13 @@ module Parser =
         skipStringCI "massShip" .>> spaces
         >>. many (puserMention .>> spaces)
 
-    let start =
+    let start f: _ Parser =
         choice [
             pship .>> spaces .>>. opt puserMention |>> Ship
             pmassShip |>> MassShip
         ]
-
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 let r = System.Random ()
 
@@ -122,7 +123,7 @@ let cmdBuilder2
         else
             send whoId whomId
 
-let exec (e: EventArgs.MessageCreateEventArgs) (botId: UserId) msg =
+let reduce (e: EventArgs.MessageCreateEventArgs) (botId: UserId) msg =
     match msg with
     | Ship (opt, whomId) ->
         cmdBuilder2
@@ -162,3 +163,8 @@ let exec (e: EventArgs.MessageCreateEventArgs) (botId: UserId) msg =
 
         let msg = await (e.Channel.SendMessageAsync "Processing...")
         Async.Start (f msg)
+
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        reduce e client.CurrentUser.Id msg
+    )

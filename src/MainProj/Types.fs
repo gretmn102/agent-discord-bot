@@ -174,3 +174,7 @@ module Set =
             None
         else
             Some (Seq.head s)
+
+open DSharpPlus
+
+type MessageCreateEventHandler = ((DiscordClient * EventArgs.MessageCreateEventArgs) -> unit)

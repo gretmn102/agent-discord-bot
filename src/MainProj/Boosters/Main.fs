@@ -17,6 +17,8 @@ module Parser =
 
     open DiscordMessage.Parser
 
+    type 'a Parser = Parser<'a, unit>
+
     let setSettingName = "boostersSetSetting"
     let getSettingName = "boostersGetSetting"
 
@@ -26,11 +28,13 @@ module Parser =
                 (pchannelMention .>> spaces)
                 MessageTemplate.Message.parser
 
-    let start =
+    let start f: _ Parser =
         choice [
             pchannelTemplateMessage setSettingName |>> SetSetting
             skipStringCI getSettingName >>% GetSetting
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 type State =
     { GuildBoostersSettings: Boosters.GuildSettings }
@@ -230,8 +234,10 @@ let m: MailboxProcessor<Req> =
         loop init
     )
 
-let exec e msg =
-    m.Post (Request(e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request(e, msg))
+    )
 
 let handle e =
     m.Post (Handle e)

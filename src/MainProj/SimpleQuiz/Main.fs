@@ -24,10 +24,12 @@ module Parser =
     let pquiz =
         skipStringCI CommandNames.quiz
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             pquiz >>% StartQuiz
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 module QuizUi =
     type ComponentId =
@@ -198,8 +200,10 @@ let m =
         loop init
     )
 
-let exec e msg =
-    m.Post (Request (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request (e, msg))
+    )
 
 let componentInteractionCreateHandle client e =
     QuizUi.handle client e

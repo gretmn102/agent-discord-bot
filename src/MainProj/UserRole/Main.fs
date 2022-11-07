@@ -299,7 +299,7 @@ module Parser =
                 ((pmentionRole <|> puint64) .>> spaces)
                 (puserMention <|> puint64)
 
-    let start: _ Parser =
+    let start f: MessageCreateEventHandler Parser =
         choice [
             pgiveOrChangeRole |>> GiveOrChangeRole
             premoveUserRole |>> RemoveUserRole
@@ -313,6 +313,8 @@ module Parser =
 
             PermissiveIconRoleList.Parser.start |>> PermissiveIconRoleCmd
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 module UserRoleForm =
     [<Literal>]
@@ -1189,8 +1191,10 @@ let reducer =
 let guildRoleDeletedHandler (e: EventArgs.GuildRoleDeleteEventArgs) =
     reducer.Post(GuildRoleDeletedHandler e)
 
-let exec e msg =
-    reducer.Post(Request (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        reducer.Post(Request (e, msg))
+    )
 
 let modalHandle (e: EventArgs.ModalSubmitEventArgs) =
     reducer.Post (ModalHandle e)

@@ -81,11 +81,13 @@ module Parser =
             skipStringCI removeCharacterName >>. spaces >>. pkey |>> RemoveCharacter
         ]
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             psend |>> Send
             psetting |>> SettingReq
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 type State =
     {
@@ -455,8 +457,10 @@ let m: MailboxProcessor<Req> =
         loop init
     )
 
-let exec e msg =
-    m.Post (Request(e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request(e, msg))
+    )
 
 let handle e =
     m.Post (Handle e)

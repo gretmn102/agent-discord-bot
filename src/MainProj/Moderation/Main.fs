@@ -28,11 +28,13 @@ module Parser =
         >>. ((puserMention <|> puint64) .>> spaces)
         .>>. opt (puint32 .>>. (opt (many1Satisfy (fun _ -> true))))
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             pkick |>> Kick
             pban |>> Ban
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 let reduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) =
     match msg with
@@ -162,5 +164,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) =
             |> e.Channel.SendMessageAsync
             |> awaiti
 
-let exec e msg =
-    reduce e msg
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+       reduce e msg
+    )

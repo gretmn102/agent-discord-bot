@@ -60,14 +60,15 @@ module Parser =
                 (pmessagePath .>> spaces)
                 (many1 (pemoji .>> spaces))
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             psendMessage |>> SendMessage
             pgetMessage |>> GetMessage
             peditMessage |>> EditMessage
             pswitchBotReactions |>> SwitchBotReactions
         ]
-
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 open Newtonsoft.Json
 
@@ -305,5 +306,7 @@ let m =
         loop init
     )
 
-let exec client e msg =
-    m.Post (client, e, msg)
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (client, e, msg)
+    )

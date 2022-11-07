@@ -55,11 +55,13 @@ module Parser =
         >>. manySatisfy (fun _ -> true)
         |>> SetTemplateMsg
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             psetVoiceNotificationOutput
             psetVoiceNotificationTemplateMsg
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 let voiceNotificationReduce
     (e: EventArgs.MessageCreateEventArgs)
@@ -218,5 +220,7 @@ let m =
 let voiceHandle e =
     m.Post (VoiceStateUpdatedHandle e)
 
-let execVoiceNotificationCmd e msg =
-    m.Post (VoiceNotificationMsg (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post(VoiceNotificationMsg (e, msg))
+    )

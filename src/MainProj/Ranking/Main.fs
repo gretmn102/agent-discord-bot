@@ -718,9 +718,6 @@ let m =
 let handle (e: EventArgs.MessageCreateEventArgs) =
     m.Post (NewMessageHandle e)
 
-let execSettingCmd e msg =
-    m.Post (Request (e, msg))
-
 let componentInteractionCreateHandle client e =
     MostActiveTable.componentInteractionCreateHandle
         (fun () -> m.PostAndReply GetState)
@@ -773,7 +770,7 @@ module Parser =
     let pmostActiveLeaderboard: _ Parser =
         skipStringCI "mostActiveLeaderboard"
 
-    let start: _ Parser =
+    let start f: _ Parser =
         let prankingSetting =
             choice [
                 psetOutputChannel |>> SetOutputChannel
@@ -796,6 +793,13 @@ module Parser =
             pmostActiveActivate >>% MostActiveActivate
             pmostActiveLeaderboard >>% MostActiveLeaderboard
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
+
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request (e, msg))
+    )
 
 let mostActiveTimerStart (client: DiscordClient) =
     let scheduler = new Scheduler.Scheduler<unit>(Scheduler.State.Empty)

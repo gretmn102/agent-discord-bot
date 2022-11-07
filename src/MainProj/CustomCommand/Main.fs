@@ -42,8 +42,10 @@ module Parser =
             (skipStringCI "шашлычок" <|> skipStringCI "шашлык") >>% Kebab
         ]
 
-    let start: Msg Parser =
+    let start f: _ Parser =
         cmd .>> spaces .>>. opt puserMention
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 let r = System.Random ()
 
@@ -157,7 +159,7 @@ let kebabs =
         "https://media.tenor.com/RdEYFJcw8BYAAAAC/brasero.gif"
     |]
 
-let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) ((msg, whomId): Msg) =
+let reduce (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) ((msg, whomId): Msg) =
     let cmdBuilder = cmdBuilder client e
 
     match msg with
@@ -388,3 +390,8 @@ let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) ((msg, wh
                 send whomId
             | referencedMessage ->
                 send (Some referencedMessage.Author.Id)
+
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        reduce client e msg
+    )

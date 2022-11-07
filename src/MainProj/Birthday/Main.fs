@@ -31,7 +31,7 @@ module Parser =
         skipStringCI "birthdaySet" >>. spaces
         >>. tuple2 pint32 pint32
 
-    let start: _ Parser =
+    let start f: _ Parser =
         let psetting =
             pbirthdaySetRole |>> SetRole
         let pbirthday =
@@ -40,6 +40,8 @@ module Parser =
             psetting |>> SettingReq
             pbirthday |>> BirthdayReq
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 let settingReduce
     (e: EventArgs.MessageCreateEventArgs)
@@ -219,8 +221,10 @@ let m: MailboxProcessor<Req> =
         loop init
     )
 
-let exec e msg =
-    m.Post(UsersReq (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post(UsersReq (e, msg))
+    )
 
 let startAsync (client: DiscordClient) =
     Scheduler.startAsync scheduler 500 (fun job ->

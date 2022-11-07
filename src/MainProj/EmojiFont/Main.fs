@@ -14,10 +14,12 @@ module Parser =
 
     type 'Result Parser = Primitives.Parser<'Result, unit>
 
-    let start: Request Parser =
+    let start f: _ Parser =
         skipStringCI "emojiFont" >>. spaces
         >>. (pemoji .>> spaces)
         .>>. manySatisfy (fun _ -> true)
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 let reduce (e: EventArgs.MessageCreateEventArgs) ((emoji, str): Request) =
     let emojiFont emojiImg =
@@ -50,5 +52,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) ((emoji, str): Request) =
         | Left errMsg ->
             emojiFont (Left errMsg)
 
-let exec e msg =
-    reduce e msg
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        reduce e msg
+    )

@@ -139,9 +139,6 @@ let m =
         loop init
     )
 
-let exec (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) msg =
-    m.Post (client, e, msg)
-
 module Parser =
     open FParsec
 
@@ -162,10 +159,17 @@ module Parser =
     let pstop: _ Parser =
         skipStringCI "stop"
 
-    let start =
+    let start f: _ Parser =
         choice [
             pjoin >>% Join
             pleave >>% Leave
             pplay |>> Play
             pstop >>% Stop
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
+
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (client, e, msg)
+    )

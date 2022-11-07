@@ -16,8 +16,10 @@ module Parser =
 
     type 'a Parser = Parser<'a, unit>
 
-    let start: _ Parser =
+    let start f: _ Parser =
         skipStringCI "inVoice" >>% MentionInVoice
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 let settings: Settings =
     [
@@ -113,5 +115,7 @@ let reduce (e: DSharpPlus.EventArgs.MessageCreateEventArgs) msg =
                 else
                     awaiti (e.Channel.SendMessageAsync errorMessage)
 
-let exec (e: DSharpPlus.EventArgs.MessageCreateEventArgs) msg =
-    reduce e msg
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        reduce e msg
+    )

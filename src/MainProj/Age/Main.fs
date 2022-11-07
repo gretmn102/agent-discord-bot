@@ -16,8 +16,10 @@ module Parser =
 
     type 'Result Parser = Primitives.Parser<'Result, unit>
 
-    let start: _ Parser =
+    let start f: _ Parser =
         pstring "ageCreateForm" >>% CreateForm
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
 
 [<Literal>]
 let AgeCreateModalButtonId = "ageCreateModalButtonId"
@@ -172,8 +174,10 @@ let m: MailboxProcessor<Req> =
         loop init
     )
 
-let exec e msg =
-    m.Post (Request (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request (e, msg))
+    )
 
 let createAgeStatisticEmbed guildId =
     let ageStatistic = m.PostAndReply(fun r -> GetAgeStatistics(r, guildId))
