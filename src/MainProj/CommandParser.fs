@@ -61,6 +61,8 @@ type Cmd =
 
     | RollCmd of Roll.Main.Request
 
+    | SimpleQuizCmd of SimpleQuiz.Main.Request
+
 let prefix = pchar '.'
 
 let pballotBox =
@@ -125,6 +127,8 @@ let pcommand: _ Parser =
         // Fishing.Main.Parser.start |>> FishingCmd
 
         Roll.Main.Parser.start |>> RollCmd
+
+        SimpleQuiz.Main.Parser.start |>> SimpleQuizCmd
     ]
 
 let start botId str =

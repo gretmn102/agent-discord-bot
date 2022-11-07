@@ -125,6 +125,9 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
             | CommandParser.RollCmd msg ->
                 Roll.Main.exec e msg
 
+            | CommandParser.SimpleQuizCmd msg ->
+                SimpleQuiz.Main.exec e msg
+
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 
@@ -219,6 +222,7 @@ let main argv =
                 || Doorkeeper.Invites.componentInteractionCreateHandle client e
                 || EggBattle.Main.componentInteractionCreateHandle client e
                 // || Fishing.Main.componentInteractionCreateHandle client e
+                || SimpleQuiz.Main.componentInteractionCreateHandle client e
 
             if not isHandled then
                 AppsHub.resp client e

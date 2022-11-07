@@ -86,6 +86,8 @@
     <Compile Include="Fishing\Model.fs" />
     <Compile Include="Fishing\Main.fs" />
     <Compile Include="Roll\Main.fs" />
+    <Compile Include="SimpleQuiz\Model.fs" />
+    <Compile Include="SimpleQuiz\Main.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />
