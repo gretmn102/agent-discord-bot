@@ -290,15 +290,26 @@ module BaitChoiceUi =
 let r = new System.Random()
 
 module Actions =
-    let toFish baitId send (userId: UserId) (state: State) =
+    let toFish baitId send setImage (userId: UserId) (state: State) =
         let items = state.Items
         let itemsCount = items.Cache.Count
 
         let sendCatched (newCatchSetting: option<{| TotalCatchesCount: int |}>) (catch: ItemsDb.ItemT) =
+            let image = catch.Data.ImageUrl
+            if not (System.String.IsNullOrEmpty image) then
+                setImage image
+
             [
                 sprintf "Поймано \"%s\"!" catch.Data.Name
+
+                let description = catch.Data.Description
+                if not (System.String.IsNullOrEmpty description) then
+                    ""
+                    description
+
                 match newCatchSetting with
                 | Some newCatchSetting ->
+                    ""
                     createProgressMessage newCatchSetting.TotalCatchesCount itemsCount
                 | None -> ()
             ]
@@ -442,8 +453,9 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
 
         match baitName with
         | Some baitName ->
+            let embed = Entities.DiscordEmbedBuilder()
+            let setImage imgUrl = embed.ImageUrl <- imgUrl
             let send msg =
-                let embed = Entities.DiscordEmbedBuilder()
                 embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 embed.Description <- msg
 
@@ -454,7 +466,7 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
 
             match ItemsDb.Items.tryFindByName baitName state.Items with
             | Some baitName ->
-                Actions.toFish (Some baitName.Id) send e.Author.Id state
+                Actions.toFish (Some baitName.Id) send setImage e.Author.Id state
             | None ->
                 send (sprintf "Предмет \"%s\" в игре не найден." baitName)
 
@@ -632,15 +644,16 @@ let reduce (msg: Msg) (state: State): State =
                 state
 
     | ToFishHandle(e, baitId) ->
+        let embed = Entities.DiscordEmbedBuilder()
+        let setImage imgUrl = embed.ImageUrl <- imgUrl
         let send msg =
-            let embed = Entities.DiscordEmbedBuilder()
             embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
             embed.Description <- msg
             let b = Entities.DiscordInteractionResponseBuilder()
             b.AddEmbed(embed.Build()) |> ignore
             awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
-        Actions.toFish baitId send e.User.Id state
+        Actions.toFish baitId send setImage e.User.Id state
 
     | GetState r ->
         r.Reply state

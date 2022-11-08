@@ -8,6 +8,7 @@ type Item =
         Name: string
         Loot: System.Guid []
         Description: string
+        ImageUrl: string
     }
 
 type MapItemRaw = obj []

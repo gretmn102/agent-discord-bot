@@ -12,16 +12,22 @@ module ItemsDb =
         {
             Name: string
             Loot: ItemId []
+            Description: string
+            ImageUrl: string
         }
-        static member Create name loot =
+        static member Create name loot description imageUrl =
             {
                 Name = name
                 Loot = loot
+                Description = description
+                ImageUrl = imageUrl
             }
         static member Empty =
             {
                 Name = ""
                 Loot = [||]
+                Description = ""
+                ImageUrl = ""
             }
         static member Serialize (data: ItemData) =
             data |> Json.ser
@@ -62,6 +68,8 @@ module ItemsDb =
                 {
                     Name = item.Name
                     Loot = item.Loot
+                    Description = item.Description
+                    ImageUrl = item.ImageUrl
                 }
             create item.ItemId x
 
