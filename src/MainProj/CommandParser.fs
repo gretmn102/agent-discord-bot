@@ -51,6 +51,7 @@ let pcommand: _ Parser =
         Calc.Main.exec
         Roll.Main.exec
         SimpleQuiz.Main.exec
+        // Fishing.Main.exec
     ]
 
     choice [

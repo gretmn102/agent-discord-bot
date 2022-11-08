@@ -42,14 +42,30 @@ module Parser =
             skipStringCI CommandNames.progress >>% Progress
         ]
 
-    let start: _ Parser =
+    let start f: _ Parser =
         choice [
             paction |>> Request.ActionReq
         ]
+        >>= fun msg ->
+            preturn (fun x -> f x msg)
+
+type SelectionBaitKey = Option<ItemId>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module SelectionBaitKey =
+    let serialize (data: SelectionBaitKey) =
+        data |> Json.ser
+
+    let tryDeserialize json =
+        try
+            let res: SelectionBaitKey = Json.des json
+            Ok res
+        with e ->
+            Error e.Message
 
 type Msg =
     | Request of EventArgs.MessageCreateEventArgs * Request
-    | ToFishHandle of EventArgs.ComponentInteractionCreateEventArgs * bait: ItemId option
+    | ToFishHandle of EventArgs.ComponentInteractionCreateEventArgs * baitId: SelectionBaitKey
     | GetState of AsyncReplyChannel<State>
 
 module InventoryTable =
@@ -147,10 +163,19 @@ module BaitChoiceUi =
         b.Embed <- embed.Build()
 
         let options =
-            withoutBait::baits
-            |> List.mapi (fun i item ->
-                DSharpPlus.Entities.DiscordSelectComponentOption(item.Name, item.Id)
-            )
+            let withoutBaitOption =
+                let name = "Рыбачить без наживки"
+                let value: SelectionBaitKey = None
+                Entities.DiscordSelectComponentOption(name, SelectionBaitKey.serialize value)
+            let baitOptions =
+                baits
+                |> List.mapi (fun i item ->
+                    let selectionBaitKey = Some item.Id
+                    Entities.DiscordSelectComponentOption(item.Name, SelectionBaitKey.serialize selectionBaitKey)
+                )
+
+
+            withoutBaitOption::baitOptions
 
         let componentState =
             let state: BaitComponentState =
@@ -192,15 +217,17 @@ module BaitChoiceUi =
                     match data.ComponentId with
                     | ComponentId.BaitChoiceId ->
                         if data.Data.OwnerId = e.User.Id then
-                            let selected = e.Values.[0]
-
-                            let selectedBait =
-                                if selected = withoutBait.Id then
-                                    None
-                                else
-                                    Some selected
-
-                            next selectedBait
+                            match e.Values with
+                            | [|rawSelectedBaitKey|] ->
+                                match SelectionBaitKey.tryDeserialize rawSelectedBaitKey with
+                                | Ok selectedBait ->
+                                    next selectedBait
+                                | Error errMsg ->
+                                    sprintf "SelectionBaitKey.tryDeserialize return error:\n%A" errMsg
+                                    |> restartComponent
+                            | xs ->
+                                sprintf "expected e.Values = [|rawSelectedBaitKey|] but %A" xs
+                                |> restartComponent
                         else
                             let b = Entities.DiscordInteractionResponseBuilder()
                             b.Content <-
@@ -473,8 +500,10 @@ let m =
         loop init
     )
 
-let exec e msg =
-    m.Post (Request (e, msg))
+let exec: MessageCreateEventHandler Parser.Parser =
+    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+        m.Post (Request (e, msg))
+    )
 
 let componentInteractionCreateHandle client e =
     InventoryTable.componentInteractionCreateHandle

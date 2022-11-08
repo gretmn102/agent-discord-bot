@@ -20,13 +20,6 @@ type Item =
             Loot = loot
         }
 
-let withoutBait: Item =
-    {
-        Id = "0"
-        Name = "Рыбачить без наживки"
-        Loot = [||]
-    }
-
 type RawItems = list<string * string array>
 
 let rawItems: RawItems =
