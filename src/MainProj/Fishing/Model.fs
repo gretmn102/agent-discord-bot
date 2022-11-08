@@ -5,82 +5,212 @@ open MongoDB.Bson
 
 open Types
 
-type ItemId = string
+type ItemId = System.Guid
 
-type Item =
-    {
-        Id: ItemId
-        Name: string
-        Loot: ItemId []
-    }
-    static member Create itemId name loot =
+module ItemsDb =
+    type ItemData =
         {
-            Id = itemId
-            Name = name
-            Loot = loot
+            Name: string
+            Loot: ItemId []
+        }
+        static member Create name loot =
+            {
+                Name = name
+                Loot = loot
+            }
+        static member Empty =
+            {
+                Name = ""
+                Loot = [||]
+            }
+        static member Serialize (data: ItemData) =
+            data |> Json.ser
+        static member Deserialize json =
+            try
+                Ok (Json.des json)
+            with e ->
+                Error e.Message
+
+    type Version =
+        | V0 = 0
+
+    type Item<'ItemData> =
+        {
+            Id: ItemId
+            Version: Version
+            Data: 'ItemData
         }
 
-type RawItems = list<string * string array>
+    /// Current version of item
+    type ItemT = Item<ItemData>
 
-let rawItems: RawItems =
-    [("Ничего не подозревающий червячок",
-      [|"Шоколадная пиявка"; "Плотвецкий рыба-кусь"|]);
-     ("Шоколадная пиявка ",
-      [|"Шоко-квакша земноводная"; "Дрожжевой линь"; "Рыбанан"; "Рыбаклажан"|]);
-     ("Шоко-квакша земноводная", [|"Рваный французский флаг"|]);
-     ("Дрожжевой линь",
-      [|"Блиноподобная камбала "; "Рыбагет"; "Рыбатон";
-        "Ромовая рыба (как баба, только рыба)"; "Куки-карп"|]);
-     ("Блиноподобная камбала", [|"Тунец-шармец"|]);
-     ("Рыбагет", [|"Круассалтус (круассан + палтус)"|]);
-     ("Круассалтус ", [|"Рваный французский флаг"|]);
-     ("Рыбатон", [|"Ржавое мукомольное сито"|]);
-     ("Куки-карп", [|"Глубоководная печенюшная принцесса"; "Косяк крекер-плотвы"|]);
-     ("Рыбанан", [|"Зефирный коралл"; "Медовый кои"|]);
-     ("Медовый кои", [|"Рыба-пчела"|]); ("Рыба-пчела ", [|"Рыбопчлениый улей"|]);
-     ("Рыбаклажан",
-      [|"Сапог-саможуйка"; "Рыба-сэндвич (можно заменить на что-то интереснее)"|]);
-     ("Рыба-сэндвич", [|"Лохнесское бутербродище"|]);
-     ("Плотвецкий рыба-кусь",
-      [|"Псевдовяленная вобла"; "Рыбутыль"; "СКАТерть";
-        "Роговидная левозакрученная раковина с валерьянкой"; "Фуаг-рак"|]);
-     ("Псевдовяленная вобла", [|"Рыба-Ёрш коктейлеобразная"|]);
-     ("Рыба-Ёрш коктейлеобразная", [|"Невкусный ил"|]);
-     ("Рыбутыль", [|"Волнорез-беконохвост"|]);
-     ("Волнорез-беконохвост", [|"Глубоководный поильщик"|]);
-     ("Глубоководный поильщик", [|"Хмель-водоросли"|]);
-     ("СКАТерть", [|"Банка селёдочного варенья"|]);
-     ("Банка селёдочного варенья ", [|"Рыбабушка склерозиус"|])]
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Item =
+        let create id (data: 'ItemData) =
+            {
+                Id = id
+                Version = Version.V0
+                Data = data
+            }
 
-let baseItemId = fst rawItems.[0]
+        let isBait (item: ItemT) =
+            not (Array.isEmpty item.Data.Loot)
 
-let items: Map<ItemId, Item> =
-    let fillEmptyItems (rawItems: RawItems) =
-        let rawItems =
-            rawItems
-            |> List.map (fun (name, loot) -> name.Trim(), loot |> Array.map (fun x -> x.Trim()))
+        let ofEditorItem (item: Editor.Types.Item): ItemT =
+            let x =
+                {
+                    Name = item.Name
+                    Loot = item.Loot
+                }
+            create item.ItemId x
 
-        let allItems =
-            rawItems
-            |> List.fold
-                (fun st (_, loot) ->
-                    loot |> Array.fold (fun st x -> Set.add x st) st
+    type ItemsArray = ItemT []
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module ItemsArray =
+        let serialize (item: ItemsArray) =
+            Json.ser item
+
+        let tryDeserialize json =
+            try
+                let res: ItemsArray = Json.des json
+                Ok res
+            with e ->
+                Error e.Message
+
+    type Collection = IMongoCollection<BsonDocument>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Collection =
+        let replace (newData: ItemT) (collection: Collection) =
+            let doc = newData.ToBsonDocument()
+
+            let el = BsonElement("_id", BsonValue.Create(newData.Id))
+            let i = new BsonDocument(el)
+
+            let filter = FilterDefinition.op_Implicit(i)
+
+            collection.ReplaceOne(filter, doc)
+            |> ignore
+
+        let insert itemId setAdditionParams (collection: Collection): Item<'ItemData> =
+            let itemId =
+                itemId
+                |> Option.defaultWith (fun () ->
+                    System.Guid.NewGuid()
                 )
-                Set.empty
-        let restItems =
-            rawItems
-            |> List.fold
-                (fun st (name, _) -> Set.remove name st)
-                allItems
-        restItems
-        |> Set.fold (fun st x -> (x, [||])::st) rawItems
 
-    rawItems
-    |> fillEmptyItems
-    |> List.map (fun (name, loot) ->
-        name, Item.Create name name loot
-    )
-    |> Map.ofList
+            let x = Item.create itemId (setAdditionParams ItemData.Empty)
+            collection.InsertOne(x.ToBsonDocument())
+            x
+
+    type Items =
+        {
+            Cache: Map<ItemId, ItemT>
+            Collection: Collection
+        }
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Items =
+        let collectionName = "fishingItems"
+
+        let init (db: IMongoDatabase): Items =
+            let collection = db.GetCollection<BsonDocument>(collectionName)
+
+            if IMongoCollection.isEmpty collection then
+                let item =
+                    {
+                        Cache = Map.empty
+                        Collection = collection
+                    }
+
+                item
+            else
+                {
+                    Cache =
+                        collection.Find(fun x -> true).ToEnumerable()
+                        |> Seq.fold
+                            (fun st x ->
+                                let ver =
+                                    match x.["Version"] with
+                                    | null -> failwithf "`Version` but\n%A" x
+                                    | x ->
+                                        if x.IsInt32 then
+                                            enum<Version> x.AsInt32
+                                        else
+                                            failwithf "Version not int32 but %A" x
+                                let x =
+                                    match ver with
+                                    | Version.V0 ->
+                                        Serialization.BsonSerializer.Deserialize<ItemT>(x)
+                                    | x ->
+                                        failwithf "Version = %A not implemented" x
+
+                                Map.add x.Id x st
+                            )
+                            Map.empty
+                    Collection = collection
+                }
+
+        let set itemIdOpt setAdditionParams (items: Items) =
+            let cache = items.Cache
+
+            {
+                items with
+                    Cache =
+                        let insertNew id =
+                            let item =
+                                items.Collection
+                                |> Collection.insert id setAdditionParams
+
+                            Map.add item.Id item cache
+
+                        match itemIdOpt with
+                        | Some itemId ->
+                            match Map.tryFind itemId cache with
+                            | Some item ->
+                                let item =
+                                    { item with
+                                        Data = setAdditionParams item.Data
+                                    }
+
+                                Collection.replace item items.Collection
+
+                                Map.add itemId item cache
+                            | None ->
+                                insertNew (Some itemId)
+                        | None ->
+                            insertNew None
+            }
+
+        let setItems (items: ItemsArray) (itemsDb: Items): Items =
+            items
+            |> Array.fold
+                (fun items item ->
+                    set (Some item.Id) (fun _ -> item.Data) items
+                )
+                itemsDb
+
+        let drop (db: IMongoDatabase) (items: Items) =
+            db.DropCollection collectionName
+
+            { items with
+                Cache = Map.empty
+            }
+
+        let tryFindById id (items: Items) =
+            Map.tryFind id items.Cache
+
+        let tryFindByName name (items: Items) =
+            items.Cache
+            |> Seq.tryPick (fun (KeyValue(_, item)) ->
+                if name = item.Data.Name then
+                    Some item
+                else
+                    None
+            )
 
 type InventoryItem =
     {
@@ -121,8 +251,6 @@ module Inventory =
                 Map.add itemId item inventory
             else
                 inventory
-
-MongoDB.Bson.Serialization.BsonSerializer.RegisterSerializer(typeof<Inventory>, new Db.MapSerializer<ItemId, InventoryItem>())
 
 module Players =
     type MainData =
@@ -229,6 +357,8 @@ module Players =
         let collectionName = "fishingPlayers"
 
         let init (db: IMongoDatabase): GuildData =
+            MongoDB.Bson.Serialization.BsonSerializer.RegisterSerializer(typeof<Inventory>, new Db.MapSerializer<ItemId, InventoryItem>())
+
             let collection = db.GetCollection<BsonDocument>(collectionName)
 
             if IMongoCollection.isEmpty collection then
@@ -273,3 +403,143 @@ module Players =
         let tryFind userId (guildWelcomeSetting: GuildData) =
             Map.tryFind userId guildWelcomeSetting.Cache
             |> Option.map (fun x -> x.Data)
+
+module Settings =
+    type MainData =
+        {
+            BaseCatchId: ItemId option
+        }
+        static member Empty =
+            {
+                BaseCatchId = None
+            }
+        static member Serialize (data: MainData) =
+            data |> Json.ser
+        static member Deserialize json =
+            try
+                let res: MainData = Json.des json
+                Ok res
+            with e ->
+                Error e.Message
+
+    type Version =
+        | V0 = 0
+
+    type Id = ObjectId
+
+    type Data<'MainData> =
+        {
+            Id: Id
+            Version: Version
+            Data: 'MainData
+        }
+        static member Init(data: 'MainData) =
+            {
+                Id = ObjectId.Empty
+                Version = Version.V0
+                Data = data
+            }
+
+    type Collection = IMongoCollection<BsonDocument>
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Collection =
+        let replace (newData: Data<MainData>) (collection: Collection) =
+            let doc = newData.ToBsonDocument()
+
+            let el = BsonElement("_id", BsonValue.Create(newData.Id))
+            let i = new BsonDocument(el)
+
+            let filter = FilterDefinition.op_Implicit(i)
+
+            collection.ReplaceOne(filter, doc)
+            |> ignore
+
+        let insert setAdditionParams (collection: Collection) =
+            let x =
+                Data.Init(setAdditionParams MainData.Empty)
+
+            let d = x.ToBsonDocument()
+            collection.InsertOne(d)
+
+            let newId = d.["_id"].AsObjectId
+
+            { x with
+                Id = newId
+            }
+
+    type GuildData =
+        {
+            Cache: Data<MainData>
+            Collection: Collection
+        }
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildData =
+        let collectionName = "fishingSettings"
+
+        let init (db: IMongoDatabase): GuildData =
+            let collection = db.GetCollection<BsonDocument>(collectionName)
+
+            if IMongoCollection.isEmpty collection then
+                {
+                    Cache = Collection.insert id collection
+                    Collection = collection
+                }
+            else
+                {
+                    Cache =
+                        let res =
+                            collection.Find(fun x -> true).ToEnumerable()
+                            |> Seq.tryHead
+
+                        match res with
+                        | Some x ->
+                            let ver =
+                                match x.["Version"] with
+                                | null -> failwithf "`Version` but\n%A" x
+                                | x ->
+                                    if x.IsInt32 then
+                                        enum<Version> x.AsInt32
+                                    else
+                                        failwithf "Version not int32 but %A" x
+
+                            match ver with
+                            | Version.V0 ->
+                                Serialization.BsonSerializer.Deserialize<Data<MainData>>(x)
+                            | x ->
+                                failwithf "Version = %A not implemented" x
+
+                        | None ->
+                            Collection.insert id collection
+
+                    Collection = collection
+                }
+
+        let set setAdditionParams (guildData: GuildData) =
+            let cache = guildData.Cache
+
+            {
+                guildData with
+                    Cache =
+                        let data =
+                            { cache with
+                                Data = setAdditionParams cache.Data
+                            }
+
+                        Collection.replace data guildData.Collection
+
+                        data
+            }
+
+        let drop (db: IMongoDatabase) (settings: GuildData) =
+            db.DropCollection collectionName
+
+            { settings with
+                Cache = Collection.insert id settings.Collection
+            }
+
+        let get (guildWelcomeSetting: GuildData) =
+            guildWelcomeSetting.Cache

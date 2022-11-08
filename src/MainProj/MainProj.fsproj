@@ -83,6 +83,7 @@
     <Compile Include="Moderation\Main.fs" />
     <Compile Include="Calc\Core.fs" />
     <Compile Include="Calc\Main.fs" />
+    <Compile Include="Fishing\EditorTypes.fs" />
     <Compile Include="Fishing\Model.fs" />
     <Compile Include="Fishing\Main.fs" />
     <Compile Include="Roll\Main.fs" />
