@@ -19,8 +19,12 @@ type ActionReq =
     | Inventory
     | Progress
 
+type DataOrUrl =
+    | Data of string
+    | Url of string
+
 type ItemsReq =
-    | SetItems of json: string option
+    | SetItems of json: DataOrUrl option
 
 type SettingsReq =
     | SetSettings of json: string
@@ -52,9 +56,18 @@ module Parser =
         psetSetting |>> SetSettings
 
     let pitems: _ Parser =
+        let pdataOrUrl =
+            let purl =
+                skipString "http"
+                >>. many1Satisfy ((<>) ' ')
+                |>> sprintf "http%s"
+
+            (purl |>> Url)
+            <|> (pcodeBlock <|> many1Satisfy (fun _ -> true) |>> Data)
+
         let psetItems =
             skipStringCI CommandNames.setItems .>> spaces
-            >>. opt (pcodeBlock <|> many1Satisfy (fun _ -> true))
+            >>. opt pdataOrUrl
 
         psetItems |>> SetItems
 
@@ -568,27 +581,36 @@ let reduce (msg: Msg) (state: State): State =
             | SetItems json ->
                 awaiti <| e.Channel.TriggerTypingAsync()
 
-                let getJson json next =
+                let getJson (json: DataOrUrl option) next =
+                    let download url =
+                        let res =
+                            WebDownloader.tryGet id url
+                            |> Async.RunSynchronously
+                        match res with
+                        | Right x ->
+                            match x.Content with
+                            | WebDownloader.Text json ->
+                                next json
+                            | _ ->
+                                send (sprintf "Expected WebDownloader.Text but binary.")
+                                state
+                        | Left x ->
+                            send (sprintf "%A" x)
+                            state
+
                     match json with
-                    | Some json -> next json
+                    | Some json ->
+                        match json with
+                        | Url url ->
+                            download url
+                        | Data json ->
+                            next json
+
                     | None ->
                         match Seq.tryHead e.Message.Attachments with
                         | Some jsonFile ->
                             // if jsonFile.MediaType = "application/json; charset=utf-8" then
-                            let res =
-                                WebDownloader.tryGet id jsonFile.Url
-                                |> Async.RunSynchronously
-                            match res with
-                            | Right x ->
-                                match x.Content with
-                                | WebDownloader.Text x ->
-                                    next x
-                                | _ ->
-                                    send (sprintf "Expected WebDownloader.Text but binary.")
-                                    state
-                            | Left x ->
-                                send (sprintf "%A" x)
-                                state
+                            download jsonFile.Url
                         | None ->
                             send "Нужно указать настройки либо явно, либо прикрепить файл к сообщению."
                             state
