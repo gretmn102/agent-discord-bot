@@ -9,20 +9,20 @@ type ItemId = string
 
 type Item =
     {
-        ItemId: ItemId
+        Id: ItemId
         Name: string
         Loot: ItemId []
     }
     static member Create itemId name loot =
         {
-            ItemId = itemId
+            Id = itemId
             Name = name
             Loot = loot
         }
 
 let withoutBait: Item =
     {
-        ItemId = "0"
+        Id = "0"
         Name = "Рыбачить без наживки"
         Loot = [||]
     }

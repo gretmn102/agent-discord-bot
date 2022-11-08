@@ -149,7 +149,7 @@ module BaitChoiceUi =
         let options =
             withoutBait::baits
             |> List.mapi (fun i item ->
-                DSharpPlus.Entities.DiscordSelectComponentOption(item.Name, item.ItemId)
+                DSharpPlus.Entities.DiscordSelectComponentOption(item.Name, item.Id)
             )
 
         let componentState =
@@ -195,7 +195,7 @@ module BaitChoiceUi =
                             let selected = e.Values.[0]
 
                             let selectedBait =
-                                if selected = withoutBait.ItemId then
+                                if selected = withoutBait.Id then
                                     None
                                 else
                                     Some selected
@@ -295,7 +295,7 @@ module Actions =
                 sendThereIsNoMoreBait bait
 
         let getBaitFromInventory (bait: Item) (player: Players.MainData) next =
-            match Map.tryFind bait.ItemId player.Inventory with
+            match Map.tryFind bait.Id player.Inventory with
             | Some baitInInventory ->
                 if baitInInventory.Count > 0 then
                     next baitInInventory
@@ -311,7 +311,7 @@ module Actions =
         // remove bait from inventory
         let inventory: Inventory =
             player.Inventory
-            |> Inventory.update bait.ItemId (fun count -> count - 1)
+            |> Inventory.update bait.Id (fun count -> count - 1)
 
         let loot = bait.Loot
         let catchId = loot.[r.Next(0, loot.Length)]
