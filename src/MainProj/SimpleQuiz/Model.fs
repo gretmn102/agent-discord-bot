@@ -28,7 +28,7 @@ let createQuiz quizId (questions: Question []) =
             )
     }
 
-let quizes: Quiz [] =
+let quizes =
     let capitals =
         [|
             {
@@ -123,15 +123,16 @@ let quizes: Quiz [] =
         createQuiz "capitals" capitals
         createQuiz "flags" flags
     |]
+    |> Array.map (fun q -> q.Id, q)
+    |> Map.ofArray
 
 let quizByQuestionId =
     quizes
-    |> Array.map (fun quiz ->
+    |> Map.map (fun k quiz ->
         let questions =
             quiz.Questions
             |> Array.map (fun x -> x.Id, x)
             |> Map.ofArray
 
-        quiz.Id, questions
+        questions
     )
-    |> Map.ofArray
