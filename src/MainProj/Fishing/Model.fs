@@ -197,7 +197,14 @@ module ItemsDb =
             items
             |> Array.fold
                 (fun items item ->
-                    set (Some item.Id) (fun _ -> item.Data) items
+                    let rec f () =
+                        try
+                            set (Some item.Id) (fun _ -> item.Data) items
+                        with e ->
+                            printfn "setItems error:\n%s" e.Message
+                            System.Threading.Thread.Sleep 500
+                            f ()
+                    f ()
                 )
                 itemsDb
 
