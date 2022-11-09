@@ -9,7 +9,7 @@ open Model
 type State = unit
 
 type Request =
-    | StartQuiz
+    | StartQuiz of quizName: string
 
 module Parser =
     open FParsec
@@ -23,10 +23,12 @@ module Parser =
 
     let pquiz =
         skipStringCI CommandNames.quiz
+        .>> spaces
+        >>. many1Satisfy (fun _ -> true)
 
     let start f: _ Parser =
         choice [
-            pquiz >>% StartQuiz
+            pquiz |>> StartQuiz
         ]
         >>= fun msg ->
             preturn (fun x -> f x msg)
@@ -37,7 +39,11 @@ module QuizUi =
 
     type Data =
         {
+            [<Newtonsoft.Json.JsonProperty("O")>]
             OwnerId: UserId
+            [<Newtonsoft.Json.JsonProperty("Qz")>]
+            QuizId: QuizId
+            [<Newtonsoft.Json.JsonProperty("Qs")>]
             QuestionId: QuestionId
         }
 
@@ -47,10 +53,12 @@ module QuizUi =
 
     type InitOptions =
         {
+            QuizId: QuizId
             Question: Question
         }
-        static member create question =
+        static member create quizId question =
             {
+                QuizId = quizId
                 Question = question
             }
 
@@ -71,6 +79,7 @@ module QuizUi =
                     ComponentId = ComponentId.AnswerSelectedListId
                     Data = {
                         OwnerId = userId
+                        QuizId = options.QuizId
                         QuestionId = options.Question.Id
                     }
                 }
@@ -115,21 +124,26 @@ module QuizUi =
                         if componentState.Data.OwnerId = e.User.Id then
                             match e.Values with
                             | [|answerId|] ->
-                                match Map.tryFind componentState.Data.QuestionId quizByQuestionId with
-                                | Some question ->
-                                    let send msg =
-                                        let embed = Entities.DiscordEmbedBuilder()
-                                        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                                        embed.Description <- msg
-                                        let b = Entities.DiscordInteractionResponseBuilder()
-                                        b.AddEmbed(embed.Build()) |> ignore
-                                        awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
-                                    if question.Correct = answerId then
-                                        send "И это правильный ответ!"
-                                    else
-                                        send "К сожалению, это неправильный ответ."
+                                match Map.tryFind componentState.Data.QuizId quizByQuestionId with
+                                | Some questions ->
+                                    match Map.tryFind componentState.Data.QuestionId questions with
+                                    | Some question ->
+                                        let send msg =
+                                            let embed = Entities.DiscordEmbedBuilder()
+                                            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                                            embed.Description <- msg
+                                            let b = Entities.DiscordInteractionResponseBuilder()
+                                            b.AddEmbed(embed.Build()) |> ignore
+                                            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+                                        if question.Correct = answerId then
+                                            send "И это правильный ответ!"
+                                        else
+                                            send "К сожалению, это неправильный ответ."
+                                    | None ->
+                                        sprintf "not found in %s question ID in questions" componentState.Data.QuestionId
+                                        |> restartComponent
                                 | None ->
-                                    sprintf "not found in %s question ID in questions" componentState.Data.QuestionId
+                                    sprintf "not found in %s quiz ID in questions" componentState.Data.QuizId
                                     |> restartComponent
                             | xs ->
                                 sprintf "expected `e.Values` is [|answerId|] but %A" xs
@@ -161,18 +175,37 @@ type Msg =
 let r = new System.Random()
 
 module Actions =
-    let startQuiz (e: EventArgs.MessageCreateEventArgs) =
-        let question =
+    let startQuiz (e: EventArgs.MessageCreateEventArgs) (quiz: Quiz) =
+        let questions = quiz.Questions
+        let initOptions =
             QuizUi.InitOptions.create
-                quiz.[r.Next(0, quiz.Length)]
-        QuizUi.init question e
+                quiz.Id
+                questions.[r.Next(0, questions.Length)]
+        QuizUi.init initOptions e
 
 let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: State) =
     match msg with
-    | StartQuiz ->
+    | StartQuiz quizName ->
         awaiti <| e.Channel.TriggerTypingAsync()
 
-        Actions.startQuiz e
+        let res =
+            quizes
+            |> Array.tryFind (fun quiz -> quiz.Name = quizName)
+
+        match res with
+        | Some quiz ->
+            Actions.startQuiz e quiz
+        | None ->
+            let send msg =
+                let embed = Entities.DiscordEmbedBuilder()
+                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                embed.Description <- msg
+                let b = Entities.DiscordMessageBuilder()
+                b.Embed <- embed.Build()
+                awaiti <| e.Channel.SendMessageAsync b
+
+            sprintf "Не найдена викторина с таким названием."
+            |> send
 
         state
 

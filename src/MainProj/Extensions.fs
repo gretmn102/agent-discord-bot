@@ -7,10 +7,12 @@ module Interaction =
     open FsharpMyExtension
     open Newtonsoft.Json
 
-    type ComponentState<'ComponentId, 'Data> =
+    type ComponentState<'ComponentId, 'Data when 'ComponentId: enum<int>> =
         {
             Id: string
+            [<JsonProperty("CI")>]
             ComponentId: 'ComponentId
+            [<JsonProperty("D")>]
             Data: 'Data
         }
         static member Serialize (x: ComponentState<'ComponentId, 'Data>) =
