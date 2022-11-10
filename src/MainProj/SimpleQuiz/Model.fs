@@ -253,12 +253,12 @@ module Players =
             {
                 guildData with
                     Cache =
-                        let newPlayersWithCurrent () =
+                        let newPlayersWithCurrent players =
                             let player =
                                 guildData.Collection
                                 |> Collection.insert id setAdditionParams
 
-                            Map.add id.UserId player Map.empty
+                            Map.add id.UserId player players
 
                         let players =
                             match Map.tryFind id.QuizId cache with
@@ -274,10 +274,10 @@ module Players =
 
                                     Map.add id.UserId data players
                                 | None ->
-                                    newPlayersWithCurrent ()
+                                    newPlayersWithCurrent players
 
                             | None ->
-                                newPlayersWithCurrent ()
+                                newPlayersWithCurrent Map.empty
 
                         Map.add id.QuizId players cache
             }
