@@ -33,16 +33,17 @@ type SortByContainer< ^Case when ^Case: enum<int32> and ^Case: comparison and ^C
             GetValue = fun v -> int32 v |> enum
         }
 
-type Setting<'Item, ^SortBy when ^SortBy: enum<int32> and ^SortBy: comparison and ^SortBy: (static member op_Explicit:  ^SortBy -> int32)> =
+type Setting<'Item, ^SortBy, 'CustomData, 'State when ^SortBy: enum<int32> and ^SortBy: comparison and ^SortBy: (static member op_Explicit:  ^SortBy -> int32)> =
     {
         Id: string
-        Title: string
+        GetState: unit -> 'State
+        Title: 'CustomData -> 'State -> string
         GetHeaders: ^SortBy -> string []
-        GetItems: unit -> 'Item []
+        GetItems: 'CustomData -> 'State -> 'Item []
         ItemsCountPerPage: int
         SortBy: SortByContainer< ^SortBy>
         SortFunction: ^SortBy -> 'Item [] -> 'Item []
-        MapFunction: int -> 'Item -> string []
+        MapFunction: 'State -> int -> 'Item -> string []
     }
 
 type ComponentId =
@@ -52,17 +53,26 @@ type ComponentId =
     | RightArrowButtonId = 3
     | SelectSortId = 4
 
-type ComponentState<'SortBy> = Interaction.ComponentState<ComponentId, 'SortBy>
+type InnerSettings<'SortBy, 'CustomData> = {
+    [<Newtonsoft.Json.JsonProperty("S")>]
+    SortBy: 'SortBy
+    [<Newtonsoft.Json.JsonProperty("D")>]
+    CustomData: 'CustomData
+}
+
+type ComponentState<'SortBy, 'CustomData> =
+    Interaction.ComponentState<ComponentId, InnerSettings<'SortBy, 'CustomData>>
 
 let inline createTable
     (addComponents: Entities.DiscordComponent [] -> _)
     addEmbed
     page
-    (sortBy: 'SortBy option)
-    (setting: Setting<'Item, 'SortBy>) =
+    ((sortBy: 'SortBy option), (customData: 'CustomData))
+    (setting: Setting<'Item, 'SortBy, 'CustomData, 'State>) =
 
     let itemsCountPerPage = setting.ItemsCountPerPage
-    let items = setting.GetItems ()
+    let state = setting.GetState ()
+    let items = setting.GetItems customData state
     let itemsCount = items.Length
     let lastPageItemsCount = itemsCount % itemsCountPerPage
     let pagesCount = itemsCount / itemsCountPerPage + if lastPageItemsCount > 0 then 1 else 0
@@ -81,7 +91,7 @@ let inline createTable
                 items
                 |> setting.SortFunction sortBy
                 |> Seq.skip lb |> Seq.take ub
-                |> Seq.mapi (fun i -> setting.MapFunction (lb + i + 1))
+                |> Seq.mapi ((fun i -> lb + i + 1) >> setting.MapFunction state)
                 |> Array.ofSeq
                 |> Array.transpose
                 |> Array.map (String.concat "\n")
@@ -96,7 +106,7 @@ let inline createTable
         let b =
             Entities.DiscordEmbedBuilder()
                 .WithColor(DiscordEmbed.backgroundColorDarkTheme)
-                .WithTitle(setting.Title)
+                .WithTitle(setting.Title customData state)
 
         let b =
             table
@@ -122,11 +132,15 @@ let inline createTable
         )
 
     let createId k =
-        let x: ComponentState<_> =
+        let x: ComponentState<_, _> =
             {
                 Id = componentId
                 ComponentId = k
-                Data = sortBy |> Option.defaultValue setting.SortBy.DefaultCase |> setting.SortBy.ToString
+                Data = {
+                    SortBy =
+                        sortBy |> Option.defaultValue setting.SortBy.DefaultCase |> setting.SortBy.ToString
+                    CustomData = customData
+                }
             }
         ComponentState.Serialize x
 
@@ -174,7 +188,7 @@ let inline createTable
 let inline componentInteractionCreateHandle
     (client: DiscordClient)
     (e: EventArgs.ComponentInteractionCreateEventArgs)
-    (setting: Setting<'Item, 'SortBy>) =
+    (setting: Setting<'Item, 'SortBy, 'CustomData, 'State>) =
 
     let getCurrentPage () =
         e.Message.Components
@@ -186,7 +200,7 @@ let inline componentInteractionCreateHandle
                 match Interaction.ComponentState.TryDeserialize setting.Id id with
                 | Some res ->
                     match res with
-                    | Ok (state: ComponentState<'SortBy>) ->
+                    | Ok (state: ComponentState<'SortBy, 'CustomData>) ->
                         match state.ComponentId with
                         | ComponentId.PaginationButtonId ->
                             let paginationButton = x :?> Entities.DiscordButtonComponent
@@ -203,7 +217,7 @@ let inline componentInteractionCreateHandle
             )
         )
 
-    let update mapPage (sortBy: 'SortBy option) =
+    let update mapPage (innerData: InnerSettings<'SortBy, 'CustomData>) = // (sortBy: 'SortBy option) customData =
         let currentPage =
             match getCurrentPage () with
             | Some currentPage -> currentPage
@@ -212,7 +226,7 @@ let inline componentInteractionCreateHandle
 
         let b = Entities.DiscordInteractionResponseBuilder()
 
-        createTable b.AddComponents b.AddEmbed (mapPage currentPage) sortBy setting
+        createTable b.AddComponents b.AddEmbed (mapPage currentPage) (Some innerData.SortBy, innerData.CustomData) setting
 
         awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
@@ -236,38 +250,31 @@ let inline componentInteractionCreateHandle
         match Interaction.ComponentState.TryDeserialize setting.Id e.Id with
         | Some res ->
             match res with
-            | Ok (data: ComponentState<'SortBy>) ->
+            | Ok (data: ComponentState<'SortBy, 'CustomData>) ->
                 match data.ComponentId with
                 | ComponentId.RefreshButtonId ->
-                    update id (Some data.Data)
-                    true
+                    update id data.Data
                 | ComponentId.LeftArrowButtonId ->
-                    update (fun currentPage -> currentPage - 1) (Some data.Data)
-                    true
+                    update (fun currentPage -> currentPage - 1) data.Data
                 | ComponentId.RightArrowButtonId ->
-                    update (fun currentPage -> currentPage + 1) (Some data.Data)
-                    true
+                    update (fun currentPage -> currentPage + 1) data.Data
                 | ComponentId.SelectSortId ->
                     match e.Values with
                     | [| sortByRaw |] ->
-                        let sortBy = setting.SortBy.GetValue sortByRaw
-                        update id (Some sortBy)
-                        true
+                        { data.Data with
+                            SortBy = setting.SortBy.GetValue sortByRaw
+                        }
+                        |> update id
                     | xs ->
                         sprintf "expected [| sortByRaw |] but %A" xs
                         |> restartComponent
-
-                        true
-
                 | x ->
                     sprintf "expected data.ComponentId but %A" x
                     |> restartComponent
-
-                    true
             | Error errMsg ->
                 restartComponent errMsg
 
-                true
+            true
         | _ -> false
     else
         false

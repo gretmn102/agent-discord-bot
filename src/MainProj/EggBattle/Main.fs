@@ -51,7 +51,7 @@ type ResultBattle =
 type Req =
     | Request of EventArgs.MessageCreateEventArgs * Request
     | Fight of FightState * EventArgs.ComponentInteractionCreateEventArgs
-    | GetGuildRating of GuildId * AsyncReplyChannel<Map<UserId,Rating.Data>>
+    | GetState of AsyncReplyChannel<State>
 
 module RatingTable =
     open Shared.Ui.Table
@@ -60,11 +60,13 @@ module RatingTable =
         | SortByWins = 0
         | SortByLoses = 1
 
-    let initSetting (state: Map<UserId, Rating.Data>): Setting<_, SortBy> =
+    let initSetting getState: Setting<_, SortBy, _, (GuildId * State)> =
         {
             Id = "EggBattle"
 
-            Title = "Битва на яйцах!"
+            GetState = getState
+
+            Title = fun _ _ -> "Битва на яйцах!"
 
             GetHeaders = fun sortBy ->
                 match sortBy with
@@ -74,7 +76,11 @@ module RatingTable =
                     [| "Игрок"; "Победы"; "Поражения▼" |]
                 | x -> failwithf "RatingTable.SortBy %A" x
 
-            GetItems = fun () ->
+            GetItems = fun () (guildId, state) ->
+                let state =
+                    match Map.tryFind guildId state.Rating with
+                    | Some guildRating -> guildRating
+                    | None -> Map.empty
                 state
                 |> Map.toArray
 
@@ -94,7 +100,7 @@ module RatingTable =
                 | x -> failwithf "RatingTable.SortBy %A" x
 
             MapFunction =
-                fun i (userId, data) ->
+                fun _ i (userId, data) ->
                     [|
                         sprintf "%d <@!%d>" i userId
                         string data.Wins
@@ -103,11 +109,14 @@ module RatingTable =
         }
 
     let createTable addComponents addEmbed state =
-        createTable addComponents addEmbed 1 None (initSetting state)
+        createTable addComponents addEmbed 1 (None, ()) (initSetting state)
 
-    let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-        let state = getState ()
-        componentInteractionCreateHandle client e (initSetting state)
+    let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) getState =
+        let getState () =
+            let state: State = getState ()
+            e.Guild.Id, state
+
+        componentInteractionCreateHandle client e (initSetting getState)
 
 [<Literal>]
 let YesButtonId = "EggBattleYesButtonId"
@@ -184,10 +193,7 @@ let reduce msg (state: State) =
 
             let b = Entities.DiscordMessageBuilder()
 
-            match Map.tryFind e.Guild.Id state.Rating with
-            | Some guildRating ->
-                RatingTable.createTable b.AddComponents b.AddEmbed guildRating
-            | None -> b.Content <- "Таблица пока что пуста."
+            RatingTable.createTable b.AddComponents b.AddEmbed (fun () -> e.Guild.Id, state)
 
             awaiti <| e.Channel.SendMessageAsync b
 
@@ -255,10 +261,8 @@ let reduce msg (state: State) =
             Rating = ratingState
         }
 
-    | GetGuildRating(guildId, r) ->
-        Map.tryFind guildId state.Rating
-        |> Option.defaultValue Map.empty
-        |> r.Reply
+    | GetState r ->
+        r.Reply state
 
         state
 
@@ -364,8 +368,8 @@ let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.Compo
             true
         | _ ->
             RatingTable.componentInteractionCreateHandle
-                (fun () -> m.PostAndReply (fun r -> GetGuildRating(e.Guild.Id, r)))
                 client
                 e
+                (fun () -> m.PostAndReply GetState)
     else
         false

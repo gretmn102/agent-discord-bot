@@ -72,11 +72,13 @@ module InviteTable =
         | SortByUses = 0
         | SortByCode = 1
 
-    let initSetting (guild: Entities.DiscordGuild) (state: Model.InvitesSetting.GuildSetting): Setting<_, SortBy> =
+    let initSetting getState: Setting<_, SortBy, _, (Entities.DiscordGuild * Model.InvitesSetting.GuildSetting)> =
         {
             Id = "Invites"
 
-            Title = "Приглашения"
+            GetState = getState
+
+            Title = fun _ _ -> "Приглашения"
 
             GetHeaders = fun sortBy ->
                 match sortBy with
@@ -86,7 +88,7 @@ module InviteTable =
                     [| "Автор"; "Код▼"; "Использовано" |]
                 | x -> failwithf "InviteTable.SortBy %A" x
 
-            GetItems = fun () ->
+            GetItems = fun () (guild, state) ->
                 await <| guild.GetInvitesAsync()
                 |> Array.ofSeq
 
@@ -105,6 +107,7 @@ module InviteTable =
                 | x -> failwithf "InviteTable.SortBy %A" x
 
             MapFunction =
+                fun (guild, state) ->
                 let getAuthor =
                     let guildInvitesSetting = Map.tryFind guild.Id state
                     match guildInvitesSetting with
@@ -126,12 +129,15 @@ module InviteTable =
                     |]
         }
 
-    let createTable guild addComponents addEmbed state =
-        createTable addComponents addEmbed 1 None (initSetting guild state)
+    let createTable addComponents addEmbed getState =
+        createTable addComponents addEmbed 1 (None, ()) (initSetting getState)
 
-    let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-        let state = getState ()
-        componentInteractionCreateHandle client e (initSetting e.Guild state)
+    let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) getState =
+        let getState () =
+            let state = getState ()
+            e.Guild, state
+
+        componentInteractionCreateHandle client e (initSetting getState)
 
 let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: Model.InvitesSetting.GuildSetting) =
     match req with
@@ -208,7 +214,7 @@ let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: M
 
         let b = Entities.DiscordMessageBuilder()
 
-        InviteTable.createTable e.Guild b.AddComponents b.AddEmbed state
+        InviteTable.createTable b.AddComponents b.AddEmbed (fun () -> e.Guild, state)
 
         awaiti <| e.Channel.SendMessageAsync b
 
@@ -386,6 +392,6 @@ let exec: MessageCreateEventHandler Parser.Parser =
     )
 let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
     InviteTable.componentInteractionCreateHandle
-        (fun () -> m.PostAndReply GetState)
         client
         e
+        (fun () -> m.PostAndReply GetState)

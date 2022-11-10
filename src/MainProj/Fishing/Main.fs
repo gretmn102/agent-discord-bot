@@ -117,11 +117,13 @@ module InventoryTable =
         | SortByName = 0
         | SortByCount = 1
 
-    let initSetting (getItemById: ItemId -> ItemsDb.ItemT option) (inventory: Inventory): Setting<_, SortBy> =
+    let initSetting getInventory: Setting<_, SortBy, _, (UserId * State)> =
         {
             Id = "InventoryTable"
 
-            Title = "Инвентарь"
+            GetState = getInventory
+
+            Title = fun _ _ -> "Инвентарь"
 
             GetHeaders = fun sortBy ->
                 match sortBy with
@@ -132,7 +134,12 @@ module InventoryTable =
                 | x ->
                     failwithf "InventoryTable.SortBy %A" x
 
-            GetItems = fun () ->
+            GetItems = fun () (userId, state) ->
+                let inventory =
+                    match Players.GuildData.tryFind userId state.Players with
+                    | Some ranking -> ranking.Inventory
+                    | None -> Map.empty
+
                 inventory
                 |> Map.toArray
 
@@ -152,7 +159,9 @@ module InventoryTable =
                     failwithf "MostActiveTable.SortBy %A" x
 
             MapFunction =
-                fun i (itemId, user) ->
+                fun (_, state) i (itemId, user) ->
+                    let getItemById itemId = ItemsDb.Items.tryFindById itemId state.Items
+
                     let itemName =
                         match getItemById itemId with
                         | Some item -> item.Data.Name
@@ -168,22 +177,16 @@ module InventoryTable =
     let createTable
         (addComponents: Entities.DiscordComponent [] -> _)
         addEmbed
-        getItemById
-        inventory =
+        getState =
 
-        createTable addComponents addEmbed 1 None (initSetting getItemById inventory)
+        createTable addComponents addEmbed 1 (None, ()) (initSetting getState)
 
     let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-        let state: State = getState ()
+        let getState () =
+            let state: State = getState ()
+            e.User.Id, state
 
-        let inventory =
-            match Players.GuildData.tryFind e.User.Id state.Players with
-            | Some ranking -> ranking.Inventory
-            | None -> Map.empty
-
-        let getItemById itemId = ItemsDb.Items.tryFindById itemId state.Items
-
-        componentInteractionCreateHandle client e (initSetting getItemById inventory)
+        componentInteractionCreateHandle client e (initSetting getState)
 
 let createProgressMessage totalCatchesCount itemsCount =
     sprintf "Найдено %d обитателей морских глубин из %d."
@@ -516,14 +519,10 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
 
         let b = Entities.DiscordMessageBuilder()
 
-        let inventory =
-            match Players.GuildData.tryFind e.Author.Id state.Players with
-            | Some ranking -> ranking.Inventory
-            | None -> Map.empty
+        let getState () =
+            e.Author.Id, state
 
-        let getItemById itemId = ItemsDb.Items.tryFindById itemId state.Items
-
-        InventoryTable.createTable b.AddComponents b.AddEmbed getItemById inventory
+        InventoryTable.createTable b.AddComponents b.AddEmbed getState
 
         awaiti <| e.Channel.SendMessageAsync b
         state

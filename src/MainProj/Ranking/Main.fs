@@ -459,17 +459,18 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
 module MostActiveTable =
     open Shared.Ui.Table
 
-
     type SortBy =
         | SortByDayExp = 0
         | SortByExp = 1
         | SortByIndex = 2
 
-    let initSetting (state: Map<UserId, Rankings.RankingData>): Setting<_, SortBy> =
+    let initSetting getState: Setting<_, SortBy, _, (GuildId * State)> =
         {
             Id = "MostActive"
 
-            Title = "Приглашения"
+            GetState = getState
+
+            Title = fun _ _ -> "Наиболее активные ребята"
 
             GetHeaders = fun sortBy ->
                 match sortBy with
@@ -482,7 +483,12 @@ module MostActiveTable =
                 | x ->
                     failwithf "MostActiveTable.SortBy %A" x
 
-            GetItems = fun () ->
+            GetItems = fun () (guildId, state) ->
+                let state =
+                    match Map.tryFind guildId state.Rankings with
+                    | Some ranking -> ranking
+                    | None -> Map.empty
+
                 state
                 |> Map.toArray
 
@@ -505,7 +511,7 @@ module MostActiveTable =
                     failwithf "MostActiveTable.SortBy %A" x
 
             MapFunction =
-                fun i (userId, user) ->
+                fun _ i (userId, user) ->
                     [|
                         sprintf "%d <@!%d>" i userId
                         string user.Exp
@@ -518,17 +524,14 @@ module MostActiveTable =
         addEmbed
         userRanks =
 
-        createTable addComponents addEmbed 1 None (initSetting userRanks)
+        createTable addComponents addEmbed 1 (None, ()) (initSetting userRanks)
 
-    let componentInteractionCreateHandle getState (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-        let state = getState ()
+    let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) getState =
+        let getState () =
+            let state = getState ()
+            e.Guild.Id, state
 
-        let userRanks =
-            match Map.tryFind e.Guild.Id state.Rankings with
-            | Some ranking -> ranking
-            | None -> Map.empty
-
-        componentInteractionCreateHandle client e (initSetting userRanks)
+        componentInteractionCreateHandle client e (initSetting getState)
 
 let requestReduce
     (e: EventArgs.MessageCreateEventArgs)
@@ -639,12 +642,10 @@ let requestReduce
 
         let b = Entities.DiscordMessageBuilder()
 
-        let userRanks =
-            match Map.tryFind e.Guild.Id state.Rankings with
-            | Some ranking -> ranking
-            | None -> Map.empty
+        let getState () =
+            e.Guild.Id, state
 
-        MostActiveTable.createTable b.AddComponents b.AddEmbed userRanks
+        MostActiveTable.createTable b.AddComponents b.AddEmbed getState
 
         awaiti <| e.Channel.SendMessageAsync b
 
@@ -720,9 +721,9 @@ let handle (e: EventArgs.MessageCreateEventArgs) =
 
 let componentInteractionCreateHandle client e =
     MostActiveTable.componentInteractionCreateHandle
-        (fun () -> m.PostAndReply GetState)
         client
         e
+        (fun () -> m.PostAndReply GetState)
 
 module Parser =
     open FParsec
