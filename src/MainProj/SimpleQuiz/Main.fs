@@ -12,7 +12,7 @@ type State = {
 
 type Request =
     | StartQuiz of quizName: string option
-    | StartRating of quizName: string
+    | StartRating of quizName: string option
 
 module Parser =
     open FParsec
@@ -33,7 +33,7 @@ module Parser =
     let prating =
         skipStringCI CommandNames.rating
         .>> spaces
-        >>. many1Satisfy (fun _ -> true)
+        >>. opt (many1Satisfy (fun _ -> true))
 
     let start f: _ Parser =
         choice [
@@ -203,115 +203,6 @@ module Actions =
                 questions.[r.Next(0, questions.Length)]
         QuizUi.init initOptions (addEmbed, addComponents)
 
-module QuizSelectionUi =
-    type ComponentId =
-        | QuizSelectionListId = 0
-
-    type Data =
-        {
-            [<Newtonsoft.Json.JsonProperty("O")>]
-            OwnerId: UserId
-        }
-
-    type ComponentState = Interaction.ComponentState<ComponentId, Data>
-
-    let messageTypeId = "SimpleQuizSelectionUI"
-
-    let init (e: EventArgs.MessageCreateEventArgs) =
-        let userId = e.Author.Id
-
-        let embed = Entities.DiscordEmbedBuilder()
-        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-        embed.Description <- sprintf "<@%d>, выбери викторину:" userId
-
-        let b = Entities.DiscordMessageBuilder()
-        b.Embed <- embed.Build()
-
-        let componentState =
-            let state: ComponentState =
-                {
-                    Id = messageTypeId
-                    ComponentId = ComponentId.QuizSelectionListId
-                    Data = {
-                        OwnerId = e.Author.Id
-                    }
-                }
-            state
-            |> ComponentState.Serialize
-
-        let options =
-            quizes
-            |> Seq.map (fun (KeyValue(quizId, quiz)) ->
-                Entities.DiscordSelectComponentOption(quiz.Name, quizId)
-            )
-
-        let c = Entities.DiscordSelectComponent(componentState, "Выбери викторину...", options)
-        b.AddComponents c |> ignore
-
-        awaiti <| e.Channel.SendMessageAsync b
-
-    let handle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-        let restartComponent errMsg =
-            DiscordMessage.Ext.clearComponents e.Message
-
-            let b = Entities.DiscordInteractionResponseBuilder()
-            b.Content <-
-                [
-                    sprintf "Вызовите комманду `.%s` еще раз, потому что-то пошло не так:" Parser.CommandNames.quiz
-                    "```"
-                    sprintf "%s" errMsg
-                    "```"
-                ] |> String.concat "\n"
-            b.IsEphemeral <- true
-            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-
-        if e.Message.Author.Id = client.CurrentUser.Id then
-            match ComponentState.TryDeserialize messageTypeId e.Id with
-            | Some res ->
-                match res with
-                | Ok (componentState: ComponentState) ->
-                    match componentState.ComponentId with
-                    | ComponentId.QuizSelectionListId ->
-                        if componentState.Data.OwnerId = e.User.Id then
-                            match e.Values with
-                            | [|quizId|] ->
-                                match Map.tryFind quizId quizes with
-                                | Some quiz ->
-                                    let b = Entities.DiscordInteractionResponseBuilder()
-
-                                    Actions.startQuiz
-                                        (b.AddEmbed >> ignore, b.AddComponents >> ignore)
-                                        e.User.Id
-                                        quiz
-
-                                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
-
-                                | None ->
-                                    sprintf "not found in %s quiz ID in quizes" quizId
-                                    |> restartComponent
-                            | xs ->
-                                sprintf "expected `e.Values` is [|answerId|] but %A" xs
-                                |> restartComponent
-                        else
-                            let b = Entities.DiscordInteractionResponseBuilder()
-                            b.Content <-
-                                sprintf "На вопрос отвечает <@%d>. Чтобы поучаствовать в викторине, введите `.%s`"
-                                    componentState.Data.OwnerId
-                                    Parser.CommandNames.quiz
-                            b.IsEphemeral <- true
-                            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-                    | x ->
-                        sprintf "expected data.ComponentId but %A" x
-                        |> restartComponent
-
-                | Error errMsg ->
-                    restartComponent errMsg
-
-                true
-            | _ -> false
-        else
-            false
-
 module RatingTableUi =
     open Shared.Ui.Table
 
@@ -393,12 +284,138 @@ module RatingTableUi =
 
     let createTable
         (addEmbed, (addComponents: Entities.DiscordComponent [] -> _))
-        (quiz: Quiz<_>, userRanks) =
+        (quiz: Quiz<_>, getState) =
 
-        createTable addComponents addEmbed 1 (None, quiz.Id) (initSetting userRanks)
+        createTable addComponents addEmbed 1 (None, quiz.Id) (initSetting getState)
 
     let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) state =
         componentInteractionCreateHandle client e (initSetting state)
+
+module QuizSelectionUi =
+    type ComponentId =
+        | QuizSelectionListId = 0
+
+    type Data =
+        {
+            [<Newtonsoft.Json.JsonProperty("O")>]
+            OwnerId: UserId
+        }
+
+    type ComponentState = Interaction.ComponentState<ComponentId, Data>
+
+    let init messageTypeId (e: EventArgs.MessageCreateEventArgs) =
+        let userId = e.Author.Id
+
+        let embed = Entities.DiscordEmbedBuilder()
+        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+        embed.Description <- sprintf "<@%d>, выбери викторину:" userId
+
+        let b = Entities.DiscordMessageBuilder()
+        b.Embed <- embed.Build()
+
+        let componentState =
+            let state: ComponentState =
+                {
+                    Id = messageTypeId
+                    ComponentId = ComponentId.QuizSelectionListId
+                    Data = {
+                        OwnerId = e.Author.Id
+                    }
+                }
+            state
+            |> ComponentState.Serialize
+
+        let options =
+            quizes
+            |> Seq.map (fun (KeyValue(quizId, quiz)) ->
+                Entities.DiscordSelectComponentOption(quiz.Name, quizId)
+            )
+
+        let c = Entities.DiscordSelectComponent(componentState, "Выбери викторину...", options)
+        b.AddComponents c |> ignore
+
+        awaiti <| e.Channel.SendMessageAsync b
+
+    let handle messageTypeId (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) next =
+        let restartComponent errMsg =
+            DiscordMessage.Ext.clearComponents e.Message
+
+            let b = Entities.DiscordInteractionResponseBuilder()
+            b.Content <-
+                [
+                    sprintf "Вызовите комманду `.%s` еще раз, потому что-то пошло не так:" Parser.CommandNames.quiz
+                    "```"
+                    sprintf "%s" errMsg
+                    "```"
+                ] |> String.concat "\n"
+            b.IsEphemeral <- true
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+
+        if e.Message.Author.Id = client.CurrentUser.Id then
+            match ComponentState.TryDeserialize messageTypeId e.Id with
+            | Some res ->
+                match res with
+                | Ok (componentState: ComponentState) ->
+                    match componentState.ComponentId with
+                    | ComponentId.QuizSelectionListId ->
+                        if componentState.Data.OwnerId = e.User.Id then
+                            match e.Values with
+                            | [|quizId|] ->
+                                match Map.tryFind quizId quizes with
+                                | Some quiz ->
+                                    next quiz
+                                | None ->
+                                    sprintf "not found in %s quiz ID in quizes" quizId
+                                    |> restartComponent
+                            | xs ->
+                                sprintf "expected `e.Values` is [|answerId|] but %A" xs
+                                |> restartComponent
+                        else
+                            let b = Entities.DiscordInteractionResponseBuilder()
+                            b.Content <-
+                                sprintf "На вопрос отвечает <@%d>. Чтобы поучаствовать в викторине, введите `.%s`"
+                                    componentState.Data.OwnerId
+                                    Parser.CommandNames.quiz
+                            b.IsEphemeral <- true
+                            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                    | x ->
+                        sprintf "expected data.ComponentId but %A" x
+                        |> restartComponent
+
+                | Error errMsg ->
+                    restartComponent errMsg
+
+                true
+            | _ -> false
+        else
+            false
+
+    module MessageTypesIds =
+        let startQuiz = "SimpleQuizSelectionUI"
+        let rating = "SimpleQuizSelectionUIRating"
+
+    let handleStartQuiz (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
+        handle MessageTypesIds.startQuiz client e (fun quiz ->
+            let b = Entities.DiscordInteractionResponseBuilder()
+
+            Actions.startQuiz
+                (b.AddEmbed >> ignore, b.AddComponents >> ignore)
+                e.User.Id
+                quiz
+
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+        )
+
+    let handleRating (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) getPlayers =
+        handle MessageTypesIds.rating client e (fun quiz ->
+            let b = Entities.DiscordInteractionResponseBuilder()
+
+            RatingTableUi.createTable
+                (b.AddEmbed >> ignore, b.AddComponents >> ignore)
+                (quiz, getPlayers)
+
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+        )
 
 type Msg =
     | Request of EventArgs.MessageCreateEventArgs * Request
@@ -422,7 +439,7 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: St
 
         match quizName with
         | None ->
-            QuizSelectionUi.init e
+            QuizSelectionUi.init QuizSelectionUi.MessageTypesIds.startQuiz e
         | Some quizName ->
             match tryFindQuizByName quizName with
             | Some quiz ->
@@ -451,27 +468,31 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: St
     | StartRating quizName ->
         awaiti <| e.Channel.TriggerTypingAsync()
 
-        match tryFindQuizByName quizName with
-        | Some quiz ->
-            let b = Entities.DiscordMessageBuilder()
-
-            RatingTableUi.createTable
-                ((fun c -> b.Embed <- c), b.AddComponents >> ignore)
-                (quiz, fun () -> state.Players)
-
-            awaiti <| e.Channel.SendMessageAsync b
-
+        match quizName with
         | None ->
-            let send msg =
-                let embed = Entities.DiscordEmbedBuilder()
-                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                embed.Description <- msg
+            QuizSelectionUi.init QuizSelectionUi.MessageTypesIds.rating e
+        | Some quizName ->
+            match tryFindQuizByName quizName with
+            | Some quiz ->
                 let b = Entities.DiscordMessageBuilder()
-                b.Embed <- embed.Build()
+
+                RatingTableUi.createTable
+                    ((fun c -> b.Embed <- c), b.AddComponents >> ignore)
+                    (quiz, fun () -> state.Players)
+
                 awaiti <| e.Channel.SendMessageAsync b
 
-            sprintf "Не найдена викторина с таким названием."
-            |> send
+            | None ->
+                let send msg =
+                    let embed = Entities.DiscordEmbedBuilder()
+                    embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                    embed.Description <- msg
+                    let b = Entities.DiscordMessageBuilder()
+                    b.Embed <- embed.Build()
+                    awaiti <| e.Channel.SendMessageAsync b
+
+                sprintf "Не найдена викторина с таким названием."
+                |> send
 
         state
 
@@ -546,7 +567,10 @@ let componentInteractionCreateHandle client e =
     QuizUi.handle client e (fun x ->
         m.PostAndReply (fun r -> AddScore(r, x))
     )
-    || QuizSelectionUi.handle client e
+    || QuizSelectionUi.handleStartQuiz client e
     || RatingTableUi.componentInteractionCreateHandle client e (fun () ->
+        m.PostAndReply GetPlayers
+    )
+    || QuizSelectionUi.handleRating client e (fun () ->
         m.PostAndReply GetPlayers
     )
