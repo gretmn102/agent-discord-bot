@@ -63,7 +63,7 @@ let pcommand: _ Parser =
 
         pmessageCreateEventHandler |>> MessageCreateEventHandler
 
-        pstringCI "numberToWords" >>. spaces >>. FParsecUtils.pbigint |>> NumberToWords
+        pstringCI "numberToWords" >>. spaces >>. FParsecExt.pbigint |>> NumberToWords
 
         pballotBox |>> BallotBox
     ]
@@ -72,6 +72,4 @@ let start botId str =
     let p =
         (attempt (puserMentionTarget botId) >>. spaces >>. (optional prefix >>. pcommand <|>% Unknown))
         <|> ((prefix >>? pcommand) <|>% Pass)
-    match run p str with
-    | Success(x, _, _) -> Right x
-    | Failure(x, _, _) -> Left x
+    FParsecExt.runEither p str

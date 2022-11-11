@@ -47,13 +47,13 @@ let pshipTests =
 
     testList "pshipTests" [
         testCase "pshipTestsShipRand" (fun _ ->
-            Assert.Equal("", Right Ship.Main.Rand, FParsecUtils.runEither pship "shipRand")
+            Assert.Equal("", Right Ship.Main.Rand, FParsecExt.runEither pship "shipRand")
         )
         testCase "pshipTestsShip0" (fun _ ->
-            Assert.Equal("", Right (Ship.Main.Target 0), FParsecUtils.runEither pship "ship0")
+            Assert.Equal("", Right (Ship.Main.Target 0), FParsecExt.runEither pship "ship0")
         )
         testCase "pshipTestsShip100" (fun _ ->
-            Assert.Equal("", Right (Ship.Main.Target 100), FParsecUtils.runEither pship "ship100")
+            Assert.Equal("", Right (Ship.Main.Target 100), FParsecExt.runEither pship "ship100")
         )
         testCase "pshipTestsErr" (fun _ ->
             let exp =
@@ -70,7 +70,7 @@ let pshipTests =
                     "  Expecting: integer number (32-bit, signed) or 'rand' (case-insensitive)"
                     ""
                 ] |> String.concat "\r\n"
-            Assert.Equal("", Left exp, FParsecUtils.runEither pship "ship")
+            Assert.Equal("", Left exp, FParsecExt.runEither pship "ship")
         )
     ]
 
@@ -89,7 +89,7 @@ let ballotBoxTests =
             let exp =
                 Right
                   ("Нужны ли нам такие голосовалки?", ["Да"; "Нет"; "Удоли!11"; "Vox Populi, Vox Dei"])
-            Assert.Equal("", exp, FParsecUtils.runEither pballotBox input)
+            Assert.Equal("", exp, FParsecExt.runEither pballotBox input)
         )
         testCase "ballotBoxTests2" (fun _ ->
             let input =
@@ -103,7 +103,7 @@ let ballotBoxTests =
             let exp =
                 Right
                   ("Нужны ли нам такие голосовалки?", ["Да"; "Нет"; "Vox Populi, Vox Dei"])
-            Assert.Equal("", exp, FParsecUtils.runEither pballotBox input)
+            Assert.Equal("", exp, FParsecExt.runEither pballotBox input)
         )
     ]
 
@@ -123,7 +123,7 @@ module VoiceChannelNotificationTests =
                    Text " заш"; UserName; Text "ел в "
                    VoiceChannel; Text "!"
                 ]
-                Assert.Equal("", exp, FParsecUtils.runEither ptemplateMessage input)
+                Assert.Equal("", exp, FParsecExt.runEither ptemplateMessage input)
             )
         ]
 

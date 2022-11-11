@@ -51,7 +51,7 @@ module Message =
         many Part.Parser
 
     let parse message =
-        FParsecUtils.runEither parser message
+        FParsecExt.runEither parser message
 
     let toString (template: Message): MessageRaw =
         template |> List.map Part.toString |> System.String.Concat

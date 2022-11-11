@@ -34,7 +34,6 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="FParsecUtils.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Extensions.fs" />
     <Compile Include="DiscordMessage.fs" />

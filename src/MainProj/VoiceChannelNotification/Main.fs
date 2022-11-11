@@ -109,7 +109,7 @@ let voiceNotificationReduce
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
             || (Db.superUserId = e.Author.Id) then
 
-            match FParsecUtils.runEither Parser.ptemplateMessage templateMessage with
+            match FParsecExt.runEither Parser.ptemplateMessage templateMessage with
             | Right _ ->
                 let guildVoiceNotification: VoiceNotification.GuildVoiceNotification =
                     match Map.tryFind e.Guild.Id guildVoiceNotification with
@@ -164,7 +164,7 @@ let reduce (msg: Msg) (state: State): State =
                             let guildMember = getGuildMember e.Guild e.User
 
                             let message =
-                                FParsecUtils.runEither Parser.ptemplateMessage templateMsg
+                                FParsecExt.runEither Parser.ptemplateMessage templateMsg
                                 |> Either.map (
                                     List.map (function
                                         | Parser.Text x -> x

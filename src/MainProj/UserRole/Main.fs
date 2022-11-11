@@ -715,7 +715,7 @@ module UserRoleForm =
             let color =
                 match e.Values.TryGetValue UserRoleFormModalColorId with
                 | true, hexOrDecColorStr ->
-                    match FParsecUtils.runEither Parser.phexOrDecColor hexOrDecColorStr  with
+                    match FParsecExt.runEither Parser.phexOrDecColor hexOrDecColorStr  with
                     | Left errMsg ->
                         sprintf "Пожалуйста, введите цвет в шестнадцатеричном формате (например, `#ffa500` даст оранжевый цвет), а не `%s`. Цвет можно выбрать на [W3Schools](https://www.w3schools.com/colors/colors_picker.asp), например."
                             hexOrDecColorStr
