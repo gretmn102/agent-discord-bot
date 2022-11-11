@@ -48,3 +48,77 @@ module Interaction =
                         None
                 | false, _ -> None
             )
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module ComponentState =
+        let create id componentId data =
+            {
+                Id = id
+                ComponentId = componentId
+                Data = data
+            }
+
+        let header =
+            "cid"
+
+        module Printer =
+            open FsharpMyExtension.ShowList
+
+            let showEsapedString (str: string): ShowS =
+                showString (str.Replace("\n", "\\\n"))
+
+            let inline showEnum (enu: 'Enum) =
+                shows (int enu)
+
+            let inline showT (showData: _ -> ShowS) (x: ComponentState<'ComponentId, 'Data>): ShowS =
+                showString header << nl
+                << showEsapedString x.Id << nl
+                << showEnum x.ComponentId << nl
+                << showData x.Data
+
+            let inline serialize (showData: _ -> ShowS) (x: ComponentState<'ComponentId, 'Data>): string =
+                showT showData x
+                |> show
+
+        let inline serialize showData (x: ComponentState<'ComponentId, 'Data>) =
+            Printer.serialize showData x
+
+        module Parser =
+            open FParsec
+
+            type 'a Parser = Parser<'a, unit>
+
+            let pheader: _ Parser =
+                skipString header .>> newline
+
+            let pescapedString: _ Parser =
+                let pescapedNewline =
+                    pchar '\\'
+                    >>. (newlineReturn "\n" <|>% "\\")
+
+                manyStrings
+                    (many1Satisfy (isNoneOf "\\\n") <|> pescapedNewline)
+
+            let inline parse pdata: ComponentState<'ComponentId, 'Data> Parser =
+                let p =
+                    pipe3
+                        (pescapedString .>> newline)
+                        (pint32 .>> newline)
+                        pdata
+                        (fun id componentId data ->
+                            {
+                                Id = id
+                                ComponentId = (enum<'ComponentId> componentId)
+                                Data = data
+                            }
+                        )
+
+                pheader >>. p
+
+        let inline tryDeserialize pdata str: Result<ComponentState<'ComponentId, 'Data>, _> option =
+            match FParsecExt.runResult Parser.pheader str with
+            | Ok _ ->
+                FParsecExt.runResult (Parser.parse pdata) str
+                |> Some
+            | _ -> None

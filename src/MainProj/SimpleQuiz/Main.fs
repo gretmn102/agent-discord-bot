@@ -58,8 +58,44 @@ module QuizUi =
             [<Newtonsoft.Json.JsonProperty("Qs")>]
             QuestionId: QuestionId
         }
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Data =
+        module Printer =
+            open FsharpMyExtension.ShowList
+
+            let show (data: Data) =
+                shows data.OwnerId << nl
+                << showString data.QuizId << nl
+                << showString data.QuestionId
+
+        module Parser =
+            open FParsec
+
+            open Interaction
+
+            let parse: _ ComponentState.Parser.Parser =
+                pipe3
+                    (puint64 .>> newline)
+                    (ComponentState.Parser.pescapedString .>> newline)
+                    ComponentState.Parser.pescapedString
+                    (fun id componentId data ->
+                        {
+                            OwnerId = id
+                            QuizId = componentId
+                            QuestionId = data
+                        }
+                    )
 
     type ComponentState = Interaction.ComponentState<ComponentId, Data>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module ComponentState =
+        let inline serialize (x: ComponentState) =
+            Interaction.ComponentState.serialize Data.Printer.show x
+
+        let inline tryDeserialize str: Result<ComponentState, _> option =
+            Interaction.ComponentState.tryDeserialize Data.Parser.parse str
 
     let messageTypeId = "SimpleQuizUI"
 
@@ -95,7 +131,7 @@ module QuizUi =
                     }
                 }
             state
-            |> ComponentState.Serialize
+            |> ComponentState.serialize
 
         let options =
             Array.append [|options.Question.Correct|] options.Question.Others
@@ -125,7 +161,7 @@ module QuizUi =
             awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
         if e.Message.Author.Id = client.CurrentUser.Id then
-            match ComponentState.TryDeserialize messageTypeId e.Id with
+            match ComponentState.tryDeserialize e.Id with // TODO: test messageTypeId
             | Some res ->
                 match res with
                 | Ok (componentState: ComponentState) ->
