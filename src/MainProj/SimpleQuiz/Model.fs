@@ -6,7 +6,7 @@ open MongoDB.Bson
 open Types
 
 type QuestionId = string
-type QuizId = string
+type QuizId = System.Guid
 
 type Question = {
     Id: QuestionId
@@ -38,7 +38,7 @@ type QuizArray = Quiz<Question []>
 module QuizArray =
     let create quizId (questions: Question []): QuizArray =
         {
-            Id = quizId
+            Id = System.Guid.NewGuid()
             Name = quizId
             Questions =
                 questions

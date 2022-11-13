@@ -66,7 +66,7 @@ module QuizUi =
 
             let show (data: Data) =
                 shows data.OwnerId << nl
-                << showString data.QuizId << nl
+                << shows data.QuizId << nl
                 << showString data.QuestionId
 
         module Parser =
@@ -82,7 +82,7 @@ module QuizUi =
                     (fun id componentId data ->
                         {
                             OwnerId = id
-                            QuizId = componentId
+                            QuizId = System.Guid.Parse componentId
                             QuestionId = data
                         }
                     )
@@ -201,7 +201,7 @@ module QuizUi =
                                         sprintf "not found in %s question ID in questions" componentState.Data.QuestionId
                                         |> restartComponent
                                 | None ->
-                                    sprintf "not found in %s quiz ID in questions" componentState.Data.QuizId
+                                    sprintf "not found in %A quiz ID in questions" componentState.Data.QuizId
                                     |> restartComponent
                             | xs ->
                                 sprintf "expected `e.Values` is [|answerId|] but %A" xs
@@ -364,7 +364,7 @@ module QuizSelectionUi =
         let options =
             quizes
             |> Seq.map (fun (KeyValue(quizId, quiz)) ->
-                Entities.DiscordSelectComponentOption(quiz.Name, quizId)
+                Entities.DiscordSelectComponentOption(quiz.Name, quizId.ToString())
             )
 
         let c = Entities.DiscordSelectComponent(componentState, "Выбери викторину...", options)
@@ -396,12 +396,17 @@ module QuizSelectionUi =
                     | ComponentId.QuizSelectionListId ->
                         if componentState.Data.OwnerId = e.User.Id then
                             match e.Values with
-                            | [|quizId|] ->
-                                match Map.tryFind quizId quizes with
-                                | Some quiz ->
-                                    next quiz
-                                | None ->
-                                    sprintf "not found in %s quiz ID in quizes" quizId
+                            | [|rawQuizId|] ->
+                                match System.Guid.TryParse rawQuizId with
+                                | true, quizId ->
+                                    match Map.tryFind quizId quizes with
+                                    | Some quiz ->
+                                        next quiz
+                                    | None ->
+                                        sprintf "not found in %s quiz ID in quizes" rawQuizId
+                                        |> restartComponent
+                                | _ ->
+                                    sprintf "Error parsing %s guid" rawQuizId
                                     |> restartComponent
                             | xs ->
                                 sprintf "expected `e.Values` is [|answerId|] but %A" xs
