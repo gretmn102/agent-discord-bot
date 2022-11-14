@@ -18,6 +18,7 @@ type ActionReq =
     | ToFish of baitName: string option
     | Inventory
     | Progress
+    | Inspect of itemName: string
 
 type DataOrUrl =
     | Data of string
@@ -45,6 +46,7 @@ module Parser =
         let toFish = "рыбачить"
         let inventory = "инвентарь"
         let progress = "прогресс"
+        let inspect = "осм"
         let setSettings = "fishingSetSettings"
         let setItems = "fishingSetItems"
 
@@ -76,10 +78,15 @@ module Parser =
             skipStringCI CommandNames.toFish .>> spaces
             >>. opt (many1Satisfy (fun _ -> true))
 
+        let pinspect =
+            skipStringCI CommandNames.inspect .>> spaces
+            >>. many1Satisfy (fun _ -> true)
+
         choice [
             toFish |>> ToFish
             skipStringCI CommandNames.inventory >>% Inventory
             skipStringCI CommandNames.progress >>% Progress
+            pinspect |>> Inspect
         ]
 
     let start f: _ Parser =
@@ -548,6 +555,42 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
                 createProgressMessage p.Catches.Count state.Items.Cache.Count
 
         send msg
+
+        state
+
+    | Inspect itemName ->
+        awaiti <| e.Channel.TriggerTypingAsync()
+
+        let send msg =
+            let embed = Entities.DiscordEmbedBuilder()
+            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+            embed.Description <- msg
+
+            let b = Entities.DiscordMessageBuilder()
+            b.Embed <- embed.Build()
+
+            awaiti <| e.Channel.SendMessageAsync b
+
+        match ItemsDb.Items.tryFindByName itemName state.Items with
+        | Some item ->
+            let embed = Entities.DiscordEmbedBuilder()
+            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+
+            let description = item.Data.Description
+            if not (System.String.IsNullOrEmpty description) then
+                embed.Description <- description
+
+            embed.Title <- item.Data.Name
+
+            embed.ImageUrl <- item.Data.ImageUrl
+
+            let b = Entities.DiscordMessageBuilder()
+            b.Embed <- embed.Build()
+
+            awaiti <| e.Channel.SendMessageAsync b
+
+        | None ->
+            send (sprintf "Предмет \"%s\" в игре не найден." itemName)
 
         state
 
