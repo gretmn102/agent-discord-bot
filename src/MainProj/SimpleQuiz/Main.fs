@@ -4,7 +4,7 @@ open FsharpMyExtension
 
 open Types
 open Extensions
-open Model
+open SimpleQuiz.Model
 
 type State = {
     Players: Players.GuildData
@@ -49,14 +49,23 @@ module QuizUi =
     type ComponentId =
         | AnswerSelectedListId = 0
 
+    type QuizType =
+        | Capital = 0
+        | Flag = 1
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module QuizType =
+        let all =
+            System.Enum.GetValues(typeof<QuizType>)
+            |> Seq.cast<QuizType>
+            |> Array.ofSeq
+
     type Data =
         {
-            [<Newtonsoft.Json.JsonProperty("O")>]
             OwnerId: UserId
-            [<Newtonsoft.Json.JsonProperty("Qz")>]
-            QuizId: QuizId
-            [<Newtonsoft.Json.JsonProperty("Qs")>]
-            QuestionId: QuestionId
+            QuizId: Countries.CountryId
+            DifficultId: Countries.DifficultId
         }
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
@@ -64,10 +73,12 @@ module QuizUi =
         module Printer =
             open FsharpMyExtension.ShowList
 
+            open Interaction
+
             let show (data: Data) =
                 shows data.OwnerId << nl
                 << shows data.QuizId << nl
-                << showString data.QuestionId
+                << shows data.DifficultId
 
         module Parser =
             open FParsec
@@ -77,13 +88,13 @@ module QuizUi =
             let parse: _ ComponentState.Parser.Parser =
                 pipe3
                     (puint64 .>> newline)
-                    (ComponentState.Parser.pescapedString .>> newline)
-                    ComponentState.Parser.pescapedString
-                    (fun id componentId data ->
+                    (Countries.CountryId.Parser.parse .>> newline)
+                    Countries.DifficultId.Parser.parse
+                    (fun id componentId difficultId ->
                         {
                             OwnerId = id
-                            QuizId = System.Guid.Parse componentId
-                            QuestionId = data
+                            QuizId = componentId
+                            DifficultId = difficultId
                         }
                     )
 
@@ -102,22 +113,24 @@ module QuizUi =
     type InitOptions =
         {
             UserId: UserId
-            QuizId: QuizId
-            Question: Question
+            QuizId: Countries.CountryId
+            Question: Countries.Country
+            QuizType: QuizType
+            DifficultId: Countries.DifficultId
         }
-        static member create userId quizId question =
+        static member create userId quizId question quizType difficultId =
             {
                 UserId = userId
                 QuizId = quizId
                 Question = question
+                QuizType = quizType
+                DifficultId = difficultId
             }
 
     let init (options: InitOptions) (addEmbed, addComponents) =
         let embed = Entities.DiscordEmbedBuilder()
         embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-        embed.Description <- sprintf "<@%d>, %s" options.UserId options.Question.Description
 
-        addEmbed (embed.Build())
 
         let componentState =
             let state: ComponentState =
@@ -127,19 +140,62 @@ module QuizUi =
                     Data = {
                         OwnerId = options.UserId
                         QuizId = options.QuizId
-                        QuestionId = options.Question.Id
+                        DifficultId = options.DifficultId
                     }
                 }
             state
             |> ComponentState.serialize
 
-        let options =
-            Array.append [|options.Question.Correct|] options.Question.Others
-            |> List.ofArray
-            |> List.shuffle
-            |> List.mapi (fun i item ->
-                Entities.DiscordSelectComponentOption(item, item)
-            )
+        let description, options =
+            let countriesWithoutCurrent =
+                let countriesIdsWithoutCurrent =
+                    Countries.countries
+                    |> Array.filter (fun x -> x <> options.Question.Id)
+
+                Seq.generateRandomSequence countriesIdsWithoutCurrent.Length
+                |> Seq.map (fun i ->
+                    Countries.countriesById.[countriesIdsWithoutCurrent.[i]]
+                )
+                |> Seq.truncate 4
+                |> Array.ofSeq
+
+            match options.QuizType with
+            | QuizType.Capital ->
+                let description = sprintf "<@%d>, какая столица страны \"%s\"?" options.UserId options.Question.Name
+
+                let options =
+                    Array.append [|options.Question|] countriesWithoutCurrent // TODO: Array.insertAt
+                    |> List.ofArray
+                    |> List.shuffle
+                    |> List.mapi (fun i item ->
+                        Entities.DiscordSelectComponentOption(item.Capital, string item.Id)
+                    )
+
+                description, options
+            | QuizType.Flag ->
+                let countries =
+                    Array.append [|options.Question|] countriesWithoutCurrent // TODO: Array.insertAt
+                    |> List.ofArray
+                    |> List.shuffle
+
+                let description =
+                    countries
+                    |> Seq.mapi (fun i x -> sprintf "[flag%d](%s)" i x.FlagUrl)
+                    |> String.concat "\n"
+                    |> sprintf "<@%d>, какой флаг страны \"%s\"?\n%s" options.UserId options.Question.Name
+
+                let options =
+                    countries
+                    |> List.mapi (fun i item ->
+                        Entities.DiscordSelectComponentOption(string i, string item.Id)
+                    )
+
+                description, options
+            | x ->
+                failwithf "%A not implemented yet" x
+
+        embed.Description <- description
+        addEmbed (embed.Build())
 
         let c = Entities.DiscordSelectComponent(componentState, "Выбери ответ...", options)
         addComponents (c :> Entities.DiscordComponent)
@@ -170,38 +226,43 @@ module QuizUi =
                         let userId = e.User.Id
                         if componentState.Data.OwnerId = userId then
                             match e.Values with
-                            | [|answerId|] ->
-                                match Map.tryFind componentState.Data.QuizId quizByQuestionId with
-                                | Some quiz ->
-                                    match Map.tryFind componentState.Data.QuestionId quiz.Questions with
-                                    | Some question ->
-                                        let send msg =
-                                            let embed = Entities.DiscordEmbedBuilder()
-                                            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                                            embed.Description <- msg
-                                            let b = Entities.DiscordInteractionResponseBuilder()
-                                            b.AddEmbed(embed.Build()) |> ignore
-                                            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+                            | [|answerCountryId|] ->
+                                match Countries.CountryId.tryDeserialize answerCountryId with
+                                | Ok answerCountryId ->
+                                    match Map.tryFind componentState.Data.QuizId Countries.countriesById with
+                                    | Some country ->
+                                        match Map.tryFind componentState.Data.DifficultId Countries.countriesByDifficult with
+                                        | Some difficult ->
+                                            let send msg =
+                                                let embed = Entities.DiscordEmbedBuilder()
+                                                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                                                embed.Description <- msg
+                                                let b = Entities.DiscordInteractionResponseBuilder()
+                                                b.AddEmbed(embed.Build()) |> ignore
+                                                awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
-                                        let ratingPosition scoreType = addWin ((Players.Id.create userId componentState.Data.QuizId), scoreType)
+                                            let ratingPosition scoreType = addWin ((Players.Id.create userId componentState.Data.DifficultId), scoreType)
 
-                                        if question.Correct = answerId then
-                                            sprintf "<@%d>, и это правильный ответ! 🥳\nТы на %d месте в рейтинге по \"%s\" викторине!"
-                                                userId
-                                                (ratingPosition Win)
-                                                quiz.Name
-                                            |> send
-                                        else
-                                            sprintf "<@%d>, к сожалению, это неправильный ответ.\nТы на %d месте в рейтинге по \"%s\" викторине"
-                                                userId
-                                                (ratingPosition Lose)
-                                                quiz.Name
-                                            |> send
+                                            if country.Id = answerCountryId then
+                                                sprintf "<@%d>, и это правильный ответ! 🥳\nТы на %d месте в рейтинге по \"%s\" викторине!"
+                                                    userId
+                                                    (ratingPosition Win)
+                                                    difficult.Name
+                                                |> send
+                                            else
+                                                sprintf "<@%d>, к сожалению, это неправильный ответ.\nТы на %d месте в рейтинге по \"%s\" викторине"
+                                                    userId
+                                                    (ratingPosition Lose)
+                                                    difficult.Name
+                                                |> send
+                                        | None ->
+                                            sprintf "not found in %A question ID in questions" componentState.Data.DifficultId
+                                            |> restartComponent
                                     | None ->
-                                        sprintf "not found in %s question ID in questions" componentState.Data.QuestionId
+                                        sprintf "not found in %A quiz ID in questions" componentState.Data.QuizId
                                         |> restartComponent
-                                | None ->
-                                    sprintf "not found in %A quiz ID in questions" componentState.Data.QuizId
+                                | Error errorMsg ->
+                                    errorMsg
                                     |> restartComponent
                             | xs ->
                                 sprintf "expected `e.Values` is [|answerId|] but %A" xs
@@ -230,13 +291,23 @@ module QuizUi =
 module Actions =
     let r = new System.Random()
 
-    let startQuiz (addEmbed, addComponents) userId (quiz: QuizArray) =
-        let questions = quiz.Questions
+    let startQuiz (addEmbed, addComponents) userId (difficult: Countries.Difficult) =
+        let countries = difficult.Countries
+        let countryId = countries.[r.Next(0, countries.Length)]
+        let country = Map.find countryId Countries.countriesById
+
+        let quizType =
+            let types = QuizUi.QuizType.all
+            types.[r.Next(0, types.Length)]
+
         let initOptions =
             QuizUi.InitOptions.create
                 userId
-                quiz.Id
-                questions.[r.Next(0, questions.Length)]
+                countryId
+                country
+                quizType
+                difficult.Id
+
         QuizUi.init initOptions (addEmbed, addComponents)
 
 module RatingTableUi =
@@ -247,14 +318,14 @@ module RatingTableUi =
         | SortByWins = 1
         | SortByLoses = 2
 
-    let initSetting getState: Setting<_, SortBy, QuizId, Players.GuildData> =
+    let initSetting getState: Setting<_, SortBy, Players.QuizId, Players.GuildData> =
         {
             Id = sprintf "RatingTableUi"
 
             GetState = getState
 
             Title = fun quizId _ ->
-                match Map.tryFind quizId quizes with
+                match Map.tryFind quizId Countries.countriesByDifficult with
                 | Some quiz ->
                     quiz.Name
                 | None ->
@@ -320,7 +391,7 @@ module RatingTableUi =
 
     let createTable
         (addEmbed, (addComponents: Entities.DiscordComponent [] -> _))
-        (quiz: Quiz<_>, getState) =
+        (quiz: Countries.Difficult, getState) =
 
         createTable addComponents addEmbed 1 (None, quiz.Id) (initSetting getState)
 
@@ -362,7 +433,7 @@ module QuizSelectionUi =
             |> ComponentState.Serialize
 
         let options =
-            quizes
+            Countries.countriesByDifficult
             |> Seq.map (fun (KeyValue(quizId, quiz)) ->
                 Entities.DiscordSelectComponentOption(quiz.Name, quizId.ToString())
             )
@@ -397,16 +468,16 @@ module QuizSelectionUi =
                         if componentState.Data.OwnerId = e.User.Id then
                             match e.Values with
                             | [|rawQuizId|] ->
-                                match System.Guid.TryParse rawQuizId with
-                                | true, quizId ->
-                                    match Map.tryFind quizId quizes with
+                                match Countries.DifficultId.tryDeserialize rawQuizId with
+                                | Ok quizId ->
+                                    match Map.tryFind quizId Countries.countriesByDifficult with
                                     | Some quiz ->
                                         next quiz
                                     | None ->
                                         sprintf "not found in %s quiz ID in quizes" rawQuizId
                                         |> restartComponent
-                                | _ ->
-                                    sprintf "Error parsing %s guid" rawQuizId
+                                | Error errMsg ->
+                                    errMsg
                                     |> restartComponent
                             | xs ->
                                 sprintf "expected `e.Values` is [|answerId|] but %A" xs
@@ -466,7 +537,7 @@ type Msg =
 
 let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: State) =
     let tryFindQuizByName quizName =
-        quizes
+        Countries.countriesByDifficult
         |> Map.tryPick (fun _ quiz ->
             if quiz.Name = quizName then
                 Some quiz
