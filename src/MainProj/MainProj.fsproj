@@ -34,6 +34,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\..\paket-files\github.com\gretmn102\TextCardsMaker\DrawText\DrawText\Grid.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Extensions.fs" />
     <Compile Include="DiscordMessage.fs" />
@@ -88,6 +89,7 @@
     <Compile Include="Roll\Main.fs" />
     <Compile Include="SimpleQuiz\Countries.fs" />
     <Compile Include="SimpleQuiz\Model.fs" />
+    <Compile Include="SimpleQuiz\FlagsRenderer.fs" />
     <Compile Include="SimpleQuiz\Main.fs" />
     <Compile Include="Cyoa.fs" />
     <Compile Include="AppsHub.fs" />

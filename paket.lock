@@ -569,7 +569,9 @@ NUGET
       System.Drawing.Common (>= 4.7)
       TextCopy (>= 4.2)
       YamlDotNet (>= 8.1.2)
-
+GIT
+  remote: https://github.com/gretmn102/TextCardsMaker.git
+     (9c13d1d0345158f92c1247e6bce51e9e360776a7)
 GROUP Build
 STORAGE: NONE
 RESTRICTION: == netstandard2.0

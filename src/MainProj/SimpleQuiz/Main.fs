@@ -1,6 +1,7 @@
 module SimpleQuiz.Main
 open DSharpPlus
 open FsharpMyExtension
+open FsharpMyExtension.Either
 
 open Types
 open Extensions
@@ -127,10 +128,9 @@ module QuizUi =
                 DifficultId = difficultId
             }
 
-    let init (options: InitOptions) (addEmbed, addComponents) =
+    let init (options: InitOptions) (addEmbed, addComponents, addFile) =
         let embed = Entities.DiscordEmbedBuilder()
         embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-
 
         let componentState =
             let state: ComponentState =
@@ -147,6 +147,7 @@ module QuizUi =
             |> ComponentState.serialize
 
         let description, options =
+            let varsCount = 8
             let countriesWithoutCurrent =
                 let countriesIdsWithoutCurrent =
                     Countries.countries
@@ -156,7 +157,7 @@ module QuizUi =
                 |> Seq.map (fun i ->
                     Countries.countriesById.[countriesIdsWithoutCurrent.[i]]
                 )
-                |> Seq.truncate 4
+                |> Seq.truncate (varsCount - 1)
                 |> Array.ofSeq
 
             match options.QuizType with
@@ -179,15 +180,28 @@ module QuizUi =
                     |> List.shuffle
 
                 let description =
+                    sprintf "<@%d>, какой флаг страны \"%s\"?" options.UserId options.Question.Name
+
+                let res =
                     countries
-                    |> Seq.mapi (fun i x -> sprintf "[flag%d](%s)" i x.FlagUrl)
-                    |> String.concat "\n"
-                    |> sprintf "<@%d>, какой флаг страны \"%s\"?\n%s" options.UserId options.Question.Name
+                    |> List.map (fun x -> x.FlagUrl)
+                    |> FlagsRenderer.downloadAndDrawFlags
+                match res with
+                | Right flags ->
+                    let m = new System.IO.MemoryStream() // potential memory leak
+                    flags.Save(m, System.Drawing.Imaging.ImageFormat.Png)
+                    m.Position <- 0L
+                    let fileName = "flags.png"
+                    addFile(fileName, m)
+
+                    embed.ImageUrl <- sprintf "attachment://%s" fileName
+                | Left errMsg ->
+                    printfn "%s" errMsg
 
                 let options =
                     countries
                     |> List.mapi (fun i item ->
-                        Entities.DiscordSelectComponentOption(string i, string item.Id)
+                        Entities.DiscordSelectComponentOption(string (i + 1), string item.Id)
                     )
 
                 description, options
@@ -291,7 +305,7 @@ module QuizUi =
 module Actions =
     let r = new System.Random()
 
-    let startQuiz (addEmbed, addComponents) userId (difficult: Countries.Difficult) =
+    let startQuiz (addEmbed, addComponents, addFile) userId (difficult: Countries.Difficult) =
         let countries = difficult.Countries
         let countryId = countries.[r.Next(0, countries.Length)]
         let country = Map.find countryId Countries.countriesById
@@ -308,7 +322,7 @@ module Actions =
                 quizType
                 difficult.Id
 
-        QuizUi.init initOptions (addEmbed, addComponents)
+        QuizUi.init initOptions (addEmbed, addComponents, addFile)
 
 module RatingTableUi =
     open Shared.Ui.Table
@@ -510,8 +524,11 @@ module QuizSelectionUi =
         handle MessageTypesIds.startQuiz client e (fun quiz ->
             let b = Entities.DiscordInteractionResponseBuilder()
 
+            let addFile (fileName: string, stream) = // TODO: @critical 404 error when update message with new file attachment
+                b.AddFile(fileName, stream) |> ignore
+
             Actions.startQuiz
-                (b.AddEmbed >> ignore, b.AddComponents >> ignore)
+                (b.AddEmbed >> ignore, b.AddComponents >> ignore, addFile)
                 e.User.Id
                 quiz
 
@@ -557,8 +574,10 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: St
             | Some quiz ->
                 let b = Entities.DiscordMessageBuilder()
                 let addEmbed c = b.Embed <- c
+                let addFile (fileName: string, stream) =
+                    b.WithFile(fileName, stream) |> ignore
                 Actions.startQuiz
-                    (addEmbed, b.AddComponents >> ignore)
+                    (addEmbed, b.AddComponents >> ignore, addFile)
                     e.Author.Id
                     quiz
                 awaiti <| e.Channel.SendMessageAsync b
