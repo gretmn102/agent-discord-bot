@@ -191,12 +191,12 @@ module QuizUi =
                     let m = new System.IO.MemoryStream() // potential memory leak
                     flags.Save(m, System.Drawing.Imaging.ImageFormat.Png)
                     m.Position <- 0L
-                    let fileName = "flags.png"
-                    addFile(fileName, m)
 
-                    embed.ImageUrl <- sprintf "attachment://%s" fileName
+                    let imageUrl = addFile(m)
+
+                    embed.ImageUrl <- imageUrl
                 | Left errMsg ->
-                    printfn "%s" errMsg
+                    printfn "Flags error:\n%s" errMsg
 
                 let options =
                     countries
@@ -524,8 +524,17 @@ module QuizSelectionUi =
         handle MessageTypesIds.startQuiz client e (fun quiz ->
             let b = Entities.DiscordInteractionResponseBuilder()
 
-            let addFile (fileName: string, stream) = // TODO: @critical 404 error when update message with new file attachment
-                b.AddFile(fileName, stream) |> ignore
+            let addFile stream =
+                let channelForImages =
+                    await <| client.GetChannelAsync 930127222373777509UL // todo: remove hard code
+                let embed = Entities.DiscordMessageBuilder()
+                let fileName = "flags.png"
+                embed.WithFile(fileName, stream) |> ignore
+                let x =
+                    await <| client.SendMessageAsync(channelForImages, embed)
+
+                stream.Dispose()
+                x.Attachments.[0].Url
 
             Actions.startQuiz
                 (b.AddEmbed >> ignore, b.AddComponents >> ignore, addFile)
@@ -574,8 +583,11 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: St
             | Some quiz ->
                 let b = Entities.DiscordMessageBuilder()
                 let addEmbed c = b.Embed <- c
-                let addFile (fileName: string, stream) =
+                let addFile stream =
+                    let fileName = "flags.png"
                     b.WithFile(fileName, stream) |> ignore
+                    sprintf "attachment://%s" fileName
+
                 Actions.startQuiz
                     (addEmbed, b.AddComponents >> ignore, addFile)
                     e.Author.Id
