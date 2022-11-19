@@ -2,19 +2,6 @@ module Types
 open FsharpMyExtension
 open FsharpMyExtension.Either
 
-module WebClientDownloader =
-    open FsharpMyExtension.WebClientDownloader
-
-    let getData (headers:(string * string) list) (url:string) =
-        let hd = webClient.Headers
-
-        headers |> List.iter hd.Set
-        try
-            webClient.DownloadData url
-            |> Right
-        with
-            | x -> Left x.Message
-
 type GuildId = uint64
 type UserId = uint64
 type ChannelId = uint64

@@ -120,7 +120,7 @@ let downloadAndDrawFlags (urls: string seq) =
                     // The remote server returned an error: (403) Forbidden. Please comply with the User-Agent policy: https://meta.wikimedia.org/wiki/User-Agent_policy.
                     "User-Agent", "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0"
                 ]
-            Types.WebClientDownloader.getData headers url
+            WebClientDownloader.getData headers url
             |> Either.map (fun x ->
                 use m = new System.IO.MemoryStream(x)
                 let flag = new Bitmap(m)
