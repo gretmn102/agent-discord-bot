@@ -161,13 +161,6 @@ module IMongoCollection =
 
         0L = collection.CountDocuments((fun _ -> true), countOptions)
 
-module Set =
-    let tryFirst (s: _ Set) =
-        if Set.isEmpty s then
-            None
-        else
-            Some (Seq.head s)
-
 open DSharpPlus
 
 type MessageCreateEventHandler = ((DiscordClient * EventArgs.MessageCreateEventArgs) -> unit)
