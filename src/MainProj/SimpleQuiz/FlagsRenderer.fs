@@ -113,42 +113,30 @@ let drawFlagsOnGrid (columnsCount, rowsCount) (numberAndFlags: (int * Image) [])
     res
 
 let downloadAndDrawFlags (webCacher: WebCacher<Bitmap>) (urls: string seq) =
-    let get url webCacher =
-        let headers =
-            [
-                // The remote server returned an error: (403) Forbidden. Please comply with the User-Agent policy: https://meta.wikimedia.org/wiki/User-Agent_policy.
-                "User-Agent", "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0"
-            ]
+    let gets urls webCacher =
         webCacher
-        |> WebCacher.get
-            headers
+        |> WebCacher.gets
+            id
             (fun bytes ->
-                use m = new System.IO.MemoryStream(bytes)
-                let flag = new Bitmap(m)
-                flag
+                match bytes.Content with
+                | WebDownloader.Binary bytes ->
+                    use m = new System.IO.MemoryStream(bytes)
+                    let flag = new Bitmap(m)
+                    flag
+                | x ->
+                    failwithf "expected Binary but Text\n%A" x
             )
-            url
+            urls
 
     let flags, webCacher =
-        urls
-        |> Seq.mapFold
-            (fun state url ->
-                match get url state with
-                | Ok (bmp, state') ->
-                    Ok bmp, Option.defaultValue state state'
-                | Error errMsg ->
-                    Error errMsg, state
-            )
-            webCacher
-
-    // WebClient does not support concurrent I/O operations, therefore, do not even think to paralle them
+        gets urls webCacher
 
     let bmp =
         flags
-        |> Seq.mapi (fun i bmp ->
+        |> Seq.mapi (fun i (_, res) ->
             let bmp =
-                match bmp with
-                | Ok bmp -> bmp
+                match res with
+                | Ok res -> res.Data
 
                 | Error errMsg ->
                     printfn "%A" errMsg
