@@ -153,7 +153,7 @@ let main argv =
                 || Doorkeeper.Invites.componentInteractionCreateHandle client e
                 || EggBattle.Main.componentInteractionCreateHandle client e
                 // || Fishing.Main.componentInteractionCreateHandle client e
-                || SimpleQuiz.Main.componentInteractionCreateHandle client e
+                // || SimpleQuiz.Main.componentInteractionCreateHandle client e
 
             if not isHandled then
                 AppsHub.resp client e

@@ -18,6 +18,7 @@ type Act =
     | Angry
     | Kebab
     | FortuneCookies
+    | Bite
 
 type Msg = Act * UserId option
 
@@ -40,6 +41,7 @@ module Parser =
             skipStringCI "angry" >>% Angry
             skipStringCI "печенье" >>% FortuneCookies
             (skipStringCI "шашлычок" <|> skipStringCI "шашлык") >>% Kebab
+            skipStringCI "кусь" >>% Bite
         ]
 
     let start f: _ Parser =
@@ -219,6 +221,24 @@ let reduce (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) ((msg, 
             (sprintf "**%s** злится на **%s**")
             "На самого себя нельзя злиться, ну в самом деле!"
             "На меня не надо злиться, я хороший!"
+    | Bite ->
+        let assets =
+            [|
+                "https://media.tenor.com/iFjm7dyo_-MAAAAd/cat-bite.gif"
+                "https://media.tenor.com/WVRAumVRwi4AAAAS/cat.gif"
+                "https://media.tenor.com/wI_QPAY2G1cAAAAd/cat-bites-lip.gif"
+                "https://media.tenor.com/yVKQAhFuGZQAAAAC/cat-bite.gif"
+                "https://media.tenor.com/bB9rBu4CZxoAAAAd/cat-bite.gif"
+                "https://media0.giphy.com/media/XtuYDes6uyL4Y/giphy.gif"
+            |]
+
+        cmdBuilder
+            whomId
+            assets
+            (sprintf "**%s** куськает **%s**")
+            "Не надо самого куськать, ну в самом деле!"
+            "Меня нельзя куськать: я железный и невкусный! 🙀"
+
     | Kebab ->
         let predictions = kebabs
 

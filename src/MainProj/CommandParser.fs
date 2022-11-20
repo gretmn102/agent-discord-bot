@@ -50,7 +50,7 @@ let pcommand: _ Parser =
         EmojiFont.Main.exec
         Calc.Main.exec
         Roll.Main.exec
-        SimpleQuiz.Main.exec
+        // SimpleQuiz.Main.exec
         // Fishing.Main.exec
     ]
 
