@@ -559,7 +559,7 @@ NUGET
       Microsoft.Extensions.DependencyInjection.Abstractions (>= 5.0)
     YamlDotNet (11.2.1)
   remote: https://gitlab.com/api/v4/projects/28574921/packages/nuget/index.json
-    FSharpMyExt (1.6.0)
+    FSharpMyExt (1.7.0)
       FParsec (>= 1.1.1)
       FSharp.Core (>= 4.7.2)
       Fuchu (>= 1.1)

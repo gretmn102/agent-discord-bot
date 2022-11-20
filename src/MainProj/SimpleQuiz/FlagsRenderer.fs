@@ -1,6 +1,7 @@
 module SimpleQuiz.FlagsRenderer
 open FsharpMyExtension
 open FsharpMyExtension.Either
+open FsharpMyExtension.ResultExt
 open System.Drawing
 
 let getTextSize =
@@ -111,32 +112,51 @@ let drawFlagsOnGrid (columnsCount, rowsCount) (numberAndFlags: (int * Image) [])
 
     res
 
-let downloadAndDrawFlags (urls: string seq) =
-    let flags =
-        urls
-        |> Seq.map (fun url ->
-            let headers =
-                [
-                    // The remote server returned an error: (403) Forbidden. Please comply with the User-Agent policy: https://meta.wikimedia.org/wiki/User-Agent_policy.
-                    "User-Agent", "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0"
-                ]
-            WebClientDownloader.getData headers url
-            |> Either.map (fun x ->
-                use m = new System.IO.MemoryStream(x)
+let downloadAndDrawFlags (webCacher: WebCacher<Bitmap>) (urls: string seq) =
+    let get url webCacher =
+        let headers =
+            [
+                // The remote server returned an error: (403) Forbidden. Please comply with the User-Agent policy: https://meta.wikimedia.org/wiki/User-Agent_policy.
+                "User-Agent", "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0"
+            ]
+        webCacher
+        |> WebCacher.get
+            headers
+            (fun bytes ->
+                use m = new System.IO.MemoryStream(bytes)
                 let flag = new Bitmap(m)
                 flag
             )
-        )
-        |> List.ofSeq
-        |> List.seqEither
+            url
+
+    let flags, webCacher =
+        urls
+        |> Seq.mapFold
+            (fun state url ->
+                match get url state with
+                | Ok (bmp, state') ->
+                    Ok bmp, Option.defaultValue state state'
+                | Error errMsg ->
+                    Error errMsg, state
+            )
+            webCacher
 
     // WebClient does not support concurrent I/O operations, therefore, do not even think to paralle them
 
-    flags
-    |> Either.map (fun xs ->
-        let xs =
-            xs
-            |> List.mapi (fun i bmp -> i + 1, bmp :> Image)
-            |> Array.ofList
-        drawFlagsOnGrid (4, 2) xs
-    )
+    let bmp =
+        flags
+        |> Seq.mapi (fun i bmp ->
+            let bmp =
+                match bmp with
+                | Ok bmp -> bmp
+
+                | Error errMsg ->
+                    printfn "%A" errMsg
+                    new Bitmap(1, 1)
+
+            i + 1, bmp :> Image
+        )
+        |> Array.ofSeq
+        |> drawFlagsOnGrid (4, 2)
+
+    bmp, webCacher

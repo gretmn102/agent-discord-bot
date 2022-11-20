@@ -7,8 +7,11 @@ open Types
 open Extensions
 open SimpleQuiz.Model
 
+type FlagImages = WebCacher<System.Drawing.Bitmap>
+
 type State = {
     Players: Players.GuildData
+    FlagImages: FlagImages
 }
 
 type Request =
@@ -128,7 +131,7 @@ module QuizUi =
                 DifficultId = difficultId
             }
 
-    let init (options: InitOptions) (addEmbed, addComponents, addFile) =
+    let init (options: InitOptions) flagImages (addEmbed, addComponents, addFile) =
         let embed = Entities.DiscordEmbedBuilder()
         embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
 
@@ -146,7 +149,7 @@ module QuizUi =
             state
             |> ComponentState.serialize
 
-        let description, options =
+        let description, options, flagImages =
             let varsCount = 8
             let countriesWithoutCurrent =
                 let countriesIdsWithoutCurrent =
@@ -172,7 +175,7 @@ module QuizUi =
                         Entities.DiscordSelectComponentOption(item.Capital, string item.Id)
                     )
 
-                description, options
+                description, options, None
             | QuizType.Flag ->
                 let countries =
                     Array.append [|options.Question|] countriesWithoutCurrent // TODO: Array.insertAt
@@ -182,21 +185,18 @@ module QuizUi =
                 let description =
                     sprintf "<@%d>, какой флаг страны \"%s\"?" options.UserId options.Question.Name
 
-                let res =
+                let flags, flagImages =
                     countries
                     |> List.map (fun x -> x.FlagUrl)
-                    |> FlagsRenderer.downloadAndDrawFlags
-                match res with
-                | Right flags ->
-                    let m = new System.IO.MemoryStream() // potential memory leak
-                    flags.Save(m, System.Drawing.Imaging.ImageFormat.Png)
-                    m.Position <- 0L
+                    |> FlagsRenderer.downloadAndDrawFlags flagImages
 
-                    let imageUrl = addFile(m)
+                let m = new System.IO.MemoryStream() // potential memory leak
+                flags.Save(m, System.Drawing.Imaging.ImageFormat.Png)
+                m.Position <- 0L
 
-                    embed.ImageUrl <- imageUrl
-                | Left errMsg ->
-                    printfn "Flags error:\n%s" errMsg
+                let imageUrl = addFile(m)
+
+                embed.ImageUrl <- imageUrl
 
                 let options =
                     countries
@@ -204,7 +204,7 @@ module QuizUi =
                         Entities.DiscordSelectComponentOption(string (i + 1), string item.Id)
                     )
 
-                description, options
+                description, options, Some flagImages
             | x ->
                 failwithf "%A not implemented yet" x
 
@@ -213,7 +213,8 @@ module QuizUi =
 
         let c = Entities.DiscordSelectComponent(componentState, "Выбери ответ...", options)
         addComponents (c :> Entities.DiscordComponent)
-        ()
+
+        flagImages
 
     let handle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) addWin =
         let restartComponent errMsg =
@@ -305,7 +306,7 @@ module QuizUi =
 module Actions =
     let r = new System.Random()
 
-    let startQuiz (addEmbed, addComponents, addFile) userId (difficult: Countries.Difficult) =
+    let startQuiz flagImages (addEmbed, addComponents, addFile) userId (difficult: Countries.Difficult) =
         let countries = difficult.Countries
         let countryId = countries.[r.Next(0, countries.Length)]
         let country = Map.find countryId Countries.countriesById
@@ -322,7 +323,7 @@ module Actions =
                 quizType
                 difficult.Id
 
-        QuizUi.init initOptions (addEmbed, addComponents, addFile)
+        QuizUi.init initOptions flagImages (addEmbed, addComponents, addFile)
 
 module RatingTableUi =
     open Shared.Ui.Table
@@ -520,7 +521,7 @@ module QuizSelectionUi =
         let startQuiz = "SimpleQuizSelectionUI"
         let rating = "SimpleQuizSelectionUIRating"
 
-    let handleStartQuiz (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
+    let handleStartQuiz (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) getSetFlagImages =
         handle MessageTypesIds.startQuiz client e (fun quiz ->
             let b = Entities.DiscordInteractionResponseBuilder()
 
@@ -536,10 +537,13 @@ module QuizSelectionUi =
                 stream.Dispose()
                 x.Attachments.[0].Url
 
-            Actions.startQuiz
-                (b.AddEmbed >> ignore, b.AddComponents >> ignore, addFile)
-                e.User.Id
-                quiz
+            getSetFlagImages (fun flagImages ->
+                Actions.startQuiz
+                    flagImages
+                    (b.AddEmbed >> ignore, b.AddComponents >> ignore, addFile)
+                    e.User.Id
+                    quiz
+            )
 
             awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
         )
@@ -560,6 +564,8 @@ type Msg =
     /// returned player position in rating
     | AddScore of AsyncReplyChannel<int> * (Players.Id * ScoreType)
     | GetPlayers of AsyncReplyChannel<Players.GuildData>
+    | GetFlagImages of AsyncReplyChannel<FlagImages>
+    | SetFlagImages of FlagImages
 
 let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: State) =
     let tryFindQuizByName quizName =
@@ -578,6 +584,8 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: St
         match quizName with
         | None ->
             QuizSelectionUi.init QuizSelectionUi.MessageTypesIds.startQuiz e
+
+            state
         | Some quizName ->
             match tryFindQuizByName quizName with
             | Some quiz ->
@@ -588,11 +596,21 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: St
                     b.WithFile(fileName, stream) |> ignore
                     sprintf "attachment://%s" fileName
 
-                Actions.startQuiz
-                    (addEmbed, b.AddComponents >> ignore, addFile)
-                    e.Author.Id
-                    quiz
+                let flagImages =
+                    Actions.startQuiz
+                        state.FlagImages
+                        (addEmbed, b.AddComponents >> ignore, addFile)
+                        e.Author.Id
+                        quiz
+
                 awaiti <| e.Channel.SendMessageAsync b
+
+                match flagImages with
+                | None -> state
+                | Some flagImages ->
+                    { state with
+                        FlagImages = flagImages
+                    }
 
             | None ->
                 let send msg =
@@ -606,7 +624,7 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: St
                 sprintf "Не найдена викторина с таким названием."
                 |> send
 
-        state
+                state
 
     | StartRating quizName ->
         awaiti <| e.Channel.TriggerTypingAsync()
@@ -680,9 +698,20 @@ let reduce (msg: Msg) (state: State): State =
 
         state
 
+    | GetFlagImages r ->
+        r.Reply state.FlagImages
+
+        state
+
+    | SetFlagImages flagImages ->
+        { state with
+            FlagImages = flagImages
+        }
+
 let m =
     let init: State = {
         Players = Players.GuildData.init Db.database
+        FlagImages = WebCacher.empty
     }
 
     MailboxProcessor.Start (fun mail ->
@@ -710,7 +739,16 @@ let componentInteractionCreateHandle client e =
     QuizUi.handle client e (fun x ->
         m.PostAndReply (fun r -> AddScore(r, x))
     )
-    || QuizSelectionUi.handleStartQuiz client e
+    || QuizSelectionUi.handleStartQuiz client e (fun getSetflagImages ->
+        let flagImages =
+            m.PostAndReply GetFlagImages
+            |> getSetflagImages
+
+        match flagImages with
+        | Some flagImages ->
+            m.Post (SetFlagImages flagImages)
+        | None -> ()
+    )
     || RatingTableUi.componentInteractionCreateHandle client e (fun () ->
         m.PostAndReply GetPlayers
     )
