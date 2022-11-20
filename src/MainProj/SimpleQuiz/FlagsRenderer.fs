@@ -112,24 +112,24 @@ let drawFlagsOnGrid (columnsCount, rowsCount) (numberAndFlags: (int * Image) [])
 
     res
 
-let downloadAndDrawFlags (webCacher: WebCacher<Bitmap>) (urls: string seq) =
-    let gets urls webCacher =
-        webCacher
-        |> WebCacher.gets
-            id
-            (fun bytes ->
-                match bytes.Content with
-                | WebDownloader.Binary bytes ->
-                    use m = new System.IO.MemoryStream(bytes)
-                    let flag = new Bitmap(m)
-                    flag
-                | x ->
-                    failwithf "expected Binary but Text\n%A" x
-            )
-            urls
+let downloads urls webCacher =
+    webCacher
+    |> WebCacher.gets
+        id
+        (fun bytes ->
+            match bytes.Content with
+            | WebDownloader.Binary bytes ->
+                use m = new System.IO.MemoryStream(bytes)
+                let flag = new Bitmap(m)
+                flag
+            | x ->
+                failwithf "expected Binary but Text\n%A" x
+        )
+        urls
 
+let downloadAndDrawFlags (webCacher: WebCacher<Bitmap>) (urls: string seq) =
     let flags, webCacher =
-        gets urls webCacher
+        downloads urls webCacher
 
     let bmp =
         flags

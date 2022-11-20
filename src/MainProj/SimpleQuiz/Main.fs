@@ -711,7 +711,19 @@ let reduce (msg: Msg) (state: State): State =
 let m =
     let init: State = {
         Players = Players.GuildData.init Db.database
-        FlagImages = WebCacher.empty
+        FlagImages =
+            let isLoadFlagsOnStartup = true
+
+            if isLoadFlagsOnStartup then
+                printfn "Downloading flags..."
+                let urls =
+                    Countries.countriesById
+                    |> Seq.map (fun (KeyValue(k, v)) -> v.FlagUrl)
+                let _, webCacher = FlagsRenderer.downloads urls WebCacher.empty
+                printfn "Flags has been downloaded."
+                webCacher
+            else
+                WebCacher.empty
     }
 
     MailboxProcessor.Start (fun mail ->
