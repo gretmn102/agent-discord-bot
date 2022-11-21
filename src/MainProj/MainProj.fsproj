@@ -70,6 +70,8 @@
     <Compile Include="Birthday\Main.fs" />
     <Compile Include="Events\Model.fs" />
     <Compile Include="Events\Main.fs" />
+    <Compile Include="CustomCommand\MessageTemplate.fs" />
+    <Compile Include="CustomCommand\Model.fs" />
     <Compile Include="CustomCommand\Main.fs" />
     <Compile Include="DiscordWebhook\Model.fs" />
     <Compile Include="DiscordWebhook\Main.fs" />

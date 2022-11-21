@@ -18,8 +18,11 @@ module Parser =
     let puserMention<'u> : Parser<UserId, 'u> =
         skipString "<@" >>. optional (skipChar '!') >>. puint64 .>> skipChar '>'
 
+    let puserMentionTargetP (p: Parser<_, 'u>) : Parser<_, 'u> =
+        skipString "<@" >>? optional (skipChar '!') >>? p .>> skipChar '>'
+
     let puserMentionTargetStr<'u> (userId: string) : Parser<_, 'u> =
-        skipString "<@" >>? optional (skipChar '!') >>? skipString userId >>. skipChar '>'
+        puserMentionTargetP (skipString userId)
 
     let puserMentionTarget<'u> (userId: UserId) : Parser<_, 'u> =
         puserMentionTargetStr (string userId)
