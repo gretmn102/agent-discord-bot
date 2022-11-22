@@ -36,8 +36,8 @@
   <ItemGroup>
     <Compile Include="..\..\paket-files\github.com\gretmn102\TextCardsMaker\DrawText\DrawText\Grid.fs" />
     <Compile Include="Types.fs" />
-    <Compile Include="Extensions.fs" />
     <Compile Include="DiscordMessage.fs" />
+    <Compile Include="Extensions.fs" />
     <Compile Include="Shared\MessageTemplate.fs" />
     <Compile Include="Shared\Ui\Table.fs" />
     <Compile Include="Shared\Api.fs" />

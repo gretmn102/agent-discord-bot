@@ -121,6 +121,7 @@ let main argv =
             Ranking.Main.handle e
             Events.Main.handle e
             DiscordWebhook.Main.handle e
+            CustomCommand.Main.handle client e
 
             cmd client e
 

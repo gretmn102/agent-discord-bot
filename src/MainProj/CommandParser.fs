@@ -28,7 +28,6 @@ let pballotBox =
 
 let pcommand: _ Parser =
     let pmessageCreateEventHandler = choice [
-        CustomCommand.Main.exec
         UserRole.Main.exec
         Doorkeeper.Main.exec
         VoiceChannelNotification.Main.exec
