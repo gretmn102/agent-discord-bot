@@ -61,7 +61,8 @@
     <Compile Include="Ship\Main.fs" />
     <Compile Include="EmojiFont\EmojiFont.fs" />
     <Compile Include="EmojiFont\Main.fs" />
-    <Compile Include="BallotBox.fs" />
+    <Compile Include="BallotBox\Core.fs" />
+    <Compile Include="BallotBox\Main.fs" />
     <Compile Include="Quiz\Quiz.fs" />
     <Compile Include="MessageManager\MessageManager.fs" />
     <Compile Include="ReactionEvent\Model.fs" />

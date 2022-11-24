@@ -19,6 +19,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Shared\Ui\TableTests.fs" />
+    <Compile Include="Modules\BallotBox\tests.fs" />
     <Compile Include="NumberToWordsTests.fs" />
     <Compile Include="ApiTests.fs" />
     <Compile Include="CalcTests.fs" />

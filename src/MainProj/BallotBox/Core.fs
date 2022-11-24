@@ -1,4 +1,4 @@
-module BallotBox
+module BallotBox.Core
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open Types

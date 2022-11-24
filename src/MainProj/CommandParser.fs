@@ -14,17 +14,11 @@ type Cmd =
     | SomeQuiz
     | Unknown
     | Pass
-    | BallotBox of description:string * choices:string list
     | NumberToWords of bigint
 
     | MessageCreateEventHandler of MessageCreateEventHandler
 
 let prefix = pchar '.'
-
-let pballotBox =
-    pstring "ballotBox"
-    >>. many1Satisfy ((=) ' ') >>. many1Satisfy ((<>) '\n') .>> spaces
-    .>>. many1 (many1Satisfy ((<>) '\n') .>> spaces)
 
 let pcommand: _ Parser =
     let pmessageCreateEventHandler = choice [
@@ -49,6 +43,7 @@ let pcommand: _ Parser =
         EmojiFont.Main.exec
         Calc.Main.exec
         Roll.Main.exec
+        BallotBox.Main.exec (fun setting client e -> AppsHub.start (AppsHub.Hub.InitBallotBox setting) client e)
         // SimpleQuiz.Main.exec
         // Fishing.Main.exec
     ]
@@ -63,8 +58,6 @@ let pcommand: _ Parser =
         pmessageCreateEventHandler |>> MessageCreateEventHandler
 
         pstringCI "numberToWords" >>. spaces >>. FParsecExt.pbigint |>> NumberToWords
-
-        pballotBox |>> BallotBox
     ]
 
 let start botId str =

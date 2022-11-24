@@ -24,8 +24,6 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 AppsHub.start (AppsHub.Hub.InitCyoa x) client e
             | CommandParser.SomeQuiz ->
                 AppsHub.start AppsHub.Hub.InitQuiz client e
-            | CommandParser.BallotBox(description, choices) ->
-                AppsHub.start (AppsHub.Hub.InitBallotBox(description, choices)) client e
 
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()

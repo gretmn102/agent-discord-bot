@@ -74,39 +74,6 @@ let pshipTests =
         )
     ]
 
-[<Tests>]
-let ballotBoxTests =
-    testList "ballotBoxTests" [
-        testCase "ballotBoxTests1" (fun _ ->
-            let input =
-                [
-                    "ballotBox Нужны ли нам такие голосовалки?"
-                    "Да"
-                    "Нет"
-                    "Удоли!11"
-                    "Vox Populi, Vox Dei"
-                ] |> String.concat "\n"
-            let exp =
-                Right
-                  ("Нужны ли нам такие голосовалки?", ["Да"; "Нет"; "Удоли!11"; "Vox Populi, Vox Dei"])
-            Assert.Equal("", exp, FParsecExt.runEither pballotBox input)
-        )
-        testCase "ballotBoxTests2" (fun _ ->
-            let input =
-                [
-                    "ballotBox Нужны ли нам такие голосовалки?"
-                    "Да"
-                    "Нет"
-                    ""
-                    "Vox Populi, Vox Dei"
-                ] |> String.concat "\n"
-            let exp =
-                Right
-                  ("Нужны ли нам такие голосовалки?", ["Да"; "Нет"; "Vox Populi, Vox Dei"])
-            Assert.Equal("", exp, FParsecExt.runEither pballotBox input)
-        )
-    ]
-
 module VoiceChannelNotificationTests =
     open VoiceChannelNotification.Main.Parser
 

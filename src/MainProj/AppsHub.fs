@@ -44,7 +44,7 @@ module Hub =
     type AppState =
         | CyoaState of CyoaState
         | QuizState of Quiz.State
-        | BallotBoxState of BallotBox.State
+        | BallotBoxState of BallotBox.Core.State
 
     type State = Map<MessagePath, UserId * AppState>
 
@@ -119,7 +119,7 @@ module Hub =
                                 Left ThisIsNotYourApp
                         | BallotBoxState ballotBoxState ->
                             Right (BallotBoxType, fun req -> // TODO: it is obvious that one level of abstraction is clearly superfluous
-                                let x, ballotBoxState = BallotBox.update2 e ballotBoxState
+                                let x, ballotBoxState = BallotBox.Core.update2 e ballotBoxState
                                 let state =
                                     if ballotBoxState.IsPublic then
                                         Map.remove path state
@@ -161,7 +161,7 @@ module Hub =
 
                     Answer quizAnswer, f
                 | InitBallotBox(description, choices) ->
-                    let (answer, ballotBoxState) = BallotBox.init2 userId description choices
+                    let (answer, ballotBoxState) = BallotBox.Core.init2 userId description choices
                     let f path =
                         let state = Map.add path (userId, BallotBoxState ballotBoxState) state
                         state
