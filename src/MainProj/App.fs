@@ -47,16 +47,6 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
                 b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
                 awaiti (client.SendMessageAsync (e.Channel, b.Build()))
 
-            | CommandParser.NumberToWords num ->
-                let b = DSharpPlus.Entities.DiscordEmbedBuilder()
-                b.Description <-
-                    try
-                        NumberToWords.toNumName num
-                    with e ->
-                        e.Message
-                b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                awaiti (client.SendMessageAsync (e.Channel, b.Build()))
-
             | CommandParser.MessageCreateEventHandler exec ->
                 exec (client, e)
 

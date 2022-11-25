@@ -43,7 +43,8 @@
     <Compile Include="Shared\Api.fs" />
     <Compile Include="Scheduler\Scheduler.fs" />
     <Compile Include="Db.fs" />
-    <Compile Include="NumberToWords.fs" />
+    <Compile Include="NumberToWords\Core.fs" />
+    <Compile Include="NumberToWords\Main.fs" />
     <Compile Include="UserRole\Model.fs" />
     <Compile Include="UserRole\Main.fs" />
     <Compile Include="ChatVoice\Model.fs" />

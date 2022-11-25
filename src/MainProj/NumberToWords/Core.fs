@@ -1,4 +1,4 @@
-module NumberToWords
+module NumberToWords.Core
 open FsharpMyExtension
 
 let twoToTen =

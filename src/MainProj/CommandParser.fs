@@ -14,7 +14,6 @@ type Cmd =
     | SomeQuiz
     | Unknown
     | Pass
-    | NumberToWords of bigint
 
     | MessageCreateEventHandler of MessageCreateEventHandler
 
@@ -44,6 +43,7 @@ let pcommand: _ Parser =
         Calc.Main.exec
         Roll.Main.exec
         BallotBox.Main.exec (fun setting client e -> AppsHub.start (AppsHub.Hub.InitBallotBox setting) client e)
+        NumberToWords.Main.exec
         // SimpleQuiz.Main.exec
         // Fishing.Main.exec
     ]
@@ -56,8 +56,6 @@ let pcommand: _ Parser =
         stringReturn "quiz" SomeQuiz
 
         pmessageCreateEventHandler |>> MessageCreateEventHandler
-
-        pstringCI "numberToWords" >>. spaces >>. FParsecExt.pbigint |>> NumberToWords
     ]
 
 let start botId str =
