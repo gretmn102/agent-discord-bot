@@ -25,9 +25,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>EmojiFont\rus_lowercase_sheet.png</TargetPath>
     </ContentWithTargetPath>
-    <ContentWithTargetPath Include="DiscordEmojiSheet.txt">
+    <ContentWithTargetPath Include="Shared\DiscordEmojiSheet.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>DiscordEmojiSheet.txt</TargetPath>
+      <TargetPath>Shared\DiscordEmojiSheet.txt</TargetPath>
     </ContentWithTargetPath>
     <Content Include="Fonts\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -35,14 +35,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\paket-files\github.com\gretmn102\TextCardsMaker\DrawText\DrawText\Grid.fs" />
-    <Compile Include="Types.fs" />
-    <Compile Include="DiscordMessage.fs" />
-    <Compile Include="Extensions.fs" />
+    <Compile Include="Shared\Scheduler.fs" />
+    <Compile Include="Shared\Types.fs" />
+    <Compile Include="Shared\DiscordMessage.fs" />
+    <Compile Include="Shared\Extensions.fs" />
     <Compile Include="Shared\MessageTemplate.fs" />
     <Compile Include="Shared\Ui\Table.fs" />
     <Compile Include="Shared\Api.fs" />
-    <Compile Include="Scheduler\Scheduler.fs" />
-    <Compile Include="Db.fs" />
+    <Compile Include="Shared\Db.fs" />
     <Compile Include="NumberToWords\Core.fs" />
     <Compile Include="NumberToWords\Main.fs" />
     <Compile Include="UserRole\Model.fs" />

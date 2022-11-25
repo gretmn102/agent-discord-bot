@@ -75,7 +75,7 @@ module StandartDiscordEmoji =
     let emojiSheetMapWidth = 42
 
     let emojiSheetMap =
-        System.IO.File.ReadAllLines "DiscordEmojiSheet.txt"
+        System.IO.File.ReadAllLines "Shared/DiscordEmojiSheet.txt"
         |> Array.mapi (fun y ->
             String.split " "
             >> Seq.mapi (fun x str -> str, (x, y))
