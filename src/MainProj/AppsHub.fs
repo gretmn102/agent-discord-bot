@@ -7,7 +7,7 @@ open FsharpMyExtension.Either
 
 module Hub =
     type AppReq =
-        | CyoaReq of Cyoa.Implementation.Msg
+        | CyoaReq of Cyoa.Core.Implementation.Msg
         | QuizReq of Quiz.Msg
         | BallotBoxReq
 
@@ -37,9 +37,9 @@ module Hub =
         | BallotBoxType
 
     type CyoaState =
-        | SomeCyoaState of Cyoa.All<Cyoa.Scenario.LabelName,obj,obj>
-        | QuizState2 of Cyoa.All<Cyoa.Scenario2.LabelName,obj,obj>
-        | QuizWithMultiChoicesState of Cyoa.All<Cyoa.QuizWithMultipleChoice.LabelName,obj,obj>
+        | SomeCyoaState of Cyoa.Core.All<Cyoa.Core.Scenario.LabelName,obj,obj>
+        | QuizState2 of Cyoa.Core.All<Cyoa.Core.Scenario2.LabelName,obj,obj>
+        | QuizWithMultiChoicesState of Cyoa.Core.All<Cyoa.Core.QuizWithMultipleChoice.LabelName,obj,obj>
 
     type AppState =
         | CyoaState of CyoaState
@@ -63,17 +63,17 @@ module Hub =
                         let userId = e.User.Id
                         match app with
                         | CyoaState cyoaState ->
-                            let quizf (cyoaState:Cyoa.All<_,_,_>) cyoaStatef =
+                            let quizf (cyoaState:Cyoa.Core.All<_,_,_>) cyoaStatef =
                                 if userId = ownerId then
                                     Right (CyoaType, fun req ->
                                         match req with
                                         | CyoaReq msg ->
-                                            let cyoaState' = Cyoa.Implementation.update cyoaState.Interp cyoaState.Init msg cyoaState.IfState
-                                            let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState'
+                                            let cyoaState' = Cyoa.Core.Implementation.update cyoaState.Interp cyoaState.Init msg cyoaState.IfState
+                                            let cyoaAnswer = Cyoa.Core.Implementation.gameView (fun _ _ -> failwith "not imp") cyoaState'
                                             let state =
                                                 match cyoaState'.Game with
-                                                | Cyoa.Core.End
-                                                | Cyoa.Core.PrintEnd _ ->
+                                                | Cyoa.Core.Core.End
+                                                | Cyoa.Core.Core.PrintEnd _ ->
                                                     Map.remove path state
                                                 | _ ->
                                                     let cyoaState =
@@ -132,8 +132,8 @@ module Hub =
             Init = fun (userId, appType) ->
                 match appType with
                 | InitCyoa x ->
-                    let cyoaf (a:Cyoa.All<_,_,_>) cyoaStatef =
-                        let cyoaAnswer = Cyoa.Implementation.gameView (fun _ _ -> failwith "not imp") a.IfState
+                    let cyoaf (a:Cyoa.Core.All<_,_,_>) cyoaStatef =
+                        let cyoaAnswer = Cyoa.Core.Implementation.gameView (fun _ _ -> failwith "not imp") a.IfState
                         let f path =
                             let state = Map.add path (userId, CyoaState (cyoaStatef a)) state
                             state
@@ -141,16 +141,16 @@ module Hub =
                         Answer cyoaAnswer, f
                     match x with
                     | SomeCyoa ->
-                        let a = Cyoa.initState Cyoa.Scenario.beginLoc Cyoa.Scenario.scenario
+                        let a = Cyoa.Core.initState Cyoa.Core.Scenario.beginLoc Cyoa.Core.Scenario.scenario
                         cyoaf a SomeCyoaState
                     | SomeGirlsQuiz ->
-                        let a = Cyoa.initState Cyoa.Scenario2.beginLoc Cyoa.Scenario2.someGirlsQuiz
+                        let a = Cyoa.Core.initState Cyoa.Core.Scenario2.beginLoc Cyoa.Core.Scenario2.someGirlsQuiz
                         cyoaf a QuizState2
                     | QuizWithMultiChoices ->
-                        let a = Cyoa.initState Cyoa.QuizWithMultipleChoice.beginLoc Cyoa.QuizWithMultipleChoice.scenario
+                        let a = Cyoa.Core.initState Cyoa.Core.QuizWithMultipleChoice.beginLoc Cyoa.Core.QuizWithMultipleChoice.scenario
                         cyoaf a QuizWithMultiChoicesState
                     | QuizPizza ->
-                        let a = Cyoa.initState Cyoa.Scenario2.beginLoc Cyoa.Scenario2.quizPizza
+                        let a = Cyoa.Core.initState Cyoa.Core.Scenario2.beginLoc Cyoa.Core.Scenario2.quizPizza
                         cyoaf a QuizState2
                 | InitQuiz ->
                     let quizState = Quiz.init (Quiz.loadQuiz "Quiz.json")
@@ -187,10 +187,10 @@ let m =
                         let cyoaf cyoaReqf =
                             let msg =
                                 match e.Id with
-                                | Cyoa.Implementation.NextButtonId ->
-                                    Cyoa.Implementation.Next
-                                | Cyoa.Implementation.SelectMenuId ->
-                                    Cyoa.Implementation.Choice (int e.Values.[0])
+                                | Cyoa.Core.Implementation.NextButtonId ->
+                                    Cyoa.Core.Implementation.Next
+                                | Cyoa.Core.Implementation.SelectMenuId ->
+                                    Cyoa.Core.Implementation.Choice (int e.Values.[0])
                                 | x ->
                                     failwithf "expected Id = %s but %s" e.Id x
                             let answer, state = f (cyoaReqf msg)

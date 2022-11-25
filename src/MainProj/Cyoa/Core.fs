@@ -1,4 +1,4 @@
-module Cyoa
+module Cyoa.Core
 open Extensions
 
 module Core =

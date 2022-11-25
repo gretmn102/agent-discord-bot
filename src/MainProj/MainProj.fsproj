@@ -94,7 +94,7 @@
     <Compile Include="SimpleQuiz\Model.fs" />
     <Compile Include="SimpleQuiz\FlagsRenderer.fs" />
     <Compile Include="SimpleQuiz\Main.fs" />
-    <Compile Include="Cyoa.fs" />
+    <Compile Include="Cyoa\Core.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />
     <Compile Include="Api.fs" />
