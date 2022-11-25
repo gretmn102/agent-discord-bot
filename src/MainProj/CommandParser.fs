@@ -28,7 +28,6 @@ let pcommand: _ Parser =
         Music.Main.exec
         MessageManager.exec
         ReactionEvent.Main.exec
-        Birthday.Main.exec
         Events.Main.exec
         ChatVoice.Main.exec
         DiscordWebhook.Main.exec
