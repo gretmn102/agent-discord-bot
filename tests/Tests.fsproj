@@ -16,6 +16,10 @@
     <Content Include="SimpleQuiz\mocks\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="..\src\MainProj\.env">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>.env</TargetPath>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Shared\Ui\TableTests.fs" />
