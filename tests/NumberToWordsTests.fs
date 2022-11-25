@@ -1,6 +1,6 @@
 module NumberToWordsTests
 open Fuchu
-open NumberToWords
+open NumberToWords.Core
 
 [<Tests>]
 let numberToWordsTests =
