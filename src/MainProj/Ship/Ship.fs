@@ -14,7 +14,7 @@ open SixLabors.ImageSharp.Drawing.Processing
 
 /// blue frame + heart + blue frame
 let (width, height), templateBmp =
-    let path = @"heart.png"
+    let path = @"Ship/heart.png"
     // let path = @"heart100.png"
     use heart = Image.Load(path)
     let width, height = 133, 133 // heart.Width, heart.Height

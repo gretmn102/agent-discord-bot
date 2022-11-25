@@ -11,19 +11,19 @@
   <ItemGroup>
     <ContentWithTargetPath Include="Quiz\Quiz.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>Quiz.json</TargetPath>
+      <TargetPath>Quiz\Quiz.json</TargetPath>
     </ContentWithTargetPath>
     <ContentWithTargetPath Include="Quiz\QuizPizza.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>QuizPizza.json</TargetPath>
+      <TargetPath>Quiz\QuizPizza.json</TargetPath>
     </ContentWithTargetPath>
     <ContentWithTargetPath Include="Ship\heart.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>heart.png</TargetPath>
+      <TargetPath>Ship\heart.png</TargetPath>
     </ContentWithTargetPath>
     <ContentWithTargetPath Include="EmojiFont\rus_lowercase_sheet.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>rus_lowercase_sheet.png</TargetPath>
+      <TargetPath>EmojiFont\rus_lowercase_sheet.png</TargetPath>
     </ContentWithTargetPath>
     <ContentWithTargetPath Include="DiscordEmojiSheet.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

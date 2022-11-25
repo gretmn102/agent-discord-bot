@@ -421,7 +421,7 @@ module Scenario2 =
                     ]
                 ]
             ]
-        scenario prelude "Quiz.json"
+        scenario prelude "Quiz/Quiz.json"
 
     let quizPizza =
         let prelude =
@@ -436,7 +436,7 @@ module Scenario2 =
                 ]
             ]
 
-        scenario prelude "QuizPizza.json"
+        scenario prelude "Quiz/QuizPizza.json"
 
     let beginLoc = Prelude
 
