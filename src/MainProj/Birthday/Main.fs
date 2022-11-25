@@ -7,7 +7,7 @@ open Types
 open Model
 
 type SettingMsg =
-    | SetRole of RoleId
+    | SetRole of RoleId option
 
 type BirthdayMsg =
     | SetBirthday of Birthday.DayMonth
@@ -25,7 +25,7 @@ module Parser =
 
     let pbirthdaySetRole: _ Parser =
         skipStringCI "birthdaySetRole" >>. spaces
-        >>. (pmentionRole <|> puint64)
+        >>. opt (pmentionRole <|> puint64)
 
     let pbirthdaySet: _ Parser =
         skipStringCI "birthdaySet" >>. spaces
@@ -46,7 +46,7 @@ module Parser =
 let settingReduce
     (e: EventArgs.MessageCreateEventArgs)
     (msg: SettingMsg)
-    (state: BirthdaySetting.GuildBirthdaySetting) =
+    (state: BirthdaySetting.Commands) =
 
     match msg with
     | SetRole newRoleId ->
@@ -55,26 +55,19 @@ let settingReduce
             await (e.Channel.SendMessageAsync("Processing..."))
 
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
-            match Map.tryFind e.Guild.Id state with
-            | Some settings ->
-                let settings =
-                    { settings with
-                        RoleId = newRoleId
-                    }
-
-                BirthdaySetting.replace settings
-                let state = Map.add e.Guild.Id settings state
-
-                awaiti (replyMessage.ModifyAsync (Entities.Optional "Done!"))
-
+            let state =
                 state
-            | None ->
-                let settings = BirthdaySetting.insert (e.Guild.Id, newRoleId)
-                let state = Map.add e.Guild.Id settings state
+                |> BirthdaySetting.Commands.set
+                    e.Guild.Id
+                    (fun data ->
+                        { data with
+                            RoleId = newRoleId
+                        }
+                    )
 
-                awaiti (replyMessage.ModifyAsync (Entities.Optional "Done!"))
+            awaiti (replyMessage.ModifyAsync (Entities.Optional "Done!"))
 
-                state
+            state
         else
             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have administration permission")))
 
@@ -127,7 +120,7 @@ let birthdayReduce
     (scheduler: Scheduler.Scheduler<JobType>)
     (e: EventArgs.MessageCreateEventArgs)
     (msg: BirthdayMsg)
-    (state: Birthday.UsersBirthday) =
+    (state: Birthday.Commands) =
 
     let replyMessage =
         await (e.Channel.SendMessageAsync("Processing..."))
@@ -136,10 +129,17 @@ let birthdayReduce
     | SetBirthday dayMonth ->
         let authorId = e.Author.Id
 
-        match Map.tryFind authorId state with
+        match Birthday.Commands.tryFindById authorId state with
         | None ->
-            let birthday = Birthday.insert (authorId, dayMonth)
-            let state = Map.add authorId birthday state
+            let state =
+                state
+                |> Birthday.Commands.set
+                    authorId
+                    (fun data ->
+                        { data with
+                            Date = dayMonth
+                        }
+                    )
 
             addJob scheduler dayMonth authorId
 
@@ -147,15 +147,17 @@ let birthdayReduce
             state
 
         | Some oldData ->
-            let oldData =
-                { oldData with
-                    Date = dayMonth
-                }
+            let state =
+                state
+                |> Birthday.Commands.set
+                    authorId
+                    (fun data ->
+                        { data with
+                            Date = dayMonth
+                        }
+                    )
 
-            Birthday.replace oldData
-            let state = Map.add authorId oldData state
-
-            removeJob scheduler oldData.Date authorId
+            removeJob scheduler oldData.Data.Date authorId
             addJob scheduler dayMonth authorId
 
             awaiti (replyMessage.ModifyAsync (Entities.Optional "Done!"))
@@ -163,12 +165,12 @@ let birthdayReduce
 
 type State =
     {
-        BirthdaySetting: BirthdaySetting.GuildBirthdaySetting
-        Birthdays: Birthday.UsersBirthday
+        BirthdaySetting: BirthdaySetting.Commands
+        Birthdays: Birthday.Commands
     }
 
 type InternalReq =
-    | GetGuilds of AsyncReplyChannel<BirthdaySetting.GuildBirthdaySetting>
+    | GetGuilds of AsyncReplyChannel<BirthdaySetting.Commands>
 
 type Req =
     | UsersReq of EventArgs.MessageCreateEventArgs * Request
@@ -201,8 +203,8 @@ let scheduler = new Scheduler.Scheduler<JobType>(Scheduler.State.Empty)
 
 let m: MailboxProcessor<Req> =
     let init = {
-        BirthdaySetting = BirthdaySetting.getAll ()
-        Birthdays = Birthday.getAll ()
+        BirthdaySetting = BirthdaySetting.Commands.init "birthdaysSetting" Db.database
+        Birthdays = Birthday.Commands.init "birthdaysSetting" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->
@@ -232,30 +234,34 @@ let startAsync (client: DiscordClient) =
         let guilds = m.PostAndReply(fun r -> InternalReq (GetGuilds r))
 
         let guildUserIds =
-            guilds
+            guilds.Cache
             |> Seq.choose (fun (KeyValue(guildId, v)) ->
                 match await (client.GetGuildAsync guildId) with
                 | null -> None // TODO: make sure it works
                 | guild ->
-                    match guild.GetRole v.RoleId with
-                    | null -> None
-                    | role ->
-                        let userIds =
-                            tasks.Birthdays
-                            |> Seq.choose (fun userId ->
-                                match await (guild.GetMemberAsync userId) with
-                                | null -> None
-                                | currentMember ->
-                                    try
-                                        awaiti <| currentMember.GrantRoleAsync role
-                                        Some userId
-                                    with e ->
-                                        None
-                            )
-                            |> List.ofSeq
+                    match v.Data.RoleId with
+                    | Some roleId ->
+                        match guild.GetRole roleId with
+                        | null -> None
+                        | role ->
+                            let userIds =
+                                tasks.Birthdays
+                                |> Seq.choose (fun userId ->
+                                    match await (guild.GetMemberAsync userId) with
+                                    | null -> None
+                                    | currentMember ->
+                                        try
+                                            awaiti <| currentMember.GrantRoleAsync role
+                                            Some userId
+                                        with e ->
+                                            None
+                                )
+                                |> List.ofSeq
 
-                        if List.isEmpty userIds then None
-                        else Some(guildId, userIds)
+                            if List.isEmpty userIds then None
+                            else Some(guildId, userIds)
+                    | None ->
+                        None
             )
 
         let nextDay = job.Time.AddDays 1.
