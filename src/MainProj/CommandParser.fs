@@ -25,7 +25,6 @@ let pcommand: _ Parser =
         Doorkeeper.Main.exec
         VoiceChannelNotification.Main.exec
         Ranking.Main.exec
-        Music.Main.exec
         MessageManager.exec
         ReactionEvent.Main.exec
         Events.Main.exec

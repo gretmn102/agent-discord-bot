@@ -57,7 +57,6 @@
     <Compile Include="Doorkeeper\Main.fs" />
     <Compile Include="Ranking\Model.fs" />
     <Compile Include="Ranking\Main.fs" />
-    <Compile Include="Music\Main.fs" />
     <Compile Include="Ship\Ship.fs" />
     <Compile Include="Ship\Main.fs" />
     <Compile Include="EmojiFont\EmojiFont.fs" />
