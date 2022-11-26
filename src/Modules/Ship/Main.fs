@@ -60,7 +60,7 @@ let cmdBuilder2
         let who = await (e.Guild.GetMemberAsync whoId)
         let whom = await (e.Guild.GetMemberAsync whomId)
 
-        let fileName = "Ship/heart.png"
+        let fileName = "Modules/Ship/heart.png"
 
         let perc =
             match opt with

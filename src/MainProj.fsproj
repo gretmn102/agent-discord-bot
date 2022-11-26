@@ -9,21 +9,21 @@
     <DefineConstants>TRACE;TEST_BOT</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <ContentWithTargetPath Include="Quiz\Quiz.json">
+    <ContentWithTargetPath Include="Modules\Quiz\Quiz.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>Quiz\Quiz.json</TargetPath>
+      <TargetPath>Modules\Quiz\Quiz.json</TargetPath>
     </ContentWithTargetPath>
-    <ContentWithTargetPath Include="Quiz\QuizPizza.json">
+    <ContentWithTargetPath Include="Modules\Quiz\QuizPizza.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>Quiz\QuizPizza.json</TargetPath>
+      <TargetPath>Modules\Quiz\QuizPizza.json</TargetPath>
     </ContentWithTargetPath>
-    <ContentWithTargetPath Include="Ship\heart.png">
+    <ContentWithTargetPath Include="Modules\Ship\heart.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>Ship\heart.png</TargetPath>
+      <TargetPath>Modules\Ship\heart.png</TargetPath>
     </ContentWithTargetPath>
-    <ContentWithTargetPath Include="EmojiFont\rus_lowercase_sheet.png">
+    <ContentWithTargetPath Include="Modules\EmojiFont\rus_lowercase_sheet.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>EmojiFont\rus_lowercase_sheet.png</TargetPath>
+      <TargetPath>Modules\EmojiFont\rus_lowercase_sheet.png</TargetPath>
     </ContentWithTargetPath>
     <ContentWithTargetPath Include="Shared\DiscordEmojiSheet.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -43,56 +43,56 @@
     <Compile Include="Shared\Ui\Table.fs" />
     <Compile Include="Shared\Api.fs" />
     <Compile Include="Shared\Db.fs" />
-    <Compile Include="NumberToWords\Core.fs" />
-    <Compile Include="NumberToWords\Main.fs" />
-    <Compile Include="UserRole\Model.fs" />
-    <Compile Include="UserRole\Main.fs" />
-    <Compile Include="ChatVoice\Model.fs" />
-    <Compile Include="ChatVoice\Main.fs" />
-    <Compile Include="VoiceChannelNotification\Model.fs" />
-    <Compile Include="VoiceChannelNotification\Main.fs" />
-    <Compile Include="Doorkeeper\Model.fs" />
-    <Compile Include="Doorkeeper\Invites.fs" />
-    <Compile Include="Doorkeeper\Api.fs" />
-    <Compile Include="Doorkeeper\Main.fs" />
-    <Compile Include="Ranking\Model.fs" />
-    <Compile Include="Ranking\Main.fs" />
-    <Compile Include="Ship\Ship.fs" />
-    <Compile Include="Ship\Main.fs" />
-    <Compile Include="EmojiFont\EmojiFont.fs" />
-    <Compile Include="EmojiFont\Main.fs" />
-    <Compile Include="BallotBox\Core.fs" />
-    <Compile Include="BallotBox\Main.fs" />
-    <Compile Include="Quiz\Quiz.fs" />
-    <Compile Include="MessageManager\MessageManager.fs" />
-    <Compile Include="ReactionEvent\Model.fs" />
-    <Compile Include="ReactionEvent\Main.fs" />
-    <Compile Include="Events\Model.fs" />
-    <Compile Include="Events\Main.fs" />
-    <Compile Include="CustomCommand\MessageTemplate.fs" />
-    <Compile Include="CustomCommand\Model.fs" />
-    <Compile Include="CustomCommand\Main.fs" />
-    <Compile Include="DiscordWebhook\Model.fs" />
-    <Compile Include="DiscordWebhook\Main.fs" />
-    <Compile Include="Boosters\Model.fs" />
-    <Compile Include="Boosters\Main.fs" />
-    <Compile Include="UserInfo\Main.fs" />
-    <Compile Include="Age\Model.fs" />
-    <Compile Include="Age\Main.fs" />
-    <Compile Include="EggBattle\Model.fs" />
-    <Compile Include="EggBattle\Main.fs" />
-    <Compile Include="Moderation\Main.fs" />
-    <Compile Include="Calc\Core.fs" />
-    <Compile Include="Calc\Main.fs" />
-    <Compile Include="Fishing\EditorTypes.fs" />
-    <Compile Include="Fishing\Model.fs" />
-    <Compile Include="Fishing\Main.fs" />
-    <Compile Include="Roll\Main.fs" />
-    <Compile Include="SimpleQuiz\Countries.fs" />
-    <Compile Include="SimpleQuiz\Model.fs" />
-    <Compile Include="SimpleQuiz\FlagsRenderer.fs" />
-    <Compile Include="SimpleQuiz\Main.fs" />
-    <Compile Include="Cyoa\Core.fs" />
+    <Compile Include="Modules\NumberToWords\Core.fs" />
+    <Compile Include="Modules\NumberToWords\Main.fs" />
+    <Compile Include="Modules\UserRole\Model.fs" />
+    <Compile Include="Modules\UserRole\Main.fs" />
+    <Compile Include="Modules\ChatVoice\Model.fs" />
+    <Compile Include="Modules\ChatVoice\Main.fs" />
+    <Compile Include="Modules\VoiceChannelNotification\Model.fs" />
+    <Compile Include="Modules\VoiceChannelNotification\Main.fs" />
+    <Compile Include="Modules\Doorkeeper\Model.fs" />
+    <Compile Include="Modules\Doorkeeper\Invites.fs" />
+    <Compile Include="Modules\Doorkeeper\Api.fs" />
+    <Compile Include="Modules\Doorkeeper\Main.fs" />
+    <Compile Include="Modules\Ranking\Model.fs" />
+    <Compile Include="Modules\Ranking\Main.fs" />
+    <Compile Include="Modules\Ship\Ship.fs" />
+    <Compile Include="Modules\Ship\Main.fs" />
+    <Compile Include="Modules\EmojiFont\EmojiFont.fs" />
+    <Compile Include="Modules\EmojiFont\Main.fs" />
+    <Compile Include="Modules\BallotBox\Core.fs" />
+    <Compile Include="Modules\BallotBox\Main.fs" />
+    <Compile Include="Modules\Quiz\Quiz.fs" />
+    <Compile Include="Modules\MessageManager\MessageManager.fs" />
+    <Compile Include="Modules\ReactionEvent\Model.fs" />
+    <Compile Include="Modules\ReactionEvent\Main.fs" />
+    <Compile Include="Modules\Events\Model.fs" />
+    <Compile Include="Modules\Events\Main.fs" />
+    <Compile Include="Modules\CustomCommand\MessageTemplate.fs" />
+    <Compile Include="Modules\CustomCommand\Model.fs" />
+    <Compile Include="Modules\CustomCommand\Main.fs" />
+    <Compile Include="Modules\DiscordWebhook\Model.fs" />
+    <Compile Include="Modules\DiscordWebhook\Main.fs" />
+    <Compile Include="Modules\Boosters\Model.fs" />
+    <Compile Include="Modules\Boosters\Main.fs" />
+    <Compile Include="Modules\UserInfo\Main.fs" />
+    <Compile Include="Modules\Age\Model.fs" />
+    <Compile Include="Modules\Age\Main.fs" />
+    <Compile Include="Modules\EggBattle\Model.fs" />
+    <Compile Include="Modules\EggBattle\Main.fs" />
+    <Compile Include="Modules\Moderation\Main.fs" />
+    <Compile Include="Modules\Calc\Core.fs" />
+    <Compile Include="Modules\Calc\Main.fs" />
+    <Compile Include="Modules\Fishing\EditorTypes.fs" />
+    <Compile Include="Modules\Fishing\Model.fs" />
+    <Compile Include="Modules\Fishing\Main.fs" />
+    <Compile Include="Modules\Roll\Main.fs" />
+    <Compile Include="Modules\SimpleQuiz\Countries.fs" />
+    <Compile Include="Modules\SimpleQuiz\Model.fs" />
+    <Compile Include="Modules\SimpleQuiz\FlagsRenderer.fs" />
+    <Compile Include="Modules\SimpleQuiz\Main.fs" />
+    <Compile Include="Modules\Cyoa\Core.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="CommandParser.fs" />
     <Compile Include="Api.fs" />

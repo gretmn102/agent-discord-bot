@@ -116,7 +116,7 @@ module Array2D =
 type Mask = bool [] []
 
 let charSheetRus, charImageSheetRus, (charWidthRus, charHeightRus) =
-    let fontPath = "EmojiFont/rus_lowercase_sheet.png"
+    let fontPath = "Modules/EmojiFont/rus_lowercase_sheet.png"
     use font = Image.Load(fontPath)
 
     let width, height = font.Width, font.Height
