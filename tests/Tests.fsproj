@@ -8,7 +8,7 @@
     <Tailcalls>true</Tailcalls>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\src\MainProj\MainProj.fsproj">
+    <ProjectReference Include="..\src\MainProj.fsproj">
       <Name>MainProj.fsproj</Name>
     </ProjectReference>
   </ItemGroup>
@@ -16,7 +16,7 @@
     <Content Include="SimpleQuiz\mocks\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\src\MainProj\.env">
+    <Content Include="..\src\.env">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>.env</TargetPath>
     </Content>
