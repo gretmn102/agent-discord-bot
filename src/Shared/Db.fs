@@ -71,6 +71,14 @@ module CommonDb =
 
             x
 
+        let removeById id (collection: Collection) =
+            let el = BsonElement("_id", BsonValue.Create(id))
+            let i = new BsonDocument(el)
+
+            let filter = FilterDefinition.op_Implicit(i)
+
+            collection.DeleteOne filter
+
     type GuildData<'Id, 'Version, 'MainData when 'Id : comparison and 'Version: enum<int>> =
         {
             Cache: Map<'Id, Data<'Id, 'Version, 'MainData>>
@@ -80,7 +88,7 @@ module CommonDb =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module GuildData =
-        let inline init convertToVersion collectionName (db: IMongoDatabase): GuildData<'Id, 'Version, 'MainData> =
+        let inline init createData convertToVersion collectionName (db: IMongoDatabase): GuildData<'Id, 'Version, 'MainData> =
             let collection = db.GetCollection<BsonDocument>(collectionName)
 
             if IMongoCollection.isEmpty collection then
@@ -95,15 +103,35 @@ module CommonDb =
                         |> Seq.fold
                             (fun st doc ->
                                 let ver =
-                                    match doc.["Version"] with
-                                    | null -> None
-                                    | x ->
+                                    // System.Collections.Generic.KeyNotFoundException: Element 'Version' not found.
+                                    let version =
+                                        try
+                                            Some doc.["Version"]
+                                        with
+                                            | :? System.Collections.Generic.KeyNotFoundException ->
+                                                None
+
+                                    version
+                                    |> Option.map (fun x ->
                                         if x.IsInt32 then
-                                            Some (enum<'Version> x.AsInt32)
+                                            enum<'Version> x.AsInt32
                                         else
                                             failwithf "Version not int32 but %A" x
-                                let x =
+                                    )
+
+                                let oldValueId, x =
                                     convertToVersion ver doc
+
+                                let x =
+                                    match oldValueId with
+                                    | None -> x
+                                    | Some id ->
+                                        collection
+                                        |> Collection.removeById id
+                                        |> ignore
+
+                                        collection
+                                        |> Collection.insert createData x.Id (fun _ -> x.Data)
 
                                 Map.add x.Id x st
                             )

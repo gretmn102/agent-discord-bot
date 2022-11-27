@@ -81,12 +81,16 @@ module ItemsDb =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module Items =
+        let createData id =
+            Item.create id ItemData.Empty
+
         let init collectionName (db: IMongoDatabase): Items =
             CommonDb.GuildData.init
+                createData
                 (fun ver doc ->
                     match Option.get ver with
                     | Version.V0 ->
-                        Serialization.BsonSerializer.Deserialize<ItemT>(doc)
+                        None, Serialization.BsonSerializer.Deserialize<ItemT>(doc)
                     | x ->
                         failwithf "Version = %A not implemented" x
                 )
@@ -95,9 +99,7 @@ module ItemsDb =
 
         let set itemIdOpt setAdditionParams (items: Items) =
             CommonDb.GuildData.set
-                (fun id ->
-                    Item.create id ItemData.Empty
-                )
+                createData
                 (itemIdOpt |> Option.defaultWith (fun () -> System.Guid.NewGuid()))
                 setAdditionParams
                 items
@@ -205,14 +207,18 @@ module Players =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module GuildData =
+        let createData id =
+            Player.create id MainData.Empty
+
         let init collectionName (db: IMongoDatabase): GuildData =
             MongoDB.Bson.Serialization.BsonSerializer.RegisterSerializer(typeof<Inventory>, new Db.MapSerializer<ItemId, InventoryItem>())
 
             CommonDb.GuildData.init
+                createData
                 (fun ver x ->
                     match Option.get ver with
                     | Version.V0 ->
-                        Serialization.BsonSerializer.Deserialize<Player>(x)
+                        None, Serialization.BsonSerializer.Deserialize<Player>(x)
                     | x ->
                         failwithf "Version = %A not implemented" x
                 )
@@ -221,7 +227,7 @@ module Players =
 
         let set userId setAdditionParams (guildData: GuildData) =
             CommonDb.GuildData.set
-                (fun userId -> Player.create userId MainData.Empty)
+                createData
                 userId
                 setAdditionParams
                 guildData
@@ -266,12 +272,16 @@ module Settings =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module GuildData =
+        let createData id =
+            Data.create id MainData.Empty
+
         let init collectionName (db: IMongoDatabase): GuildData =
             CommonDb.GuildData.init
+                createData
                 (fun ver x ->
                     match Option.get ver with
                     | Version.V0 ->
-                        Serialization.BsonSerializer.Deserialize<Data>(x)
+                        None, Serialization.BsonSerializer.Deserialize<Data>(x)
                     | x ->
                         failwithf "Version = %A not implemented" x
                 )
@@ -280,7 +290,7 @@ module Settings =
 
         let set setAdditionParams (guildData: GuildData) =
             CommonDb.GuildData.set
-                (fun userId -> Data.create userId MainData.Empty)
+                createData
                 ()
                 setAdditionParams
                 guildData

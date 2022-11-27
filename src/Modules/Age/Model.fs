@@ -2,42 +2,94 @@ module Age.Model
 open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
+open MongoDB.Bson.Serialization.Attributes
 
 open Types
+open Db
 
-module Age =
-    type Data =
+[<BsonIgnoreExtraElements>]
+type DataPreVersion =
+    {
+        Id: ObjectId
+        UserId: UserId
+        Age: int
+        GuildIds: GuildId Set
+    }
+
+type UserData =
+    {
+        Age: int
+        GuildIds: GuildId Set
+    }
+    static member Init age guildIds =
         {
-            mutable Id: ObjectId
-            mutable UserId: UserId
-            mutable Age: int
-            mutable GuildIds: GuildId Set
+            Age = age
+            GuildIds = guildIds
         }
-        static member Init(userId, date, guildIds) =
-            {
-                Id = ObjectId.Empty
-                UserId = userId
-                Age = date
-                GuildIds = guildIds
-            }
+    static member Empty =
+        {
+            Age = 0
+            GuildIds = Set.empty
+        }
+    static member Serialize (data: UserData) =
+        data |> Json.ser
+    static member Deserialize json =
+        try
+            Ok (Json.des json)
+        with e ->
+            Error e.Message
 
-    let table = Db.database.GetCollection<Data>("age")
+type Version =
+    | V0 = 0
 
-    type Users = Map<UserId, Data>
+type Id = UserId
 
-    let getAll (): Users =
-        table.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.UserId x st
+type User = CommonDb.Data<Id, Version, UserData>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module User =
+    let create id data: User =
+        CommonDb.Data.create id Version.V0 data
+
+type Users = CommonDb.GuildData<Id, Version, UserData>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module Users =
+    let createData id =
+        User.create id UserData.Empty
+
+    let init collectionName (db: IMongoDatabase): Users =
+        CommonDb.GuildData.init
+            createData
+            (fun ver doc ->
+                match ver with
+                | Some ver ->
+                    match ver with
+                    | Version.V0 ->
+                        None, Serialization.BsonSerializer.Deserialize<User>(doc)
+                    | x ->
+                        failwithf "Version = %A not implemented" x
+                | None ->
+                    let oldValue =
+                        Serialization.BsonSerializer.Deserialize<DataPreVersion>(doc)
+                    let newValue =
+                        UserData.Init oldValue.Age oldValue.GuildIds
+                        |> User.create oldValue.UserId
+
+                    Some oldValue.Id, newValue
             )
-            Map.empty
+            collectionName
+            db
 
-    let replace (newData: Data) =
-        table.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
+    let set userId setAdditionParams (guildData: Users) =
+        CommonDb.GuildData.set
+            createData
+            userId
+            setAdditionParams
+            guildData
 
-    let insert (guildId, roleId, guildIds) =
-        let x = Data.Init(guildId, roleId, guildIds)
-        table.InsertOne(x)
-        x
+    let drop (db: IMongoDatabase) (items: Users) =
+        CommonDb.GuildData.drop db items
+
+    let tryFindById id (items: Users) =
+        CommonDb.GuildData.tryFind id items

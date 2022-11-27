@@ -35,7 +35,7 @@ let AgeGetAgeStatisticsButtonId = "ageGetAgeStatisticsButtonId"
 
 type State =
     {
-        Users: Model.Age.Users
+        Users: Model.Users
     }
 
 [<Struct>]
@@ -52,33 +52,27 @@ type Req =
 let reduce (msg: Req) (state: State) =
     match msg with
     | InputAge (userId, guildId, age) ->
-        let userData =
-            match Map.tryFind userId state.Users with
-            | Some userData ->
-                let userData =
-                    { userData with
-                        Age = age
-                        GuildIds = Set.add guildId userData.GuildIds
-                    }
-                Model.Age.replace userData
-
-                userData
-            | None ->
-                Model.Age.insert(userId, age, Set.singleton guildId)
+        let users =
+            state.Users
+            |> Model.Users.set userId (fun userData ->
+                { userData with
+                    Age = age
+                    GuildIds = Set.add guildId userData.GuildIds
+                }
+            )
 
         { state with
-            Users =
-                Map.add userId userData state.Users
+            Users = users
         }
 
     | GetAgeStatistics (r, guildId) ->
-        state.Users
+        state.Users.Cache
         |> Map.fold
             (fun st userId user ->
-                if Set.contains guildId user.GuildIds then
+                if Set.contains guildId user.Data.GuildIds then
                     st
                     |> Map.addOrModWith
-                        user.Age
+                        user.Data.Age
                         (fun () -> 1)
                         (fun acc -> 1 + acc)
                 else
@@ -90,30 +84,30 @@ let reduce (msg: Req) (state: State) =
         state
 
     | IsUserEnteredAge(r, userId) ->
-        Map.containsKey userId state.Users
+        Map.containsKey userId state.Users.Cache
         |> r.Reply
 
         state
 
     | AddOrRemoveGuildId(addOrRemove, userId, guildId) ->
-        match Map.tryFind userId state.Users with
+        match Model.Users.tryFindById userId state.Users with
         | None -> state
         | Some userData ->
-            let userData =
-                { userData with
-                    GuildIds =
-                        match addOrRemove with
-                        | Remove ->
-                            Set.remove guildId userData.GuildIds
-                        | Add ->
-                            Set.add guildId userData.GuildIds
-                }
-
-            Model.Age.replace userData
+            let users =
+                state.Users
+                |> Model.Users.set userId (fun userData ->
+                    { userData with
+                        GuildIds =
+                            match addOrRemove with
+                            | Remove ->
+                                Set.remove guildId userData.GuildIds
+                            | Add ->
+                                Set.add guildId userData.GuildIds
+                    }
+                )
 
             { state with
-                Users =
-                    Map.add userId userData state.Users
+                Users = users
             }
 
     | Request(e, msg) ->
@@ -155,7 +149,7 @@ let reduce (msg: Req) (state: State) =
 
 let m: MailboxProcessor<Req> =
     let init = {
-        Users = Model.Age.getAll ()
+        Users = Model.Users.init "age" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->
