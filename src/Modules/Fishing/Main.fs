@@ -130,8 +130,8 @@ module InventoryTable =
 
             GetItems = fun () (userId, state) ->
                 let inventory =
-                    match Players.GuildData.tryFind userId state.Players with
-                    | Some ranking -> ranking.Inventory
+                    match Players.GuildData.tryFindById userId state.Players with
+                    | Some ranking -> ranking.Data.Inventory
                     | None -> Map.empty
 
                 inventory
@@ -337,15 +337,18 @@ module Actions =
                 state
 
         let getBaseСatch next =
-            let settings = state.Settings.Cache
-
-            match settings.Data.BaseCatchId with
-            | Some baseCatchId ->
-                match ItemsDb.Items.tryFindById baseCatchId items with
-                | Some baseCatch ->
-                    next baseCatch
+            match Settings.GuildData.tryFindById () state.Settings with
+            | Some settings ->
+                match settings.Data.BaseCatchId with
+                | Some baseCatchId ->
+                    match ItemsDb.Items.tryFindById baseCatchId items with
+                    | Some baseCatch ->
+                        next baseCatch
+                    | None ->
+                        send "Начальный улов определен, но сам предмет в базе данных отсутствует. Пожалуйста, свяжитесь с администратором."
+                        state
                 | None ->
-                    send "Начальный улов определен, но сам предмет в базе данных отсутствует. Пожалуйста, свяжитесь с администратором."
+                    send "Начальный улов не определен! Пожалуйста, свяжитесь с администратором."
                     state
             | None ->
                 send "Начальный улов не определен! Пожалуйста, свяжитесь с администратором."
@@ -357,8 +360,8 @@ module Actions =
                 next baitName
             | None ->
                 let player =
-                    match Players.GuildData.tryFind userId state.Players with
-                    | Some player -> player
+                    match Players.GuildData.tryFindById userId state.Players with
+                    | Some player -> player.Data
                     | None -> Players.MainData.Empty
 
                 let inventory: Inventory =
@@ -394,14 +397,14 @@ module Actions =
             state
 
         let getCurrentPlayer bait next =
-            match Players.GuildData.tryFind userId state.Players with
+            match Players.GuildData.tryFindById userId state.Players with
             | Some player ->
                 next player
             | None ->
                 sendThereIsNoMoreBait bait
 
-        let getBaitFromInventory (bait: ItemsDb.ItemT) (player: Players.MainData) next =
-            match Map.tryFind bait.Id player.Inventory with
+        let getBaitFromInventory (bait: ItemsDb.ItemT) (player: Players.Player) next =
+            match Map.tryFind bait.Id player.Data.Inventory with
             | Some baitInInventory ->
                 if baitInInventory.Count > 0 then
                     next baitInInventory
@@ -416,6 +419,7 @@ module Actions =
         itemIsBait bait <| fun () ->
         getCurrentPlayer bait <| fun player ->
         getBaitFromInventory bait player <| fun baitInInventory ->
+        let player = player.Data
 
         let loot = bait.Data.Loot
         let catchId = loot.[r.Next(0, loot.Length)]
@@ -484,8 +488,8 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
 
         | None ->
             let player =
-                match Players.GuildData.tryFind e.Author.Id state.Players with
-                | Some player -> player
+                match Players.GuildData.tryFindById e.Author.Id state.Players with
+                | Some player -> player.Data
                 | None -> Players.MainData.Empty
 
             let baits =
@@ -535,11 +539,11 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
             awaiti <| e.Channel.SendMessageAsync b
 
         let msg =
-            match Players.GuildData.tryFind e.Author.Id state.Players with
+            match Players.GuildData.tryFindById e.Author.Id state.Players with
             | None ->
                 createProgressMessage 0 state.Items.Cache.Count
             | Some p ->
-                createProgressMessage p.Catches.Count state.Items.Cache.Count
+                createProgressMessage p.Data.Catches.Count state.Items.Cache.Count
 
         send msg
 
@@ -686,9 +690,9 @@ let reduce (msg: Msg) (state: State): State =
 
 let m =
     let init: State = {
-        Players = Players.GuildData.init Db.database
-        Items = ItemsDb.Items.init Db.database
-        Settings = Settings.GuildData.init Db.database
+        Players = Players.GuildData.init "fishingPlayers" Db.database
+        Items = ItemsDb.Items.init "fishingItems" Db.database
+        Settings = Settings.GuildData.init "fishingSettings" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->

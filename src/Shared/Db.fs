@@ -25,6 +25,127 @@ type MapSerializer<'Key, 'Value when 'Key : comparison>() =
         let serializer = BsonSerializer.LookupSerializer(typeof<BsonDocument>)
         serializer.Serialize(context, bsonDocument.AsBsonValue)
 
+module CommonDb =
+    type Data<'Id, 'Version, 'MainData when 'Version: enum<int>> =
+        {
+            Id: 'Id
+            Version: 'Version
+            Data: 'MainData
+        }
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Data =
+        let create (id: 'Id) (version: 'Version) (data: 'MainData) =
+            {
+                Id = id
+                Version = version
+                Data = data
+            }
+
+    type Collection = IMongoCollection<BsonDocument>
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Collection =
+        let replace (newData: Data<'Id, 'Version, 'MainData>) (collection: Collection) =
+            let doc = newData.ToBsonDocument()
+
+            let el = BsonElement("_id", BsonValue.Create(newData.Id))
+            let i = new BsonDocument(el)
+
+            let filter = FilterDefinition.op_Implicit(i)
+
+            collection.ReplaceOne(filter, doc)
+            |> ignore
+
+        let insert createData id setAdditionParams (collection: Collection) =
+            let x =
+                let data = createData id
+                { data with
+                    Data = setAdditionParams data.Data
+                }
+
+            let d = x.ToBsonDocument()
+            collection.InsertOne(d)
+
+            x
+
+    type GuildData<'Id, 'Version, 'MainData when 'Id : comparison and 'Version: enum<int>> =
+        {
+            Cache: Map<'Id, Data<'Id, 'Version, 'MainData>>
+            Collection: Collection
+        }
+
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildData =
+        let inline init convertToVersion collectionName (db: IMongoDatabase): GuildData<'Id, 'Version, 'MainData> =
+            let collection = db.GetCollection<BsonDocument>(collectionName)
+
+            if IMongoCollection.isEmpty collection then
+                {
+                    Cache = Map.empty
+                    Collection = collection
+                }
+            else
+                {
+                    Cache =
+                        collection.Find(fun x -> true).ToEnumerable()
+                        |> Seq.fold
+                            (fun st doc ->
+                                let ver =
+                                    match doc.["Version"] with
+                                    | null -> None
+                                    | x ->
+                                        if x.IsInt32 then
+                                            Some (enum<'Version> x.AsInt32)
+                                        else
+                                            failwithf "Version not int32 but %A" x
+                                let x =
+                                    convertToVersion ver doc
+
+                                Map.add x.Id x st
+                            )
+                            Map.empty
+                    Collection = collection
+                }
+
+        let set createData id setAdditionParams (guildData: GuildData<'Id, 'Version, 'MainData>) =
+            let cache = guildData.Cache
+
+            {
+                guildData with
+                    Cache =
+                        match Map.tryFind id cache with
+                        | Some fullData ->
+                            let data =
+                                { fullData with
+                                    Data = setAdditionParams fullData.Data
+                                }
+
+                            Collection.replace data guildData.Collection
+
+                            Map.add id data cache
+                        | None ->
+                            let x =
+                                guildData.Collection
+                                |> Collection.insert createData id setAdditionParams
+
+                            Map.add id x cache
+            }
+
+        let drop (db: IMongoDatabase) (guildWelcomeSetting: GuildData<'Id, 'Version, 'MainData>) =
+            let collectionName = guildWelcomeSetting.Collection.CollectionNamespace.CollectionName
+            db.DropCollection collectionName
+
+            { guildWelcomeSetting with
+                Cache = Map.empty
+            }
+
+        let tryFind id (guildWelcomeSetting: GuildData<'Id, 'Version, 'MainData>) =
+            Map.tryFind id guildWelcomeSetting.Cache
+
 let login = getEnvironmentVariable "BotDbL"
 let password = getEnvironmentVariable "BotDbP"
 
