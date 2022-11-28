@@ -4,14 +4,21 @@
 ## Install pre-requisites
 * The [.NET Core SDK](https://www.microsoft.com/net/download) 3.1 or higher.
 
-## Starting the application
-Before you run the project **for the first time only** you must install dotnet "local tools" with this command:
+## Build
+* For Linux: `./build.sh`
+* For Windows: `build.cmd`
 
-```bash
-dotnet tool restore
-dotnet paket install
+## Before starting
+Create .env and fill next fields:
+```
+DiscordCommandBotToken=%your token%
+BotDbL=%your login to DB%
+BotDbP=%your password to DB%
+DataBaseName=%your database name%
+AblyToken=%your AblyToken%
 ```
 
+## Testing
 ```bash
 dotnet fake build -t RunTest
 ```
