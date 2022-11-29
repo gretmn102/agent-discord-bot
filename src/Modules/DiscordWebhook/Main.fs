@@ -94,37 +94,6 @@ type State =
         Characters: Characters.GuildCharacters
     }
 
-module Array =
-    let removeAt i (xs: _ []) =
-        let ys = Array.zeroCreate (xs.Length - 1)
-
-        Array.blit xs 0 ys 0 i
-        Array.blit xs (i + 1) ys i (xs.Length - i - 1)
-
-        ys
-
-    open Fuchu
-
-    [<Tests>]
-    let removeAtTests =
-        testList "removeAt" [
-            testCase "testCase1" (fun _ ->
-                let f (act, exp) = Assert.Equal("", act, exp)
-                let xs =
-                    [
-                        removeAt 0 [|0|], [||]
-                        removeAt 0 [|0..5|], [|1; 2; 3; 4; 5|]
-                        removeAt 2 [|0..5|], [|0; 1; 3; 4; 5|]
-                        removeAt 5 [|0..5|], [|0; 1; 2; 3; 4|]
-                    ]
-                xs
-                |> List.iteri (fun i (act, exp) ->
-                    Assert.Equal(string i, act, exp)
-                )
-            )
-        ]
-    // run removeAtTests
-
 let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
     match msg with
     | Send opts ->
