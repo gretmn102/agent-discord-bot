@@ -2,42 +2,94 @@ module Boosters.Model
 open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
+open MongoDB.Bson.Serialization.Attributes
 
 open Types
+open Db
 
-module Boosters =
-    type SettingsData =
+[<BsonIgnoreExtraElements>]
+type DataPreVersion =
+    {
+        Id: ObjectId
+        GuildId: GuildId
+        OutputChannelId: ChannelId
+        Message: string
+    }
+
+type GuildData =
+    {
+        OutputChannelId: ChannelId
+        Message: string
+    }
+    static member Init outputChannelId message =
         {
-            mutable Id: ObjectId
-            mutable GuildId: GuildId
-            mutable OutputChannelId: ChannelId
-            mutable Message: string
+            OutputChannelId = outputChannelId
+            Message = message
         }
-        static member Init(guildId, outputChannelId, message) =
-            {
-                Id = ObjectId.Empty
-                GuildId = guildId
-                OutputChannelId = outputChannelId
-                Message = message
-            }
+    static member Empty =
+        {
+            OutputChannelId = 0UL
+            Message = ""
+        }
+    static member Serialize (data: GuildData) =
+        data |> Json.ser
+    static member Deserialize json =
+        try
+            Ok (Json.des json)
+        with e ->
+            Error e.Message
 
-    let settings = Db.database.GetCollection<SettingsData>("boosterGuildSettings")
+type Version =
+    | V0 = 0
 
-    type GuildSettings = Map<GuildId, SettingsData>
+type Id = UserId
 
-    let getAll (): GuildSettings =
-        settings.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.GuildId x st
+type GuildSetting = CommonDb.Data<Id, Version, GuildData>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module GuildSetting =
+    let create id data: GuildSetting =
+        CommonDb.Data.create id Version.V0 data
+
+type GuildSettings = CommonDb.GuildData<Id, Version, GuildData>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module GuildSettings =
+    let createData id =
+        GuildSetting.create id GuildData.Empty
+
+    let init collectionName (db: IMongoDatabase): GuildSettings =
+        CommonDb.GuildData.init
+            createData
+            (fun ver doc ->
+                match ver with
+                | Some ver ->
+                    match ver with
+                    | Version.V0 ->
+                        None, Serialization.BsonSerializer.Deserialize<GuildSetting>(doc)
+                    | x ->
+                        failwithf "Version = %A not implemented" x
+                | None ->
+                    let oldValue =
+                        Serialization.BsonSerializer.Deserialize<DataPreVersion>(doc)
+                    let newValue =
+                        GuildData.Init oldValue.OutputChannelId oldValue.Message
+                        |> GuildSetting.create oldValue.GuildId
+
+                    Some oldValue.Id, newValue
             )
-            Map.empty
+            collectionName
+            db
 
-    let replace (newData: SettingsData) =
-        settings.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
+    let set userId setAdditionParams (guildData: GuildSettings) =
+        CommonDb.GuildData.set
+            createData
+            userId
+            setAdditionParams
+            guildData
 
-    let insert (guildId, userId, profiles) =
-        let x = SettingsData.Init(guildId, userId, profiles)
-        settings.InsertOne(x)
-        x
+    let drop (db: IMongoDatabase) (items: GuildSettings) =
+        CommonDb.GuildData.drop db items
+
+    let tryFindById id (items: GuildSettings) =
+        CommonDb.GuildData.tryFind id items

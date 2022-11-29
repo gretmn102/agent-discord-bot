@@ -37,9 +37,9 @@ module Parser =
             preturn (fun x -> f x msg)
 
 type State =
-    { GuildBoostersSettings: Boosters.GuildSettings }
+    { GuildBoostersSettings: Model.GuildSettings }
 
-let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Boosters.GuildSettings) =
+let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Model.GuildSettings) =
     match msg with
     | SetSetting(channelId, messageTemplate) ->
         let guild = e.Guild
@@ -48,23 +48,18 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Boosters.GuildSetti
             await (e.Channel.SendMessageAsync "Processing...")
 
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
-            let state: Boosters.GuildSettings =
+            let state: GuildSettings =
                 let template = MessageTemplate.Message.toString messageTemplate
 
-                match Map.tryFind e.Guild.Id state with
-                | Some setting ->
-                    let setting =
+                state
+                |> GuildSettings.set
+                    e.Guild.Id
+                    (fun setting ->
                         { setting with
                             OutputChannelId = channelId
                             Message = template
                         }
-
-                    Boosters.replace setting
-
-                    Map.add guild.Id setting state
-                | None ->
-                    let x = Boosters.insert (guild.Id, channelId, template)
-                    Map.add guild.Id x state
+                    )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional "Booster setting has been set"))
 
@@ -90,7 +85,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Boosters.GuildSetti
                 b.Embed <- embed.Build()
                 b
 
-            match Map.tryFind e.Guild.Id state with
+            match GuildSettings.tryFindById e.Guild.Id state with
             | Some setting ->
                 let b = Entities.DiscordMessageBuilder()
                 let embed = Entities.DiscordEmbedBuilder()
@@ -98,7 +93,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Boosters.GuildSetti
                 embed.Description <-
                     [
                         "```"
-                        Json.ser {| OutputChannelId = setting.OutputChannelId; Message = setting.Message |}
+                        Json.ser {| OutputChannelId = setting.Data.OutputChannelId; Message = setting.Data.Message |}
                         "```"
                     ] |> String.concat "\n"
 
@@ -184,9 +179,9 @@ let mainReduce req (state: State) =
                 (fun (x: Entities.DiscordRole) y -> compare x.Id y.Id)
                 (f e.RolesAfter)
         if not <| List.isEmpty addedRoles then
-            match Map.tryFind e.Guild.Id state.GuildBoostersSettings with
+            match GuildSettings.tryFindById e.Guild.Id state.GuildBoostersSettings with
             | Some setting ->
-                match e.Guild.GetChannel setting.OutputChannelId with
+                match e.Guild.GetChannel setting.Data.OutputChannelId with
                 | null -> ()
                 | channel ->
                     addedRoles
@@ -195,7 +190,7 @@ let mainReduce req (state: State) =
                         | null -> () // returns if the role is created while the bot is running
                         | tags ->
                             if tags.IsPremiumSubscriber then
-                                MessageTemplate.Message.parse setting.Message
+                                MessageTemplate.Message.parse setting.Data.Message
                                 |> Either.iter (fun msg ->
                                     let msg = MessageTemplate.Message.substitute e.Member.Mention e.Member.Username msg
 
@@ -215,7 +210,7 @@ let mainReduce req (state: State) =
 
 let m: MailboxProcessor<Req> =
     let init = {
-        GuildBoostersSettings = Boosters.getAll ()
+        GuildBoostersSettings = GuildSettings.init "boosterGuildSettings" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->
