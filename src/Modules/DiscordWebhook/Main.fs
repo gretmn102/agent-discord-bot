@@ -91,7 +91,7 @@ module Parser =
 
 type State =
     {
-        Characters: Characters.GuildCharacters
+        Characters: GuildUsers
     }
 
 let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
@@ -132,13 +132,6 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
                             match opts.ProfileMode with
                             | ManualProfile profile -> Right profile
                             | UserProfile userId ->
-                                // let client: DiscordClient = ()
-                                // match await (client.GetUserAsync userId) with
-                                // | null ->
-                                //     Left (sprintf "User %d is not found" userId)
-                                // | user ->
-                                //     Right {| AvatarUrl = user.AvatarUrl; Username = user.Username |}
-
                                 match await (e.Guild.GetMemberAsync userId) with
                                 | null ->
                                     Left (sprintf "Member %d is not found" userId)
@@ -200,133 +193,117 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
         match settingReq with
         | SetCharacter (key, profile) ->
             let state =
-                match Map.tryFind e.Guild.Id state.Characters with
-                | Some guildCharacters ->
-                    let character =
-                        match Map.tryFind e.Author.Id guildCharacters with
-                        | Some userProfileData ->
-                            let profiles = userProfileData.Profiles
+                let id = Id.create e.Guild.Id e.Author.Id
+                let character =
+                    match GuildUsers.tryFindById id state.Characters with
+                    | Some userProfileData ->
+                        let profiles = userProfileData.Data.Profiles
+
+                        let profiles =
                             let res =
                                 profiles
                                 |> Array.tryFindIndex (fun (key', _) -> key' = key)
-                            let profiles =
-                                match res with
-                                | Some i ->
-                                    let profiles = Array.copy profiles
-                                    profiles.[i] <- key, profile
+                            match res with
+                            | Some i ->
+                                let profiles = Array.copy profiles
+                                profiles.[i] <- key, profile
 
-                                    profiles
-                                | None ->
-                                    let newProfiles = Array.zeroCreate (profiles.Length + 1)
-                                    Array.blit profiles 0 newProfiles 0 profiles.Length
-                                    newProfiles.[newProfiles.Length - 1] <- key, profile
+                                profiles
+                            | None ->
+                                let newProfiles = Array.zeroCreate (profiles.Length + 1)
+                                Array.blit profiles 0 newProfiles 0 profiles.Length
+                                newProfiles.[newProfiles.Length - 1] <- key, profile
 
-                                    newProfiles
-                                |> Array.sortByDescending fst
+                                newProfiles
+                            |> Array.sortByDescending fst
 
-                            let character =
-                                { userProfileData with
-                                    Profiles = profiles
-                                }
+                        state.Characters
+                        |> GuildUsers.set
+                            id
+                            (fun x ->
+                                { x with Profiles = profiles }
+                            )
 
-                            Characters.replace character
+                    | None ->
+                        state.Characters
+                        |> GuildUsers.set
+                            id
+                            (fun x ->
+                                { x with Profiles = [|key, profile|] }
+                            )
 
-                            character
-
-                        | None ->
-                            Characters.insert(e.Guild.Id, e.Author.Id, [|key, profile|])
-
-                    { state with
-                        Characters =
-                            let guildCharacters = Map.add e.Author.Id character guildCharacters
-                            Map.add e.Guild.Id guildCharacters state.Characters
-                    }
-
-                | None ->
-                    let character = Characters.insert(e.Guild.Id, e.Author.Id, [|key, profile|])
-
-                    { state with
-                        Characters =
-                            let guildCharacters = Map.add e.Author.Id character Map.empty
-                            Map.add e.Guild.Id guildCharacters state.Characters
-                    }
+                { state with
+                    Characters = character
+                }
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional "Done!"))
 
             state
 
         | GetCharacters ->
-            match Map.tryFind e.Guild.Id state.Characters with
-            | Some guildCharacters ->
-                match Map.tryFind e.Author.Id guildCharacters with
-                | Some userProfileData ->
-                    let profiles = userProfileData.Profiles
+            let id = Id.create e.Guild.Id e.Author.Id
+            match GuildUsers.tryFindById id state.Characters with
+            | Some userProfileData ->
+                let profiles = userProfileData.Data.Profiles
 
+                let keys, names, avatars =
                     let keys, names, avatars =
-                        let keys, names, avatars =
-                            Array.foldBack
-                                (fun (key, profile: Profile) (keys, names, avatars) ->
-                                    let avatarUrl = sprintf "[img](%s)" profile.AvatarUrl
-                                    key::keys, profile.Username::names, avatarUrl::avatars
-                                )
-                                profiles
-                                ([], [], [])
-                        let f xs = List.rev xs |> String.concat "\n"
-                        f keys, f names, f avatars
+                        Array.foldBack
+                            (fun (key, profile: Profile) (keys, names, avatars) ->
+                                let avatarUrl = sprintf "[img](%s)" profile.AvatarUrl
+                                key::keys, profile.Username::names, avatarUrl::avatars
+                            )
+                            profiles
+                            ([], [], [])
+                    let f xs = List.rev xs |> String.concat "\n"
+                    f keys, f names, f avatars
 
-                    let b = Entities.DiscordEmbedBuilder()
+                let b = Entities.DiscordEmbedBuilder()
 
-                    b.AddField("Keys", keys, true) |> ignore
-                    b.AddField("Names", names, true) |> ignore
-                    b.AddField("Avatars", avatars, true) |> ignore
+                b.AddField("Keys", keys, true) |> ignore
+                b.AddField("Names", names, true) |> ignore
+                b.AddField("Avatars", avatars, true) |> ignore
 
-                    let msg = b.Build ()
+                let msg = b.Build ()
 
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional null, Entities.Optional msg))
+                awaiti (replyMessage.ModifyAsync(Entities.Optional null, Entities.Optional msg))
 
-                | None -> awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
             | None -> awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
 
             state
 
         | RemoveCharacter key ->
-            match Map.tryFind e.Guild.Id state.Characters with
-            | Some guildCharacters ->
-                match Map.tryFind e.Author.Id guildCharacters with
-                | Some userProfileData ->
-                    let profiles = userProfileData.Profiles
-                    let res =
-                        profiles
-                        |> Array.tryFindIndex (fun (key', _) -> key' = key)
+            let id = Id.create e.Guild.Id e.Author.Id
+            match GuildUsers.tryFindById id state.Characters with
+            | Some userProfileData ->
+                let profiles = userProfileData.Data.Profiles
+                let res =
+                    profiles
+                    |> Array.tryFindIndex (fun (key', _) -> key' = key)
+                match res with
+                | Some i ->
+                    let character =
+                        state.Characters
+                        |> GuildUsers.set
+                            id
+                            (fun data ->
+                                { data with
+                                    Profiles = Array.removeAt i profiles
+                                }
+                            )
 
-                    match res with
-                    | Some i ->
-                        let profiles = Array.removeAt i profiles
-                        let character =
-                            { userProfileData with
-                                Profiles = profiles
-                            }
+                    let state =
+                        { state with
+                            Characters = character
+                        }
 
-                        Characters.replace character
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional "Done"))
 
-                        let state =
-                            { state with
-                                Characters =
-                                    let guildCharacters = Map.add e.Author.Id character guildCharacters
-                                    Map.add e.Guild.Id guildCharacters state.Characters
-                            }
-
-                        awaiti (replyMessage.ModifyAsync(Entities.Optional "Done"))
-
-                        state
-                    | None ->
-                        let msg =
-                            sprintf "You don't have character with %s key" key
-                        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
-
-                        state
+                    state
                 | None ->
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional errMsg))
+                    let msg =
+                        sprintf "You don't have character with %s key" key
+                    awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
 
                     state
             | None ->
@@ -342,64 +319,62 @@ let mainReduce req state =
     match req with
     | Handle e ->
         if not e.Author.IsBot then
-            match Map.tryFind e.Guild.Id state.Characters with
-            | Some guildCharacters ->
-                match Map.tryFind e.Author.Id guildCharacters with
-                | Some user ->
-                    let content = e.Message.Content
+            let id = Id.create e.Guild.Id e.Author.Id
+            match GuildUsers.tryFindById id state.Characters with
+            | Some user ->
+                let content = e.Message.Content
 
-                    let result =
-                        user.Profiles
-                        |> Array.tryFind (fun (key, _) ->
-                            content.StartsWith key)
+                let result =
+                    user.Data.Profiles
+                    |> Array.tryFind (fun (key, _) ->
+                        content.StartsWith key)
 
-                    match result with
-                    | None -> ()
-                    | Some (key, profile) ->
-                        let content =
-                            // let content = "key   123"
-                            let rec calcContent i =
-                                if i < content.Length then
-                                    if System.Char.IsWhiteSpace content.[i] then
-                                        calcContent (i + 1)
-                                    else
-                                        i
+                match result with
+                | None -> ()
+                | Some (key, profile) ->
+                    let content =
+                        // let content = "key   123"
+                        let rec calcContent i =
+                            if i < content.Length then
+                                if System.Char.IsWhiteSpace content.[i] then
+                                    calcContent (i + 1)
                                 else
                                     i
-                            // let key = "key"
-                            content.[calcContent key.Length..] // 123
+                            else
+                                i
+                        // let key = "key"
+                        content.[calcContent key.Length..] // 123
 
-                        if content.Length > 0 then
-                            let channel = e.Channel
+                    if content.Length > 0 then
+                        let channel = e.Channel
 
-                            let webhooks = await (channel.GetWebhooksAsync())
+                        let webhooks = await (channel.GetWebhooksAsync())
 
-                            let webhook =
-                                if webhooks.Count > 0 then
-                                    Some webhooks.[0]
-                                else
-                                    try
-                                        await (channel.CreateWebhookAsync(sprintf "%d webhook" channel.Id))
-                                        |> Some
-                                    with e -> None
-
-                            match webhook with
-                            | Some webhook ->
-                                let b = Entities.DiscordWebhookBuilder()
-
-                                b.WithUsername profile.Username |> ignore
-                                b.WithAvatarUrl profile.AvatarUrl |> ignore
-
-                                b.WithContent content |> ignore
-
+                        let webhook =
+                            if webhooks.Count > 0 then
+                                Some webhooks.[0]
+                            else
                                 try
-                                    awaiti (webhook.ExecuteAsync b)
-                                    awaiti (e.Message.DeleteAsync())
-                                with e -> ()
+                                    await (channel.CreateWebhookAsync(sprintf "%d webhook" channel.Id))
+                                    |> Some
+                                with e -> None
 
-                            | None -> ()
+                        match webhook with
+                        | Some webhook ->
+                            let b = Entities.DiscordWebhookBuilder()
 
-                | None -> ()
+                            b.WithUsername profile.Username |> ignore
+                            b.WithAvatarUrl profile.AvatarUrl |> ignore
+
+                            b.WithContent content |> ignore
+
+                            try
+                                awaiti (webhook.ExecuteAsync b)
+                                awaiti (e.Message.DeleteAsync())
+                            with e -> ()
+
+                        | None -> ()
+
             | None -> ()
 
         state
@@ -407,7 +382,7 @@ let mainReduce req state =
 
 let m: MailboxProcessor<Req> =
     let init = {
-        Characters = Characters.getAll ()
+        Characters = GuildUsers.init "characters" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->

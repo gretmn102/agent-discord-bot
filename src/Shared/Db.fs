@@ -51,7 +51,13 @@ module CommonDb =
         let replace (newData: Data<'Id, 'Version, 'MainData>) (collection: Collection) =
             let doc = newData.ToBsonDocument()
 
-            let el = BsonElement("_id", BsonValue.Create(newData.Id))
+            let value =
+                if Reflection.FSharpType.IsRecord typeof<'Id> then
+                    newData.Id.ToBsonDocument() :> BsonValue
+                else
+                    BsonValue.Create(newData.Id)
+
+            let el = BsonElement("_id", value)
             let i = new BsonDocument(el)
 
             let filter = FilterDefinition.op_Implicit(i)
