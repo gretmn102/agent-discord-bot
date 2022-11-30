@@ -8,6 +8,7 @@ open Extensions
 
 type CommandManagementRequest =
     | Set of json: DataOrUrl option
+    | Print
 
 type CommandRequest = Model.CommandT * UserId option
 
@@ -57,9 +58,13 @@ module CommandManagementParser =
         skipStringCI "setCustomCommands" .>> spaces
         >>. opt DataOrUrl.Parser.parser
 
+    let pprintCommand: _ Parser =
+        skipStringCI "команды"
+
     let parser: _ Parser =
         choice [
             pset |>> CommandManagementRequest.Set
+            pprintCommand >>% CommandManagementRequest.Print
         ]
 
 module Parser =
@@ -226,6 +231,21 @@ let reduce (req: Handler) (state: State) =
                             }
 
                         send "Done!"
+
+                        state
+
+                    | CommandManagementRequest.Print ->
+                        let commands =
+                            state.Commands.Cache
+                            |> Seq.map (fun (KeyValue(id, v)) ->
+                                v.Data.Names
+                                |> Array.map (sprintf "`%s`")
+                                |> String.concat ", "
+                                |> sprintf "• %s"
+                            )
+                            |> String.concat "\n"
+
+                        send commands
 
                         state
 
