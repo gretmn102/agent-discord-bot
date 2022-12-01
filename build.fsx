@@ -34,6 +34,8 @@ let mainProjDir =
     Fake.IO.Path.getDirectory mainProjPath
 
 let deployDir = Path.getFullName "./deploy"
+
+let envPath = ".env"
 // --------------------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------------------
@@ -98,6 +100,11 @@ let deploy () =
 
 Target.create "Deploy" (fun _ -> deploy())
 
+Target.create "CopyEnvToDeploy" (fun _ ->
+    if File.exists envPath then
+        Shell.copyFile (Path.combine deployDir envPath) envPath
+)
+
 // --------------------------------------------------------------------------------------
 // Build order
 // --------------------------------------------------------------------------------------
@@ -105,5 +112,6 @@ open Fake.Core.TargetOperators
 
 "Clean"
   ==> "Deploy"
+  ==> "CopyEnvToDeploy"
 
-Target.runOrDefault "Deploy"
+Target.runOrDefault "CopyEnvToDeploy"
