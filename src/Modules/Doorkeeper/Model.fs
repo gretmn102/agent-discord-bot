@@ -2,9 +2,11 @@ module Doorkeeper.Model
 open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
+open MongoDB.Bson.Serialization.Attributes
 
 open Types
 open Shared.MessageTemplate
+open Db
 
 module NewcomersRolesOld =
     type PassSettings =
@@ -685,13 +687,14 @@ module Setting =
             |> Option.map (fun x -> x.Data)
 
 module InvitesSetting =
-    type SettingData =
+    [<BsonIgnoreExtraElements>]
+    type DataPreVersion =
         {
-            mutable Id: ObjectId
-            mutable GuildId: GuildId
-            mutable OutputChannel: ChannelId
+            Id: ObjectId
+            GuildId: GuildId
+            OutputChannel: ChannelId
             /// `invite_code * message`
-            mutable Associations: (string * string) []
+            Associations: (string * string) []
         }
         static member Init(guildId, outputChannel, associations) =
             {
@@ -701,26 +704,84 @@ module InvitesSetting =
                 Associations = associations
             }
 
-    let welcomeSetting = Db.database.GetCollection<SettingData>("invitesSetting")
+    type GuildData =
+        {
+            OutputChannel: ChannelId
+            /// `invite_code * message`
+            Associations: (string * string) []
+        }
+        static member Init outputChannel associations =
+            {
+                OutputChannel = outputChannel
+                Associations = associations
+            }
+        static member Empty =
+            {
+                OutputChannel = 0UL
+                Associations = [||]
+            }
+        static member Serialize (data: GuildData) =
+            data |> Json.ser
+        static member Deserialize json =
+            try
+                Ok (Json.des json)
+            with e ->
+                Error e.Message
 
-    type GuildSetting = Map<GuildId, SettingData>
+    type Version =
+        | V0 = 0
 
-    let getAll (): GuildSetting =
-        welcomeSetting.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.GuildId x st
-            )
-            Map.empty
+    type Id = GuildId
 
-    let replace (newData: SettingData) =
-        welcomeSetting.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
+    type Guild = CommonDb.Data<Id, Version, GuildData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Guild =
+        let create id data: Guild =
+            CommonDb.Data.create id Version.V0 data
 
-    let insert (guildId, outputChannel, associations) =
-        let x = SettingData.Init(guildId, outputChannel, associations)
-        welcomeSetting.InsertOne(x)
-        x
+    type Guilds = CommonDb.GuildData<Id, Version, GuildData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Guilds =
+        let createData id =
+            Guild.create id GuildData.Empty
+
+        let init collectionName (db: IMongoDatabase): Guilds =
+            CommonDb.GuildData.init
+                createData
+                (fun ver doc ->
+                    match ver with
+                    | Some ver ->
+                        match ver with
+                        | Version.V0 ->
+                            None, Serialization.BsonSerializer.Deserialize<Guild>(doc)
+                        | x ->
+                            failwithf "Version = %A not implemented" x
+                    | None ->
+                        let oldValue =
+                            Serialization.BsonSerializer.Deserialize<DataPreVersion>(doc)
+                        let newValue =
+                            GuildData.Init oldValue.OutputChannel oldValue.Associations
+                            |> Guild.create oldValue.GuildId
+
+                        Some oldValue.Id, newValue
+                )
+                collectionName
+                db
+
+        let set userId setAdditionParams (guildData: Guilds) =
+            CommonDb.GuildData.set
+                createData
+                userId
+                setAdditionParams
+                guildData
+
+        let drop (db: IMongoDatabase) (items: Guilds) =
+            CommonDb.GuildData.drop db items
+
+        let tryFindById id (items: Guilds): Guild option =
+            CommonDb.GuildData.tryFind id items
 
 module Leavers =
     type Data =

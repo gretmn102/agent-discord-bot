@@ -10,7 +10,7 @@ type InvitesState = Map<GuildId, Map<string, Entities.DiscordInvite>>
 type State =
     {
         InvitesState: InvitesState
-        Setting: Model.InvitesSetting.GuildSetting
+        Setting: Model.InvitesSetting.Guilds
     }
 
 type Setting =
@@ -72,7 +72,7 @@ module InviteTable =
         | SortByUses = 0
         | SortByCode = 1
 
-    let initSetting getState: Setting<_, SortBy, _, (Entities.DiscordGuild * Model.InvitesSetting.GuildSetting)> =
+    let initSetting getState: Setting<_, SortBy, _, (Entities.DiscordGuild * Model.InvitesSetting.Guilds)> =
         {
             Id = "Invites"
 
@@ -109,10 +109,9 @@ module InviteTable =
             MapFunction =
                 fun (guild, state) ->
                 let getAuthor =
-                    let guildInvitesSetting = Map.tryFind guild.Id state
-                    match guildInvitesSetting with
+                    match Model.InvitesSetting.Guilds.tryFindById guild.Id state with
                     | Some invitesSetting ->
-                        let assocs = Map.ofArray invitesSetting.Associations
+                        let assocs = Map.ofArray invitesSetting.Data.Associations
                         fun inviteCode ->
                             Map.tryFind inviteCode assocs
                     | None -> fun _ -> None
@@ -139,7 +138,7 @@ module InviteTable =
 
         componentInteractionCreateHandle client e (initSetting getState)
 
-let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: Model.InvitesSetting.GuildSetting) =
+let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: Model.InvitesSetting.Guilds) =
     match req with
     | SetSetting newSetting ->
         let guild = e.Guild
@@ -151,20 +150,15 @@ let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: M
             match newSetting with
             | Right newSetting ->
                 let state =
-                    match Map.tryFind e.Guild.Id state with
-                    | Some data ->
-                        let data =
+                    state
+                    |> Model.InvitesSetting.Guilds.set
+                        e.Guild.Id
+                        (fun data ->
                             { data with
                                 OutputChannel = newSetting.ChannelId
                                 Associations = newSetting.Associations
                             }
-
-                        Model.InvitesSetting.replace data
-
-                        Map.add guild.Id data state
-                    | None ->
-                        let x = Model.InvitesSetting.insert (guild.Id, newSetting.ChannelId, newSetting.Associations)
-                        Map.add guild.Id x state
+                        )
 
                 awaiti (replyMessage.ModifyAsync(Entities.Optional "Setting has been set"))
 
@@ -187,13 +181,13 @@ let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: M
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 
-        match Map.tryFind e.Guild.Id state with
-        | Some data ->
+        match Model.InvitesSetting.Guilds.tryFindById e.Guild.Id state with
+        | Some guildSetting ->
             let msg =
                 let setting =
                     {
-                        ChannelId = data.OutputChannel
-                        Associations = data.Associations
+                        ChannelId = guildSetting.Data.OutputChannel
+                        Associations = guildSetting.Data.Associations
                     }
                     |> Json.ser
 
@@ -226,12 +220,12 @@ type Req =
     | InviteDeletedHandle of EventArgs.InviteDeleteEventArgs
     | GuildMemberAddedHandle of EventArgs.GuildMemberAddEventArgs
     | Request of EventArgs.MessageCreateEventArgs * Request
-    | GetState of AsyncReplyChannel<Model.InvitesSetting.GuildSetting>
+    | GetState of AsyncReplyChannel<Model.InvitesSetting.Guilds>
 
 let reduce (req: Req) (state: State) =
     match req with
     | GuildMemberAddedHandle e ->
-        match Map.tryFind e.Guild.Id state.Setting with
+        match Model.InvitesSetting.Guilds.tryFindById e.Guild.Id state.Setting with
         | Some setting ->
             match Map.tryFind e.Guild.Id state.InvitesState with
             | Some oldInvites ->
@@ -251,12 +245,12 @@ let reduce (req: Req) (state: State) =
 
                 match diff with
                 | [ invite ] ->
-                    match e.Guild.GetChannel setting.OutputChannel with
+                    match e.Guild.GetChannel setting.Data.OutputChannel with
                     | null -> state
                     | channel ->
                         let embed = Entities.DiscordEmbedBuilder()
                         embed.Description <-
-                            match Array.tryFind (fun (code, _) -> code = invite.Code) setting.Associations with
+                            match Array.tryFind (fun (code, _) -> code = invite.Code) setting.Data.Associations with
                             | None ->
                                 sprintf "%s пришел на сервер по [ссылке](https://discord.gg/%s), которую создал %s." e.Member.Mention invite.Code invite.Inviter.Mention
                             | Some (_, message) ->
@@ -359,7 +353,7 @@ let reduce (req: Req) (state: State) =
 let m =
     let init = {
         InvitesState = Map.empty
-        Setting = Model.InvitesSetting.getAll ()
+        Setting = Model.InvitesSetting.Guilds.init "invitesSetting" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->
