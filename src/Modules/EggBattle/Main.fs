@@ -34,7 +34,7 @@ module Parser =
 
 type State =
     {
-        Rating: Rating.GuildsRating
+        Rating: Rating.GuildUsers
     }
 
 type FightState =
@@ -78,11 +78,16 @@ module RatingTable =
 
             GetItems = fun () (guildId, state) ->
                 let state =
-                    match Map.tryFind guildId state.Rating with
-                    | Some guildRating -> guildRating
-                    | None -> Map.empty
+                    state.Rating.Cache
+                    |> Seq.choose (fun (KeyValue(id, v)) ->
+                        if id.GuildId = guildId then
+                            Some v
+                        else
+                            None
+                    )
+
                 state
-                |> Map.toArray
+                |> Seq.toArray
 
             ItemsCountPerPage = 10
 
@@ -94,17 +99,17 @@ module RatingTable =
             SortFunction = fun sortBy items ->
                 match sortBy with
                 | SortBy.SortByWins ->
-                    Array.sortByDescending (fun (_, data) -> data.Wins) items
+                    Array.sortByDescending (fun x -> x.Data.Wins) items
                 | SortBy.SortByLoses ->
-                    Array.sortByDescending (fun (_, data) -> data.Loses) items
+                    Array.sortByDescending (fun x -> x.Data.Loses) items
                 | x -> failwithf "RatingTable.SortBy %A" x
 
             MapFunction =
-                fun _ i (userId, data) ->
+                fun _ i x ->
                     [|
-                        sprintf "%d <@!%d>" i userId
-                        string data.Wins
-                        string data.Loses
+                        sprintf "%d <@!%d>" i x.Id.UserId
+                        string x.Data.Wins
+                        string x.Data.Loses
                     |]
         }
 
@@ -208,41 +213,21 @@ let reduce msg (state: State) =
 
         let ratingState =
             let guildId = e.Guild.Id
-
-            let apply guildRating =
-                guildRating
-                |> Map.addOrModWith
-                    winnerId
-                    (fun () ->
-                        Rating.insert(guildId, winnerId, 1, 0)
-                    )
-                    (fun (attacker: Rating.Data) ->
-                        let attacker =
-                            { attacker with
-                                Wins = attacker.Wins + 1
-                            }
-                        Rating.replace attacker
-                        attacker
-                    )
-                |> Map.addOrModWith
-                    loserId
-                    (fun () ->
-                        Rating.insert(guildId, loserId, 0, 1)
-                    )
-                    (fun (loser: Rating.Data) ->
-                        let loser =
-                            { loser with
-                                Loses = loser.Loses + 1
-                            }
-                        Rating.replace loser
-                        loser
-                    )
-
             state.Rating
-            |> Map.addOrModWith
-                guildId
-                (fun () -> apply Map.empty)
-                (fun rating -> apply rating)
+            |> Rating.GuildUsers.set
+                (Rating.Id.create guildId winnerId)
+                (fun data ->
+                    { data with
+                        Wins = data.Wins + 1
+                    }
+                )
+            |> Rating.GuildUsers.set
+                (Rating.Id.create guildId loserId)
+                (fun data ->
+                    { data with
+                        Loses = data.Loses + 1
+                    }
+                )
 
         let b = Entities.DiscordInteractionResponseBuilder()
 
@@ -268,7 +253,7 @@ let reduce msg (state: State) =
 
 let m =
     let init = {
-        Rating = Rating.getAll ()
+        Rating = Rating.GuildUsers.init "EggBattleRatings" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->

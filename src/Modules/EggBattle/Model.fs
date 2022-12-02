@@ -2,48 +2,108 @@ module EggBattle.Model
 open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
+open MongoDB.Bson.Serialization.Attributes
 
 open Types
+open Db
 
 module Rating =
-    type Data =
+    [<BsonIgnoreExtraElements>]
+    type DataPreVersion =
         {
-            mutable Id: ObjectId
-            mutable GuildId: GuildId
-            mutable UserId: UserId
-            mutable Wins: int
-            mutable Loses: int
+            Id: ObjectId
+            GuildId: GuildId
+            UserId: UserId
+            Wins: int
+            Loses: int
         }
-        static member Init(guildId, userId, wins, loses) =
+
+    type GuildUserData =
+        {
+            Wins: int
+            Loses: int
+        }
+        static member Init wins loses =
             {
-                Id = ObjectId.Empty
-                GuildId = guildId
-                UserId = userId
                 Wins = wins
                 Loses = loses
             }
+        static member Empty =
+            {
+                Wins = 0
+                Loses = 0
+            }
+        static member Serialize (data: GuildUserData) =
+            data |> Json.ser
+        static member Deserialize json =
+            try
+                Ok (Json.des json)
+            with e ->
+                Error e.Message
 
-    let table = Db.database.GetCollection<Data>("EggBattleRatings")
+    type Version =
+        | V0 = 0
 
-    type GuildsRating = Map<GuildId, Map<UserId, Data>>
+    type Id =
+        {
+            GuildId: GuildId
+            UserId: UserId
+        }
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Id =
+        let create guildId userId =
+            {
+                GuildId = guildId
+                UserId = userId
+            }
 
-    let getAll (): GuildsRating =
-        table.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                st
-                |> Map.addOrModWith
-                    x.GuildId
-                    (fun () -> Map.add x.UserId x Map.empty)
-                    (fun st -> Map.add x.UserId x st)
-            )
-            Map.empty
+    type GuildUser = CommonDb.Data<Id, Version, GuildUserData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildUser =
+        let create id data: GuildUser =
+            CommonDb.Data.create id Version.V0 data
 
-    let replace (newData: Data) =
-        table.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
+    type GuildUsers = CommonDb.GuildData<Id, Version, GuildUserData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildUsers =
+        let createData id =
+            GuildUser.create id GuildUserData.Empty
 
-    let insert (guildId, userId, wins, loses) =
-        let x = Data.Init(guildId, userId, wins, loses)
-        table.InsertOne(x)
-        x
+        let init collectionName (db: IMongoDatabase): GuildUsers =
+            CommonDb.GuildData.init
+                createData
+                (fun ver doc ->
+                    match ver with
+                    | Some ver ->
+                        match ver with
+                        | Version.V0 ->
+                            None, Serialization.BsonSerializer.Deserialize<GuildUser>(doc)
+                        | x ->
+                            failwithf "Version = %A not implemented" x
+                    | None ->
+                        let oldValue =
+                            Serialization.BsonSerializer.Deserialize<DataPreVersion>(doc)
+                        let newValue =
+                            GuildUserData.Init oldValue.Wins oldValue.Loses
+                            |> GuildUser.create (Id.create oldValue.GuildId oldValue.UserId)
+
+                        Some oldValue.Id, newValue
+                )
+                collectionName
+                db
+
+        let set userId setAdditionParams (guildData: GuildUsers) =
+            CommonDb.GuildData.set
+                createData
+                userId
+                setAdditionParams
+                guildData
+
+        let drop (db: IMongoDatabase) (items: GuildUsers) =
+            CommonDb.GuildData.drop db items
+
+        let tryFindById id (items: GuildUsers) =
+            CommonDb.GuildData.tryFind id items
