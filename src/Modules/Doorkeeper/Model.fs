@@ -784,52 +784,104 @@ module InvitesSetting =
             CommonDb.GuildData.tryFind id items
 
 module Leavers =
-    type Data =
+    [<BsonIgnoreExtraElements>]
+    type DataPreVersion =
         {
-            mutable Id: ObjectId
-            mutable GuildId: GuildId
-            mutable UserId: UserId
-            mutable RoleIds: RoleId []
+            Id: ObjectId
+            GuildId: GuildId
+            UserId: UserId
+            RoleIds: RoleId []
         }
-        static member Init(guildId, userId, rolesId) =
+
+    type GuildUserData =
+        {
+            RoleIds: RoleId []
+        }
+        static member Init roleIds =
             {
-                Id = ObjectId.Empty
+                RoleIds = roleIds
+            }
+        static member Empty =
+            {
+                RoleIds = [||]
+            }
+        static member Serialize (data: GuildUserData) =
+            data |> Json.ser
+        static member Deserialize json =
+            try
+                Ok (Json.des json)
+            with e ->
+                Error e.Message
+
+    type Version =
+        | V0 = 0
+
+    type Id =
+        {
+            GuildId: GuildId
+            UserId: UserId
+        }
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Id =
+        let create guildId userId =
+            {
                 GuildId = guildId
                 UserId = userId
-                RoleIds = rolesId
             }
 
-    let datas = Db.database.GetCollection<Data>("leavers")
+    type GuildUser = CommonDb.Data<Id, Version, GuildUserData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildUser =
+        let create id data: GuildUser =
+            CommonDb.Data.create id Version.V0 data
 
-    type GuildDatas = Map<GuildId, Map<UserId, Data>>
+    type GuildUsers = CommonDb.GuildData<Id, Version, GuildUserData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module GuildUsers =
+        let createData id =
+            GuildUser.create id GuildUserData.Empty
 
-    let getAll (): GuildDatas =
-        datas.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                st
-                |> Map.addOrModWith
-                    x.GuildId
-                    (fun () -> Map.add x.UserId x Map.empty)
-                    (fun st -> Map.add x.UserId x st)
-            )
-            Map.empty
+        let init collectionName (db: IMongoDatabase): GuildUsers =
+            CommonDb.GuildData.init
+                createData
+                (fun ver doc ->
+                    match ver with
+                    | Some ver ->
+                        match ver with
+                        | Version.V0 ->
+                            None, Serialization.BsonSerializer.Deserialize<GuildUser>(doc)
+                        | x ->
+                            failwithf "Version = %A not implemented" x
+                    | None ->
+                        let oldValue =
+                            Serialization.BsonSerializer.Deserialize<DataPreVersion>(doc)
+                        let newValue =
+                            GuildUserData.Init oldValue.RoleIds
+                            |> GuildUser.create (Id.create oldValue.GuildId oldValue.UserId)
 
-    let replace (newRoleData: Data) =
-        datas.ReplaceOne((fun x -> x.Id = newRoleData.Id), newRoleData)
-        |> ignore
+                        Some oldValue.Id, newValue
+                )
+                collectionName
+                db
 
-    let insert (guildId, userId, rolesId) =
-        let x = Data.Init(guildId, userId, rolesId)
-        datas.InsertOne(x)
-        x
+        let set userId setAdditionParams (guildData: GuildUsers) =
+            CommonDb.GuildData.set
+                createData
+                userId
+                setAdditionParams
+                guildData
 
-    let remove (roleData: Data) =
-        datas.DeleteOne(fun x -> x.Id = roleData.Id)
-        |> ignore
+        let drop (db: IMongoDatabase) (items: GuildUsers) =
+            CommonDb.GuildData.drop db items
+
+        let tryFindById id (items: GuildUsers) =
+            CommonDb.GuildData.tryFind id items
 
 type State =
     {
         Settings: Setting.GuildData
-        Leavers: Leavers.GuildDatas
+        Leavers: Leavers.GuildUsers
     }

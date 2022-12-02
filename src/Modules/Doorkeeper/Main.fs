@@ -326,12 +326,10 @@ let actionReduce
             )
 
         let getUserData targetUserId =
-            Map.tryFind guild.Id state.Leavers
-            |> Option.bind (fun userDatas ->
-                Map.tryFind targetUserId userDatas
-            )
+            let id = Leavers.Id.create guild.Id targetUserId
+            Leavers.GuildUsers.tryFindById id state.Leavers
 
-        let returnAllRoles (setting: Setting.MainData) (userData: Leavers.Data) (targetUser: Entities.DiscordMember) =
+        let returnAllRoles (setting: Setting.MainData) (userData: Leavers.GuildUser) (targetUser: Entities.DiscordMember) =
             let enteredUserRole = EnabledOptionValue.toOption setting.Checkpoint.EnteredUserRole
             let returnedUserExcludeRoles = EnabledOptionValue.toOption setting.Inner.ReturnedUserExcludeRoles
 
@@ -349,7 +347,7 @@ let actionReduce
                 | None ->
                     fun _ -> false
 
-            userData.RoleIds
+            userData.Data.RoleIds
             |> Array.iter (fun roleId ->
                 if not (isEnteredUserRoleId roleId || isReturnedUserExcludeRoleId roleId) then
                     grantRoleSilent guild roleId targetUser
@@ -477,10 +475,8 @@ let reduce (msg: Msg) (state: State): State =
         let guildId = guild.Id
 
         let getUserData targetUserId =
-            Map.tryFind guildId state.Leavers
-            |> Option.bind (fun userDatas ->
-                Map.tryFind targetUserId userDatas
-            )
+            let id = Leavers.Id.create guild.Id targetUserId
+            Leavers.GuildUsers.tryFindById id state.Leavers
 
         state
         |> isUserNotBot currentUser ^<| fun () ->
@@ -507,7 +503,7 @@ let reduce (msg: Msg) (state: State): State =
                 | None -> ()
                 | Some returnedUserIncludeRoles ->
                     if not <| Array.isEmpty returnedUserIncludeRoles then
-                        userData.RoleIds
+                        userData.Data.RoleIds
                         |> Array.iter (fun roleId ->
                             if Array.contains roleId returnedUserIncludeRoles then
                                 grantRoleSilent guild roleId currentUser
@@ -553,31 +549,14 @@ let reduce (msg: Msg) (state: State): State =
                     |> Seq.map (fun role -> role.Id)
                     |> Array.ofSeq
 
+                let id = Leavers.Id.create guild.Id e.Member.Id
                 state.Leavers
-                |> Map.addOrModWith
-                    guildId
-                    (fun () ->
-                        let data = Leavers.insert (guildId, e.Member.Id, roleIds)
-
-                        Map.add e.Member.Id data Map.empty
-                    )
-                    (fun guild ->
-                        guild
-                        |> Map.addOrModWith
-                            e.Member.Id
-                            (fun () ->
-                                Leavers.insert (guildId, e.Member.Id, roleIds)
-                            )
-                            (fun data ->
-                                let data =
-                                    { data with
-                                        RoleIds = roleIds
-                                    }
-
-                                Leavers.replace data
-
-                                data
-                            )
+                |> Leavers.GuildUsers.set
+                    id
+                    (fun data ->
+                        { data with
+                            RoleIds = roleIds
+                        }
                     )
         }
 
@@ -601,7 +580,7 @@ let reduce (msg: Msg) (state: State): State =
 let m =
     let init = {
         Settings = Setting.GuildData.init Db.database
-        Leavers = Leavers.getAll ()
+        Leavers = Leavers.GuildUsers.init "leavers" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->
