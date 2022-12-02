@@ -153,7 +153,7 @@ module Hub =
                         let a = Cyoa.Core.initState Cyoa.Core.Scenario2.beginLoc Cyoa.Core.Scenario2.quizPizza
                         cyoaf a QuizState2
                 | InitQuiz ->
-                    let quizState = Quiz.init (Quiz.loadQuiz "Quiz/Quiz.json")
+                    let quizState = Quiz.init (Quiz.loadQuiz "Modules/Quiz/Quiz.json")
                     let quizAnswer = Quiz.view quizState
                     let f path =
                         let state = Map.add path (userId, QuizState quizState) state
