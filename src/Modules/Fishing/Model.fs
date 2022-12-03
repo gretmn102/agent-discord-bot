@@ -12,23 +12,26 @@ module ItemsDb =
     type ItemData =
         {
             Name: string
-            Loot: ItemId []
+            AsBait: Option<Editor.Types.Loot>
+            AsChest: Option<Editor.Types.Loot>
             Description: string
-            ImageUrl: string
+            ImageUrl: Option<string>
         }
-        static member Create name loot description imageUrl =
+        static member Create name asBait asChest description imageUrl: ItemData =
             {
                 Name = name
-                Loot = loot
+                AsBait = asBait
+                AsChest = asChest
                 Description = description
                 ImageUrl = imageUrl
             }
-        static member Empty =
+        static member Empty: ItemData =
             {
                 Name = ""
-                Loot = [||]
+                AsBait = None
+                AsChest = None
                 Description = ""
-                ImageUrl = ""
+                ImageUrl = Some ""
             }
         static member Serialize (data: ItemData) =
             data |> Json.ser
@@ -50,17 +53,18 @@ module ItemsDb =
             CommonDb.Data.create id Version.V0 data
 
         let isBait (item: ItemT) =
-            not (Array.isEmpty item.Data.Loot)
+            Option.isSome item.Data.AsBait
 
         let ofEditorItem (item: Editor.Types.Item): ItemT =
             let x =
                 {
                     Name = item.Name
-                    Loot = item.Loot
+                    AsBait = item.AsBait
+                    AsChest = item.AsChest
                     Description = item.Description
                     ImageUrl = item.ImageUrl
                 }
-            create item.ItemId x
+            create item.Id x
 
     type ItemsArray = ItemT []
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -122,10 +126,10 @@ module ItemsDb =
         let drop (db: IMongoDatabase) (items: Items) =
             CommonDb.GuildData.drop db items
 
-        let tryFindById id (items: Items) =
+        let tryFindById id (items: Items): ItemT option =
             CommonDb.GuildData.tryFind id items
 
-        let tryFindByName name (items: Items) =
+        let tryFindByName name (items: Items): ItemT option =
             items.Cache
             |> Seq.tryPick (fun (KeyValue(_, item)) ->
                 if name = item.Data.Name then
@@ -149,8 +153,8 @@ module InventoryItem =
         }
 
     let updateCount updating (inventoryItem: InventoryItem) =
-        {
-            inventoryItem with Count = updating inventoryItem.Count
+        { inventoryItem with
+            Count = updating inventoryItem.Count
         }
 
 type Inventory = Map<ItemId, InventoryItem>
@@ -158,7 +162,7 @@ type Inventory = Map<ItemId, InventoryItem>
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module Inventory =
-    let update itemId upd (inventory: Inventory) =
+    let update itemId upd (inventory: Inventory): Inventory =
         match Map.tryFind itemId inventory with
         | Some inventoryItem ->
             let item = InventoryItem.updateCount upd inventoryItem
@@ -173,6 +177,9 @@ module Inventory =
                 Map.add itemId item inventory
             else
                 inventory
+
+    let tryFindById itemId (inventory: Inventory) =
+        Map.tryFind itemId inventory
 
 module Players =
     type MainData =
@@ -235,7 +242,7 @@ module Players =
         let drop (db: IMongoDatabase) (items: GuildData) =
             CommonDb.GuildData.drop db items
 
-        let tryFindById id (items: GuildData) =
+        let tryFindById id (items: GuildData): Player option =
             CommonDb.GuildData.tryFind id items
 
 module Settings =

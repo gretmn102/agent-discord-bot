@@ -19,6 +19,7 @@ type ActionReq =
     | Inventory
     | Progress
     | Inspect of itemName: string
+    | OpenUp of itemName: string
 
 type ItemsReq =
     | SetItems of json: DataOrUrl option
@@ -43,6 +44,7 @@ module Parser =
         let inventory = "инвентарь"
         let progress = "прогресс"
         let inspect = "осм"
+        let openUp = "открыть"
         let setSettings = "fishingSetSettings"
         let setItems = "fishingSetItems"
 
@@ -61,19 +63,27 @@ module Parser =
         psetItems |>> SetItems
 
     let paction: _ Parser =
+        let pitemName =
+            many1Satisfy (fun _ -> true)
+
         let toFish =
             skipStringCI CommandNames.toFish .>> spaces
-            >>. opt (many1Satisfy (fun _ -> true))
+            >>. opt pitemName
 
         let pinspect =
             skipStringCI CommandNames.inspect .>> spaces
-            >>. many1Satisfy (fun _ -> true)
+            >>. pitemName
+
+        let popen: _ Parser =
+            skipStringCI CommandNames.openUp .>> spaces
+            >>. pitemName
 
         choice [
             toFish |>> ToFish
             skipStringCI CommandNames.inventory >>% Inventory
             skipStringCI CommandNames.progress >>% Progress
             pinspect |>> Inspect
+            popen |>> OpenUp
         ]
 
     let start f: _ Parser =
@@ -305,9 +315,10 @@ module Actions =
         let itemsCount = items.Cache.Count
 
         let sendCatched (newCatchSetting: option<{| TotalCatchesCount: int |}>) (catch: ItemsDb.ItemT) =
-            let image = catch.Data.ImageUrl
-            if not (System.String.IsNullOrEmpty image) then
+            catch.Data.ImageUrl
+            |> Option.iter (fun image ->
                 setImage image
+            )
 
             [
                 sprintf "Поймано \"%s\"!" catch.Data.Name
@@ -381,10 +392,11 @@ module Actions =
 
                 state
 
-        let itemIsBait (item: ItemsDb.ItemT) next =
-            if ItemsDb.Item.isBait item then
-                next ()
-            else
+        let baitGetLoot (item: ItemsDb.ItemT) next =
+            match item.Data.AsBait with
+            | Some loot ->
+                next loot
+            | None ->
                 let msg = sprintf "На \"%A\" больше ничего словить нельзя." item.Data.Name
                 send msg
 
@@ -416,12 +428,11 @@ module Actions =
         getBaseСatch <| fun baseCatch ->
         useBaseBaitOrContinue baseCatch <| fun baitId ->
         getItem baitId <| fun bait ->
-        itemIsBait bait <| fun () ->
+        baitGetLoot bait <| fun loot ->
         getCurrentPlayer bait <| fun player ->
         getBaitFromInventory bait player <| fun baitInInventory ->
         let player = player.Data
 
-        let loot = bait.Data.Loot
         let catchId = loot.[r.Next(0, loot.Length)]
 
         getItem catchId <| fun catch ->
@@ -461,6 +472,24 @@ module Actions =
         state
 
 let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: State) =
+    let send msg =
+        let embed = Entities.DiscordEmbedBuilder()
+        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+        embed.Description <- msg
+
+        let b = Entities.DiscordMessageBuilder()
+        b.Embed <- embed.Build()
+
+        awaiti <| e.Channel.SendMessageAsync b
+
+    let getItemByName itemName next =
+        match ItemsDb.Items.tryFindByName itemName state.Items with
+        | Some item ->
+            next item
+        | None ->
+            send (sprintf "Предмет \"%s\" в игре не найден." itemName)
+            state
+
     match msg with
     | ToFish baitName ->
         awaiti <| e.Channel.TriggerTypingAsync()
@@ -478,13 +507,8 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
 
                 awaiti <| e.Channel.SendMessageAsync b
 
-            match ItemsDb.Items.tryFindByName baitName state.Items with
-            | Some baitName ->
-                Actions.toFish (Some baitName.Id) send setImage e.Author.Id state
-            | None ->
-                send (sprintf "Предмет \"%s\" в игре не найден." baitName)
-
-                state
+            getItemByName baitName <| fun bait ->
+                Actions.toFish (Some bait.Id) send setImage e.Author.Id state
 
         | None ->
             let player =
@@ -552,8 +576,35 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
     | Inspect itemName ->
         awaiti <| e.Channel.TriggerTypingAsync()
 
+        getItemByName itemName <| fun item ->
+
+        let embed = Entities.DiscordEmbedBuilder()
+        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+
+        let description = item.Data.Description
+        if not (System.String.IsNullOrEmpty description) then
+            embed.Description <- description
+
+        embed.Title <- item.Data.Name
+
+        item.Data.ImageUrl
+        |> Option.iter (fun imageUrl ->
+            embed.ImageUrl <- imageUrl
+        )
+
+        let b = Entities.DiscordMessageBuilder()
+        b.Embed <- embed.Build()
+
+        awaiti <| e.Channel.SendMessageAsync b
+
+        state
+
+    | OpenUp itemName ->
+        awaiti <| e.Channel.TriggerTypingAsync()
+
+        let embed = Entities.DiscordEmbedBuilder()
+        let setImage imgUrl = embed.ImageUrl <- imgUrl
         let send msg =
-            let embed = Entities.DiscordEmbedBuilder()
             embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
             embed.Description <- msg
 
@@ -562,26 +613,121 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
 
             awaiti <| e.Channel.SendMessageAsync b
 
-        match ItemsDb.Items.tryFindByName itemName state.Items with
-        | Some item ->
-            let embed = Entities.DiscordEmbedBuilder()
-            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+        let userId = e.Author.Id
 
-            let description = item.Data.Description
-            if not (System.String.IsNullOrEmpty description) then
-                embed.Description <- description
+        let items = state.Items
+        let itemsCount = items.Cache.Count
 
-            embed.Title <- item.Data.Name
+        let getItem itemId next =
+            match ItemsDb.Items.tryFindById itemId items with
+            | Some bait ->
+                next bait
+            | None ->
+                let msg = sprintf "Предмет %A в игре не найден. Пожалуйста, свяжитесь с администратором." itemId
+                send msg
 
-            embed.ImageUrl <- item.Data.ImageUrl
+                state
 
-            let b = Entities.DiscordMessageBuilder()
-            b.Embed <- embed.Build()
+        let getChestLoot (item: ItemsDb.ItemT) next =
+            match item.Data.AsChest with
+            | Some loot ->
+                next loot
+            | None ->
+                sprintf "<@%d>, этот предмет нельзя открыть." userId
+                |> send
 
-            awaiti <| e.Channel.SendMessageAsync b
+                state
 
-        | None ->
-            send (sprintf "Предмет \"%s\" в игре не найден." itemName)
+        let sendDontHaveItem (item: ItemsDb.ItemT) =
+            sprintf "<@%d>, в инвентаре нет \"%s\"" userId item.Data.Name
+            |> send
+
+        let getPlayer (item: ItemsDb.ItemT) next =
+            match Players.GuildData.tryFindById userId state.Players with
+            | Some player -> next player
+            | None ->
+                sendDontHaveItem item
+                state
+
+        let getInventoryItem (item: ItemsDb.ItemT) (player: Players.Player) next =
+            match Inventory.tryFindById item.Id player.Data.Inventory with
+            | Some inv -> next inv
+            | None ->
+                sendDontHaveItem item
+                state
+
+        let isEnoughItems itemName (invItem: InventoryItem) next =
+            if invItem.Count > 0 then
+                next ()
+            else
+                sprintf "<@%d>, в инвентаре не хватает \"%s\"." userId itemName
+                |> send
+                state
+
+        let sendCatched (newCatchSetting: option<{| TotalCatchesCount: int |}>) (catch: ItemsDb.ItemT) =
+            catch.Data.ImageUrl
+            |> Option.iter (fun image ->
+                setImage image
+            )
+
+            [
+                sprintf "В сундуке оказалось \"%s\"!" catch.Data.Name
+
+                let description = catch.Data.Description
+                if not (System.String.IsNullOrEmpty description) then
+                    ""
+                    description
+
+                match newCatchSetting with
+                | Some newCatchSetting ->
+                    ""
+                    createProgressMessage newCatchSetting.TotalCatchesCount itemsCount
+                | None -> ()
+            ]
+            |> String.concat "\n"
+            |> send
+
+        getItemByName itemName <| fun chest ->
+        getChestLoot chest <| fun loot ->
+        getPlayer chest <| fun player ->
+        getInventoryItem chest player <| fun invItem ->
+        isEnoughItems chest.Data.Name invItem <| fun () ->
+
+        // remove the chest from the inventory
+        let inventory =
+            player.Data.Inventory
+            |> Inventory.update chest.Id (fun count -> count - 1)
+
+        let catchId = loot.[r.Next(0, loot.Length)]
+
+        let inventory: Inventory =
+            inventory
+            |> Inventory.update catchId ((+) 1)
+
+        let catches, newCatchSetting =
+            if Set.contains catchId player.Data.Catches then
+                player.Data.Catches, None
+            else
+                let catches = player.Data.Catches |> Set.add catchId
+                let res = {| TotalCatchesCount = catches.Count |}
+                catches, Some res
+
+        let state =
+            { state with
+                Players =
+                    state.Players
+                    |> Players.GuildData.set
+                        userId
+                        (fun p ->
+                            { p with
+                                Inventory = inventory
+                                Catches = catches
+                            }
+                        )
+            }
+
+        getItem catchId <| fun catch ->
+        sendCatched newCatchSetting catch
 
         state
 
@@ -622,7 +768,6 @@ let reduce (msg: Msg) (state: State): State =
                         state
 
                 let deserializeItemsArray json next =
-                    // match ItemsDb.ItemsArray.tryDeserialize json with
                     match Editor.Types.Items.tryDeserialize json with
                     | Ok itemsArray ->
                         itemsArray
