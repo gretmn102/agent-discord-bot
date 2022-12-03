@@ -19,7 +19,7 @@ type ActionReq =
     | Inventory
     | Progress
     | Inspect of itemName: string
-    | OpenUp of itemName: string
+    | OpenUp of itemName: string option
 
 type ItemsReq =
     | SetItems of json: DataOrUrl option
@@ -76,7 +76,7 @@ module Parser =
 
         let popen: _ Parser =
             skipStringCI CommandNames.openUp .>> spaces
-            >>. pitemName
+            >>. opt pitemName
 
         choice [
             toFish |>> ToFish
@@ -109,9 +109,12 @@ module SelectionBaitKey =
         with e ->
             Error e.Message
 
+type SelectionChestKey = ItemId
+
 type Msg =
     | Request of EventArgs.MessageCreateEventArgs * Request
     | ToFishHandle of EventArgs.ComponentInteractionCreateEventArgs * baitId: SelectionBaitKey
+    | OpenUpHandle of EventArgs.ComponentInteractionCreateEventArgs * baitId: SelectionChestKey
     | GetState of AsyncReplyChannel<State>
 
 module InventoryTable =
@@ -307,6 +310,111 @@ module BaitChoiceUi =
         else
             false
 
+module ChestChoiceUi =
+    type ComponentId =
+        | BaitChoiceId = 0
+
+    type Data =
+        {
+            OwnerId: UserId
+        }
+
+    type BaitComponentState = Interaction.ComponentState<ComponentId, Data>
+
+    let messageTypeId = "ChestChoiceComponentId"
+
+    let init (baits: ItemsDb.ItemT list) (e: EventArgs.MessageCreateEventArgs) =
+        let userId = e.Author.Id
+
+        let embed = Entities.DiscordEmbedBuilder()
+        embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+        embed.Description <- sprintf "<@%d>, выбери сундук, чтобы открыть:" userId
+
+        let b = DSharpPlus.Entities.DiscordMessageBuilder()
+        b.Embed <- embed.Build()
+
+        let options =
+            let baitOptions =
+                baits
+                |> List.mapi (fun i item ->
+                    let selectionBaitKey = item.Id
+                    Entities.DiscordSelectComponentOption(item.Data.Name, ItemId.serialize selectionBaitKey)
+                )
+
+            baitOptions
+
+        let componentState =
+            let state: BaitComponentState =
+                {
+                    Id = messageTypeId
+                    ComponentId = ComponentId.BaitChoiceId
+                    Data = {
+                        OwnerId = userId
+                    }
+                }
+            state
+            |> Interaction.ComponentState.Serialize
+
+        let c = Entities.DiscordSelectComponent(componentState, "Выбери сундук...", options)
+        b.AddComponents c |> ignore
+
+        awaiti <| e.Channel.SendMessageAsync b
+
+    let handle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) next =
+        let restartComponent errMsg =
+            DiscordMessage.Ext.clearComponents e.Message
+
+            let b = Entities.DiscordInteractionResponseBuilder()
+            b.Content <-
+                [
+                    sprintf "Вызовите комманду `.%s` еще раз, потому что-то пошло не так:" Parser.CommandNames.toFish
+                    "```"
+                    sprintf "%s" errMsg
+                    "```"
+                ] |> String.concat "\n"
+            b.IsEphemeral <- true
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+
+        if e.Message.Author.Id = client.CurrentUser.Id then
+            match Interaction.ComponentState.TryDeserialize messageTypeId e.Id with
+            | Some res ->
+                match res with
+                | Ok (data: BaitComponentState) ->
+                    match data.ComponentId with
+                    | ComponentId.BaitChoiceId ->
+                        if data.Data.OwnerId = e.User.Id then
+                            match e.Values with
+                            | [|rawSelectedBaitKey|] ->
+                                match ItemId.tryDeserialize rawSelectedBaitKey with
+                                | Ok selectedBait ->
+                                    next selectedBait
+                                | Error errMsg ->
+                                    sprintf "ItemId.tryDeserialize return error:\n%A" errMsg
+                                    |> restartComponent
+                            | xs ->
+                                sprintf "expected e.Values = [|rawSelectedBaitKey|] but %A" xs
+                                |> restartComponent
+                        else
+                            let b = Entities.DiscordInteractionResponseBuilder()
+                            b.Content <-
+                                sprintf "Здесь открывает сундук <@%d>. Начните открывать сундук сами командой `.%s`"
+                                    data.Data.OwnerId
+                                    Parser.CommandNames.openUp
+                            b.IsEphemeral <- true
+                            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                    | x ->
+                        sprintf "expected data.ComponentId but %A" x
+                        |> restartComponent
+
+                    true
+                | Error errMsg ->
+                    restartComponent errMsg
+
+                    true
+            | _ -> false
+        else
+            false
+
 let r = new System.Random()
 
 module Actions =
@@ -471,6 +579,123 @@ module Actions =
 
         state
 
+    let openUp baitId send setImage (userId: UserId) (state: State) =
+        let items = state.Items
+        let itemsCount = items.Cache.Count
+
+        let getItem itemId next =
+            match ItemsDb.Items.tryFindById itemId items with
+            | Some bait ->
+                next bait
+            | None ->
+                let msg = sprintf "Предмет %A в игре не найден. Пожалуйста, свяжитесь с администратором." itemId
+                send msg
+
+                state
+
+        let getChestLoot (item: ItemsDb.ItemT) next =
+            match item.Data.AsChest with
+            | Some loot ->
+                next loot
+            | None ->
+                sprintf "<@%d>, этот предмет нельзя открыть." userId
+                |> send
+
+                state
+
+        let sendDontHaveItem (item: ItemsDb.ItemT) =
+            sprintf "<@%d>, в инвентаре нет \"%s\"" userId item.Data.Name
+            |> send
+
+        let getPlayer (item: ItemsDb.ItemT) next =
+            match Players.GuildData.tryFindById userId state.Players with
+            | Some player -> next player
+            | None ->
+                sendDontHaveItem item
+                state
+
+        let getInventoryItem (item: ItemsDb.ItemT) (player: Players.Player) next =
+            match Inventory.tryFindById item.Id player.Data.Inventory with
+            | Some inv -> next inv
+            | None ->
+                sendDontHaveItem item
+                state
+
+        let isEnoughItems itemName (invItem: InventoryItem) next =
+            if invItem.Count > 0 then
+                next ()
+            else
+                sprintf "<@%d>, в инвентаре не хватает \"%s\"." userId itemName
+                |> send
+                state
+
+        let sendCatched (newCatchSetting: option<{| TotalCatchesCount: int |}>) (catch: ItemsDb.ItemT) =
+            catch.Data.ImageUrl
+            |> Option.iter (fun image ->
+                setImage image
+            )
+
+            [
+                sprintf "В сундуке оказалось \"%s\"!" catch.Data.Name
+
+                let description = catch.Data.Description
+                if not (System.String.IsNullOrEmpty description) then
+                    ""
+                    description
+
+                match newCatchSetting with
+                | Some newCatchSetting ->
+                    ""
+                    createProgressMessage newCatchSetting.TotalCatchesCount itemsCount
+                | None -> ()
+            ]
+            |> String.concat "\n"
+            |> send
+
+        getItem baitId <| fun chest ->
+        getChestLoot chest <| fun loot ->
+        getPlayer chest <| fun player ->
+        getInventoryItem chest player <| fun invItem ->
+        isEnoughItems chest.Data.Name invItem <| fun () ->
+
+        // remove the chest from the inventory
+        let inventory =
+            player.Data.Inventory
+            |> Inventory.update chest.Id (fun count -> count - 1)
+
+        let catchId = loot.[r.Next(0, loot.Length)]
+
+        let inventory: Inventory =
+            inventory
+            |> Inventory.update catchId ((+) 1)
+
+        let catches, newCatchSetting =
+            if Set.contains catchId player.Data.Catches then
+                player.Data.Catches, None
+            else
+                let catches = player.Data.Catches |> Set.add catchId
+                let res = {| TotalCatchesCount = catches.Count |}
+                catches, Some res
+
+        let state =
+            { state with
+                Players =
+                    state.Players
+                    |> Players.GuildData.set
+                        userId
+                        (fun p ->
+                            { p with
+                                Inventory = inventory
+                                Catches = catches
+                            }
+                        )
+            }
+
+        getItem catchId <| fun catch ->
+        sendCatched newCatchSetting catch
+
+        state
+
 let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: State) =
     let send msg =
         let embed = Entities.DiscordEmbedBuilder()
@@ -599,137 +824,56 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: ActionReq) (state: 
 
         state
 
-    | OpenUp itemName ->
+    | OpenUp baitName ->
         awaiti <| e.Channel.TriggerTypingAsync()
 
-        let embed = Entities.DiscordEmbedBuilder()
-        let setImage imgUrl = embed.ImageUrl <- imgUrl
-        let send msg =
-            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-            embed.Description <- msg
+        match baitName with
+        | Some baitName ->
+            let embed = Entities.DiscordEmbedBuilder()
+            let setImage imgUrl = embed.ImageUrl <- imgUrl
+            let send msg =
+                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                embed.Description <- msg
 
-            let b = Entities.DiscordMessageBuilder()
-            b.Embed <- embed.Build()
+                let b = Entities.DiscordMessageBuilder()
+                b.Embed <- embed.Build()
 
-            awaiti <| e.Channel.SendMessageAsync b
+                awaiti <| e.Channel.SendMessageAsync b
 
-        let userId = e.Author.Id
+            getItemByName baitName <| fun bait ->
+                Actions.openUp bait.Id send setImage e.Author.Id state
 
-        let items = state.Items
-        let itemsCount = items.Cache.Count
+        | None ->
+            let player =
+                match Players.GuildData.tryFindById e.Author.Id state.Players with
+                | Some player -> player.Data
+                | None -> Players.MainData.Empty
 
-        let getItem itemId next =
-            match ItemsDb.Items.tryFindById itemId items with
-            | Some bait ->
-                next bait
-            | None ->
-                let msg = sprintf "Предмет %A в игре не найден. Пожалуйста, свяжитесь с администратором." itemId
-                send msg
-
-                state
-
-        let getChestLoot (item: ItemsDb.ItemT) next =
-            match item.Data.AsChest with
-            | Some loot ->
-                next loot
-            | None ->
-                sprintf "<@%d>, этот предмет нельзя открыть." userId
-                |> send
-
-                state
-
-        let sendDontHaveItem (item: ItemsDb.ItemT) =
-            sprintf "<@%d>, в инвентаре нет \"%s\"" userId item.Data.Name
-            |> send
-
-        let getPlayer (item: ItemsDb.ItemT) next =
-            match Players.GuildData.tryFindById userId state.Players with
-            | Some player -> next player
-            | None ->
-                sendDontHaveItem item
-                state
-
-        let getInventoryItem (item: ItemsDb.ItemT) (player: Players.Player) next =
-            match Inventory.tryFindById item.Id player.Data.Inventory with
-            | Some inv -> next inv
-            | None ->
-                sendDontHaveItem item
-                state
-
-        let isEnoughItems itemName (invItem: InventoryItem) next =
-            if invItem.Count > 0 then
-                next ()
-            else
-                sprintf "<@%d>, в инвентаре не хватает \"%s\"." userId itemName
-                |> send
-                state
-
-        let sendCatched (newCatchSetting: option<{| TotalCatchesCount: int |}>) (catch: ItemsDb.ItemT) =
-            catch.Data.ImageUrl
-            |> Option.iter (fun image ->
-                setImage image
-            )
-
-            [
-                sprintf "В сундуке оказалось \"%s\"!" catch.Data.Name
-
-                let description = catch.Data.Description
-                if not (System.String.IsNullOrEmpty description) then
-                    ""
-                    description
-
-                match newCatchSetting with
-                | Some newCatchSetting ->
-                    ""
-                    createProgressMessage newCatchSetting.TotalCatchesCount itemsCount
-                | None -> ()
-            ]
-            |> String.concat "\n"
-            |> send
-
-        getItemByName itemName <| fun chest ->
-        getChestLoot chest <| fun loot ->
-        getPlayer chest <| fun player ->
-        getInventoryItem chest player <| fun invItem ->
-        isEnoughItems chest.Data.Name invItem <| fun () ->
-
-        // remove the chest from the inventory
-        let inventory =
-            player.Data.Inventory
-            |> Inventory.update chest.Id (fun count -> count - 1)
-
-        let catchId = loot.[r.Next(0, loot.Length)]
-
-        let inventory: Inventory =
-            inventory
-            |> Inventory.update catchId ((+) 1)
-
-        let catches, newCatchSetting =
-            if Set.contains catchId player.Data.Catches then
-                player.Data.Catches, None
-            else
-                let catches = player.Data.Catches |> Set.add catchId
-                let res = {| TotalCatchesCount = catches.Count |}
-                catches, Some res
-
-        let state =
-            { state with
-                Players =
-                    state.Players
-                    |> Players.GuildData.set
-                        userId
-                        (fun p ->
-                            { p with
-                                Inventory = inventory
-                                Catches = catches
-                            }
+            let chests =
+                player.Inventory
+                |> Seq.choose (fun (KeyValue(itemId, invItem)) ->
+                    if invItem.Count > 0 then
+                        ItemsDb.Items.tryFindById itemId state.Items
+                        |> Option.bind (fun item ->
+                            if ItemsDb.Item.isChest item then
+                                Some item
+                            else
+                                None
                         )
-            }
+                    else
+                        None
+                )
+                |> List.ofSeq
 
-        getItem catchId <| fun catch ->
-        sendCatched newCatchSetting catch
+            if List.isEmpty chests then
+                sprintf "<@%d>, нет доступных сундуков для открытия." e.Author.Id
+                |> send
 
-        state
+                state
+            else
+                ChestChoiceUi.init chests e
+
+                state
 
 let reduce (msg: Msg) (state: State): State =
     match msg with
@@ -828,6 +972,18 @@ let reduce (msg: Msg) (state: State): State =
 
         Actions.toFish baitId send setImage e.User.Id state
 
+    | OpenUpHandle(e, baitId) ->
+        let embed = Entities.DiscordEmbedBuilder()
+        let setImage imgUrl = embed.ImageUrl <- imgUrl
+        let send msg =
+            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+            embed.Description <- msg
+            let b = Entities.DiscordInteractionResponseBuilder()
+            b.AddEmbed(embed.Build()) |> ignore
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+
+        Actions.openUp baitId send setImage e.User.Id state
+
     | GetState r ->
         r.Reply state
 
@@ -868,4 +1024,7 @@ let componentInteractionCreateHandle client e =
         e
     || BaitChoiceUi.handle client e (fun st ->
         m.Post (ToFishHandle(e, st))
+    )
+    || ChestChoiceUi.handle client e (fun st ->
+        m.Post (OpenUpHandle(e, st))
     )

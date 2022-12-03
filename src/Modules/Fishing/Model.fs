@@ -7,6 +7,16 @@ open Types
 open Db
 
 type ItemId = System.Guid
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module ItemId =
+    let serialize (id: ItemId) =
+        id.ToString()
+
+    let tryDeserialize (str: string) =
+        match System.Guid.TryParse str with
+        | true, x -> Ok (x: ItemId)
+        | false, _ -> Error ""
 
 module ItemsDb =
     type ItemData =
@@ -53,7 +63,14 @@ module ItemsDb =
             CommonDb.Data.create id Version.V0 data
 
         let isBait (item: ItemT) =
-            Option.isSome item.Data.AsBait
+            match item.Data.AsBait with
+            | Some xs -> not (Array.isEmpty xs)
+            | None -> false
+
+        let isChest (item: ItemT) =
+            match item.Data.AsChest with
+            | Some xs -> not (Array.isEmpty xs)
+            | None -> false
 
         let ofEditorItem (item: Editor.Types.Item): ItemT =
             let x =
