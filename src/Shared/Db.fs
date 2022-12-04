@@ -48,7 +48,7 @@ module CommonDb =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module Collection =
-        let replace (newData: Data<'Id, 'Version, 'MainData>) (collection: Collection) =
+        let mkReplace (newData: Data<'Id, 'Version, 'MainData>) =
             let doc = newData.ToBsonDocument()
 
             let value =
@@ -61,6 +61,11 @@ module CommonDb =
             let i = new BsonDocument(el)
 
             let filter = FilterDefinition.op_Implicit(i)
+
+            filter, doc
+
+        let replace (newData: Data<'Id, 'Version, 'MainData>) (collection: Collection) =
+            let filter, doc = mkReplace newData
 
             collection.ReplaceOne(filter, doc)
             |> ignore
@@ -76,6 +81,23 @@ module CommonDb =
             collection.InsertOne(d)
 
             x
+
+        let bulkWrite (datas: (WriteModelType * Data<'Id, 'Version, 'MainData>) seq) (collection: Collection) =
+            datas
+            |> Seq.map (fun (writeModelType, newData) ->
+                match writeModelType with
+                | WriteModelType.ReplaceOne ->
+                    let filter, doc = mkReplace newData
+
+                    ReplaceOneModel(filter, doc) :> WriteModel<_>
+                | WriteModelType.InsertOne ->
+                    let doc = newData.ToBsonDocument()
+
+                    InsertOneModel(doc) :> WriteModel<_>
+                | _ ->
+                    failwithf "%A write model not implemented!" writeModelType
+            )
+            |> collection.BulkWrite
 
         let removeById id (collection: Collection) =
             let el = BsonElement("_id", BsonValue.Create(id))
@@ -168,6 +190,33 @@ module CommonDb =
 
                             Map.add id x cache
             }
+
+        let sets (items: Data<'Id, 'Version, 'MainData> seq) (db: GuildData<'Id, 'Version, 'MainData>) =
+            let cache = db.Cache
+            let xs, cache =
+                items
+                |> Seq.mapFold
+                    (fun cache item ->
+                        let id: 'Id = item.Id
+                        let writeModelType =
+                            match Map.tryFind id cache with
+                            | Some _ ->
+                                WriteModelType.ReplaceOne
+
+                            | None ->
+                                WriteModelType.InsertOne
+
+                        (writeModelType, item), Map.add id item cache
+                    )
+                    cache
+
+            Collection.bulkWrite xs db.Collection |> ignore
+
+            {
+                db with
+                    Cache = cache
+            }
+
 
         let drop (db: IMongoDatabase) (guildWelcomeSetting: GuildData<'Id, 'Version, 'MainData>) =
             let collectionName = guildWelcomeSetting.Collection.CollectionNamespace.CollectionName

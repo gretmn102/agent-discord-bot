@@ -126,19 +126,8 @@ module ItemsDb =
                 items
 
         let setItems (items: ItemsArray) (itemsDb: Items): Items =
-            items
-            |> Array.fold
-                (fun items item ->
-                    let rec f () =
-                        try
-                            set (Some item.Id) (fun _ -> item.Data) items
-                        with e ->
-                            printfn "setItems error:\n%s" e.Message
-                            System.Threading.Thread.Sleep 500
-                            f ()
-                    f ()
-                )
-                itemsDb
+            itemsDb
+            |> CommonDb.GuildData.sets items
 
         let drop (db: IMongoDatabase) (items: Items) =
             CommonDb.GuildData.drop db items
