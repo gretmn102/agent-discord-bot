@@ -5,7 +5,6 @@ open DSharpPlus
 
 open Types
 open Extensions
-open Model
 
 type SettingMsg =
     | SetEventSetting of RoleId * bool
@@ -16,7 +15,7 @@ type Msg =
     | NewMessageHandle of EventArgs.MessageCreateEventArgs
 
 type State = {
-    Setting: WomensDaySetting.GuildWomensDaySetting
+    Setting: Model.Guilds
 }
 
 module Parser =
@@ -43,11 +42,11 @@ module Parser =
         >>= fun msg ->
             preturn (fun x -> f x msg)
 
-let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: WomensDaySetting.GuildWomensDaySetting) =
+let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: Model.Guilds) =
     match msg with
     | GetEventSetting ->
         let message =
-            match Map.tryFind e.Guild.Id state with
+            match Model.Guilds.tryFindById e.Guild.Id state with
             | Some data ->
                 let b = Entities.DiscordMessageBuilder()
                 let embed = Entities.DiscordEmbedBuilder()
@@ -85,28 +84,20 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: WomensDaySet
             await (e.Channel.SendMessageAsync("Processing..."))
 
         if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-            let newData =
-                match Map.tryFind guild.Id state with
-                | Some setting ->
-                    let newData =
-                        { setting with
+            let settings =
+                state
+                |> Model.Guilds.set
+                    guild.Id
+                    (fun settings ->
+                        { settings with
                             FilteringRoleId = filteringRoleId
                             IsEnabled = isEnabled
                         }
-
-                    WomensDaySetting.replace newData
-
-                    newData
-
-                | None ->
-                    WomensDaySetting.insert (guild.Id, filteringRoleId, isEnabled)
-
-            let state =
-                Map.add guild.Id newData state
+                    )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional "Done"))
 
-            state
+            settings
 
         else
             awaiti (replyMessage.ModifyAsync(Entities.Optional "You don't have permission to manage roles"))
@@ -125,13 +116,13 @@ let reduce (msg: Msg) (state: State): State =
     | NewMessageHandle e ->
         if e.Author.IsBot then ()
         else
-            match Map.tryFind e.Guild.Id state.Setting with
+            match Model.Guilds.tryFindById e.Guild.Id state.Setting with
             | Some setting ->
-                if setting.IsEnabled then
+                if setting.Data.IsEnabled then
                     let guildMember = getGuildMember e.Guild e.Author
                     let existsRole =
                         guildMember.Roles
-                        |> Seq.exists (fun x -> x.Id = setting.FilteringRoleId)
+                        |> Seq.exists (fun x -> x.Id = setting.Data.FilteringRoleId)
 
                     if existsRole then
                         let flower =
@@ -152,7 +143,7 @@ let reduce (msg: Msg) (state: State): State =
 
 let m =
     let init = {
-        Setting = WomensDaySetting.getAll ()
+        Setting = Model.Guilds.init "womensDaySetting" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->

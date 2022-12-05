@@ -2,42 +2,94 @@ module Events.Model
 open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
+open MongoDB.Bson.Serialization.Attributes
 
 open Types
+open Db
 
-module WomensDaySetting =
-    type WomensDaySettingData =
+[<BsonIgnoreExtraElements>]
+type DataPreVersion =
+    {
+        Id: ObjectId
+        GuildId: GuildId
+        FilteringRoleId: RoleId
+        IsEnabled: bool
+    }
+
+type GuildData =
+    {
+        FilteringRoleId: RoleId
+        IsEnabled: bool
+    }
+    static member Init filteringRoleId isEnabled =
         {
-            mutable Id: ObjectId
-            mutable GuildId: GuildId
-            mutable FilteringRoleId: RoleId
-            mutable IsEnabled: bool
+            FilteringRoleId = filteringRoleId
+            IsEnabled = isEnabled
         }
-        static member Init(guildId, filteringRoleId, isEnabled) =
-            {
-                Id = ObjectId.Empty
-                GuildId = guildId
-                FilteringRoleId = filteringRoleId
-                IsEnabled = isEnabled
-            }
+    static member Empty =
+        {
+            FilteringRoleId = 0UL
+            IsEnabled = false
+        }
+    static member Serialize (data: GuildData) =
+        data |> Json.ser
+    static member Deserialize json =
+        try
+            Ok (Json.des json)
+        with e ->
+            Error e.Message
 
-    let table = Db.database.GetCollection<WomensDaySettingData>("womensDaySetting")
+type Version =
+    | V0 = 0
 
-    type GuildWomensDaySetting = Map<GuildId, WomensDaySettingData>
+type Id = UserId
 
-    let getAll (): GuildWomensDaySetting =
-        table.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.GuildId x st
+type Guild = CommonDb.Data<Id, Version, GuildData>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module Guild =
+    let create id data: Guild =
+        CommonDb.Data.create id Version.V0 data
+
+type Guilds = CommonDb.GuildData<Id, Version, GuildData>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module Guilds =
+    let createData id =
+        Guild.create id GuildData.Empty
+
+    let init collectionName (db: IMongoDatabase): Guilds =
+        CommonDb.GuildData.init
+            createData
+            (fun ver doc ->
+                match ver with
+                | Some ver ->
+                    match ver with
+                    | Version.V0 ->
+                        None, Serialization.BsonSerializer.Deserialize<Guild>(doc)
+                    | x ->
+                        failwithf "Version = %A not implemented" x
+                | None ->
+                    let oldValue =
+                        Serialization.BsonSerializer.Deserialize<DataPreVersion>(doc)
+                    let newValue =
+                        GuildData.Init oldValue.FilteringRoleId oldValue.IsEnabled
+                        |> Guild.create oldValue.GuildId
+
+                    Some oldValue.Id, newValue
             )
-            Map.empty
+            collectionName
+            db
 
-    let replace (newData: WomensDaySettingData) =
-        table.ReplaceOne((fun x -> x.Id = newData.Id), newData)
-        |> ignore
+    let set userId setAdditionParams (guildData: Guilds) =
+        CommonDb.GuildData.set
+            createData
+            userId
+            setAdditionParams
+            guildData
 
-    let insert (guildId, filteringRoleId, isEnabled) =
-        let x = WomensDaySettingData.Init(guildId, filteringRoleId, isEnabled)
-        table.InsertOne(x)
-        x
+    let drop (db: IMongoDatabase) (items: Guilds) =
+        CommonDb.GuildData.drop db items
+
+    let tryFindById id (items: Guilds): Guild option =
+        CommonDb.GuildData.tryFind id items
