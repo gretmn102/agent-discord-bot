@@ -48,19 +48,25 @@ module CommonDb =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module Collection =
+        let createFilterById (id: 'Id) =
+            let convertIdToBsonElement (id: 'Id) =
+                let value =
+                    if Reflection.FSharpType.IsRecord typeof<'Id> then
+                        id.ToBsonDocument() :> BsonValue
+                    else
+                        BsonValue.Create(id)
+
+                BsonElement("_id", value)
+
+            let el = convertIdToBsonElement id
+            let i = new BsonDocument(el)
+
+            FilterDefinition.op_Implicit(i)
+
         let mkReplace (newData: Data<'Id, 'Version, 'MainData>) =
             let doc = newData.ToBsonDocument()
 
-            let value =
-                if Reflection.FSharpType.IsRecord typeof<'Id> then
-                    newData.Id.ToBsonDocument() :> BsonValue
-                else
-                    BsonValue.Create(newData.Id)
-
-            let el = BsonElement("_id", value)
-            let i = new BsonDocument(el)
-
-            let filter = FilterDefinition.op_Implicit(i)
+            let filter = createFilterById newData.Id
 
             filter, doc
 
@@ -99,13 +105,17 @@ module CommonDb =
             )
             |> collection.BulkWrite
 
-        let removeById id (collection: Collection) =
-            let el = BsonElement("_id", BsonValue.Create(id))
-            let i = new BsonDocument(el)
-
-            let filter = FilterDefinition.op_Implicit(i)
-
+        let removeById (id: 'Id) (collection: Collection) =
+            let filter = createFilterById id
             collection.DeleteOne filter
+
+        let removeByIds (ids: 'Id seq) (collection: Collection) =
+            ids
+            |> Seq.map (fun id ->
+                let filter = createFilterById id
+                DeleteOneModel(filter) :> WriteModel<_>
+            )
+            |> collection.BulkWrite
 
     type GuildData<'Id, 'Version, 'MainData when 'Id : comparison and 'Version: enum<int>> =
         {
@@ -228,6 +238,32 @@ module CommonDb =
 
         let tryFind id (guildWelcomeSetting: GuildData<'Id, 'Version, 'MainData>) =
             Map.tryFind id guildWelcomeSetting.Cache
+
+        let removeById (id: 'Id) (db: GuildData<'Id, 'Version, 'MainData>) =
+            let deleteResult =
+                db.Collection
+                |> Collection.removeById id
+
+            let db =
+                { db with
+                    Cache = Map.remove id db.Cache
+                }
+
+            deleteResult, db
+
+        let removeByIds (ids: 'Id seq) (db: GuildData<'Id, 'Version, 'MainData>) =
+            let deleteResult =
+                db.Collection
+                |> Collection.removeByIds ids
+
+            let db =
+                { db with
+                    Cache =
+                        ids
+                        |> Seq.fold (fun st x -> Map.remove x st) db.Cache
+                }
+
+            deleteResult, db
 
 let login = getEnvironmentVariable "BotDbL"
 let password = getEnvironmentVariable "BotDbP"
