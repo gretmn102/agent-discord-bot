@@ -126,7 +126,7 @@ module CommonDb =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module GuildData =
-        let inline init createData convertToVersion collectionName (db: IMongoDatabase): GuildData<'Id, 'Version, 'MainData> =
+        let inline init (createData: 'Id -> Data<'Id, ^Version, 'MainData>) convertToVersion collectionName (db: IMongoDatabase): GuildData<'Id, ^Version, 'MainData> =
             let collection = db.GetCollection<BsonDocument>(collectionName)
 
             if IMongoCollection.isEmpty collection then
@@ -137,43 +137,54 @@ module CommonDb =
             else
                 {
                     Cache =
-                        collection.Find(fun x -> true).ToEnumerable()
-                        |> Seq.fold
-                            (fun st doc ->
-                                let ver =
-                                    // System.Collections.Generic.KeyNotFoundException: Element 'Version' not found.
-                                    let version =
-                                        try
-                                            Some doc.["Version"]
-                                        with
-                                            | :? System.Collections.Generic.KeyNotFoundException ->
-                                                None
+                        let (deleteRequests, insertRequest), st =
+                            collection.Find(fun x -> true).ToEnumerable()
+                            |> Seq.fold
+                                (fun ((deleteRequests, insertRequest) as request, st) doc ->
+                                    let ver =
+                                        // System.Collections.Generic.KeyNotFoundException: Element 'Version' not found.
+                                        let version =
+                                            try
+                                                Some doc.["Version"]
+                                            with
+                                                | :? System.Collections.Generic.KeyNotFoundException ->
+                                                    None
 
-                                    version
-                                    |> Option.map (fun x ->
-                                        if x.IsInt32 then
-                                            enum<'Version> x.AsInt32
-                                        else
-                                            failwithf "Version not int32 but %A" x
-                                    )
+                                        version
+                                        |> Option.map (fun x ->
+                                            if x.IsInt32 then
+                                                enum< ^Version> x.AsInt32
+                                            else
+                                                failwithf "Version not int32 but %A" x
+                                        )
 
-                                let oldValueId, x =
-                                    convertToVersion ver doc
+                                    let oldValueId, x =
+                                        convertToVersion ver doc
 
-                                let x =
                                     match oldValueId with
-                                    | None -> x
-                                    | Some id ->
-                                        collection
-                                        |> Collection.removeById id
-                                        |> ignore
+                                    | None ->
+                                        request, Map.add x.Id x st
+                                    | Some (id: 'OldId) ->
+                                        let insertRequest =
+                                            (WriteModelType.InsertOne, createData x.Id) :: insertRequest
 
-                                        collection
-                                        |> Collection.insert createData x.Id (fun _ -> x.Data)
+                                        let deleteRequests =
+                                            id :: deleteRequests
 
-                                Map.add x.Id x st
-                            )
-                            Map.empty
+                                        (deleteRequests, insertRequest), Map.add x.Id x st
+                                )
+                                (([], []), Map.empty)
+
+                        if not <| List.isEmpty deleteRequests then
+                            let _ = Collection.removeByIds deleteRequests collection
+                            ()
+
+                        if not <| List.isEmpty insertRequest then
+                            let _ = Collection.bulkWrite insertRequest collection
+                            ()
+
+                        st
+
                     Collection = collection
                 }
 
