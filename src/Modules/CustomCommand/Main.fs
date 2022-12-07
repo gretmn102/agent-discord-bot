@@ -10,7 +10,7 @@ type CommandManagementRequest =
     | Set of json: DataOrUrl option
     | Print
 
-type CommandRequest = Model.CommandT * UserId option
+type CommandRequest = Model.Command * UserId option
 
 type Request =
     | CommandManagementRequest of CommandManagementRequest
@@ -30,7 +30,7 @@ module CommandsParser =
 
     type 'a Parser = Parser<'a, unit>
 
-    let create (commands: Map<Model.CommandId, Model.CommandT>) =
+    let create (commands: Map<Model.CommandId, Model.Command>) =
         let commandParser =
             commands
             |> Seq.collect (fun (KeyValue(commandId, x)) ->

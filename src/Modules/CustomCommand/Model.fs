@@ -95,31 +95,15 @@ type Version =
     | V0 = 0
     | V1 = 1
 
-type Command<'Data> =
-    {
-        Id: CommandId
-        Version: Version
-        Data: 'Data
-    }
+/// Current version of item
+type Command = CommonDb.Data<CommandId, Version, CommandData>
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module Command =
-    let create id (data: 'ItemData) =
-        {
-            Id = id
-            Version = Version.V0
-            Data = data
-        }
-
-/// Current version of item
-type CommandT = CommonDb.Data<CommandId, Version, CommandData>
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-[<RequireQualifiedAccess>]
-module CommandT =
-    let create id data: CommandT =
+    let create id data: Command =
         CommonDb.Data.create id Version.V1 data
 
-type CommandsArray = CommandT []
+type CommandsArray = Command []
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module CommandsArray =
@@ -138,7 +122,7 @@ type Commands = CommonDb.GuildData<CommandId, Version, CommandData>
 [<RequireQualifiedAccess>]
 module Commands =
     let createData id =
-        CommandT.create id CommandData.empty
+        Command.create id CommandData.empty
 
     let init collectionName (db: IMongoDatabase): Commands =
         CommonDb.GuildData.init
@@ -148,7 +132,7 @@ module Commands =
                 | Some ver ->
                     match ver with
                     | Version.V1 ->
-                        None, Serialization.BsonSerializer.Deserialize<CommandT>(doc)
+                        None, Serialization.BsonSerializer.Deserialize<Command>(doc)
                     | Version.V0 ->
                         let oldItem = Serialization.BsonSerializer.Deserialize<CommonDb.Data<CommandId, Version, CommandDataV0>>(doc)
 
@@ -171,8 +155,8 @@ module Commands =
                                 x.OnOther
                             )
 
-                        let newItem: CommandT =
-                            CommandT.create
+                        let newItem: Command =
+                            Command.create
                                 oldItem.Id
                                 (CommandData.create oldItem.Data.Names onSelfs onBots onOthers)
 
@@ -206,5 +190,5 @@ module Commands =
     let drop (db: IMongoDatabase) (items: Commands) =
         CommonDb.GuildData.drop db items
 
-    let tryFindById id (items: Commands): CommandT option =
+    let tryFindById id (items: Commands): Command option =
         Map.tryFind id items.Cache
