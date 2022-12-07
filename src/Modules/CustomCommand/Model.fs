@@ -19,7 +19,7 @@ type Message =
         Embed: Embed
     }
 
-type Effect =
+type EffectV0 =
     {
         OnSelf: Message
         OnBot: Message
@@ -41,38 +41,59 @@ module CommandId =
         | true, x -> Ok x
         | false, _ -> Error ""
 
-type CommandData =
+type CommandDataV0 =
     {
         Names: string []
-        RandomEffects: Effect []
+        RandomEffects: EffectV0 []
     }
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
-module CommandData =
+module CommandDataV0 =
     let empty =
         {
             Names = [||]
             RandomEffects = [||]
         }
 
-    let create names randomEffects =
+type CommandData =
+    {
+        Names: string []
+        OnSelf: Message []
+        OnBot: Message []
+        OnOther: Message []
+    }
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module CommandData =
+    let empty: CommandData =
         {
-            Names = names
-            RandomEffects = randomEffects
+            Names = [||]
+            OnSelf = [||]
+            OnBot = [||]
+            OnOther = [||]
         }
 
-    let serialize (data: CommandData) =
+    let create names onSelf onBot onOther: CommandData =
+        {
+            Names = names
+            OnSelf = onSelf
+            OnBot = onBot
+            OnOther = onOther
+        }
+
+    let serialize (data: CommandDataV0) =
         data |> Json.ser
 
     let deserialize json =
         try
-            let data: CommandData = Json.des json
+            let data: CommandDataV0 = Json.des json
             Ok data
         with e ->
             Error e.Message
 
 type Version =
     | V0 = 0
+    | V1 = 1
 
 type Command<'Data> =
     {
@@ -96,7 +117,7 @@ type CommandT = CommonDb.Data<CommandId, Version, CommandData>
 [<RequireQualifiedAccess>]
 module CommandT =
     let create id data: CommandT =
-        CommonDb.Data.create id Version.V0 data
+        CommonDb.Data.create id Version.V1 data
 
 type CommandsArray = CommandT []
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -126,8 +147,36 @@ module Commands =
                 match ver with
                 | Some ver ->
                     match ver with
-                    | Version.V0 ->
+                    | Version.V1 ->
                         None, Serialization.BsonSerializer.Deserialize<CommandT>(doc)
+                    | Version.V0 ->
+                        let oldItem = Serialization.BsonSerializer.Deserialize<CommonDb.Data<CommandId, Version, CommandDataV0>>(doc)
+
+                        let randomEffects =
+                            oldItem.Data.RandomEffects
+
+                        let onSelfs =
+                            randomEffects
+                            |> Array.map (fun x ->
+                                x.OnSelf
+                            )
+                        let onBots =
+                            randomEffects
+                            |> Array.map (fun x ->
+                                x.OnBot
+                            )
+                        let onOthers =
+                            randomEffects
+                            |> Array.map (fun x ->
+                                x.OnOther
+                            )
+
+                        let newItem: CommandT =
+                            CommandT.create
+                                oldItem.Id
+                                (CommandData.create oldItem.Data.Names onSelfs onBots onOthers)
+
+                        Some oldItem.Id, newItem
                     | x ->
                         failwithf "Version = %A not implemented" x
                 | None ->

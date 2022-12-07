@@ -102,10 +102,6 @@ let reduce (req: Handler) (state: State) =
             | Some req ->
                 match req with
                 | CommandRequest(command, whomId) ->
-                    let effect =
-                        let effects = command.Data.RandomEffects
-                        effects.[r.Next(0, effects.Length)]
-
                     let send whomId =
                         let whom =
                             whomId
@@ -126,7 +122,8 @@ let reduce (req: Handler) (state: State) =
 
                         match whom with
                         | Ok whom ->
-                            let message =
+                            let effects =
+                                let effect = command.Data
                                 match whom with
                                 | None ->
                                     effect.OnSelf
@@ -140,6 +137,8 @@ let reduce (req: Handler) (state: State) =
                                         effect.OnBot
                                     else
                                         effect.OnOther
+
+                            let message = effects.[r.Next(0, effects.Length)]
 
                             let substitions =
                                 MessageTemplate.Substitions.create
