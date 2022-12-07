@@ -268,7 +268,7 @@ let reduce (req: Handler) (state: State) =
             state
 
 let m =
-    let commands = Model.Commands.init Db.database
+    let commands = Model.Commands.init "customCommands" Db.database
     let init = {
         Commands = commands
         CommandsParser = CommandsParser.create commands.Cache

@@ -5,6 +5,7 @@ open MongoDB.Driver
 open MongoDB.Bson
 
 open Types
+open Db
 
 type Embed =
     {
@@ -29,6 +30,9 @@ type CommandId = System.Guid
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module CommandId =
+    let create () =
+        System.Guid.NewGuid()
+
     let serialize (id: CommandId) =
         id.ToString()
 
@@ -87,7 +91,12 @@ module Command =
         }
 
 /// Current version of item
-type CommandT = Command<CommandData>
+type CommandT = CommonDb.Data<CommandId, Version, CommandData>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module CommandT =
+    let create id data: CommandT =
+        CommonDb.Data.create id Version.V0 data
 
 type CommandsArray = CommandT []
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -103,133 +112,50 @@ module CommandsArray =
         with e ->
             Error e.Message
 
-type Collection = IMongoCollection<BsonDocument>
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-[<RequireQualifiedAccess>]
-module Collection =
-    let replace (newData: CommandT) (collection: Collection) =
-        let doc = newData.ToBsonDocument()
-
-        let el = BsonElement("_id", BsonValue.Create(newData.Id))
-        let i = new BsonDocument(el)
-
-        let filter = FilterDefinition.op_Implicit(i)
-
-        collection.ReplaceOne(filter, doc)
-        |> ignore
-
-    let insert id setAdditionParams (collection: Collection): Command<'ItemData> =
-        let id =
-            id
-            |> Option.defaultWith (fun () ->
-                System.Guid.NewGuid()
-            )
-
-        let x = Command.create id (setAdditionParams CommandData.empty)
-        collection.InsertOne(x.ToBsonDocument())
-        x
-
-type Commands =
-    {
-        Cache: Map<CommandId, CommandT>
-        Collection: Collection
-    }
-
+type Commands = CommonDb.GuildData<CommandId, Version, CommandData>
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module Commands =
-    let collectionName = "customCommands"
+    let createData id =
+        CommandT.create id CommandData.empty
 
-    let init (db: IMongoDatabase): Commands =
-        let collection = db.GetCollection<BsonDocument>(collectionName)
-
-        if IMongoCollection.isEmpty collection then
-            let item =
-                {
-                    Cache = Map.empty
-                    Collection = collection
-                }
-
-            item
-        else
-            {
-                Cache =
-                    collection.Find(fun x -> true).ToEnumerable()
-                    |> Seq.fold
-                        (fun st x ->
-                            let ver =
-                                match x.["Version"] with
-                                | null -> failwithf "`Version` but\n%A" x
-                                | x ->
-                                    if x.IsInt32 then
-                                        enum<Version> x.AsInt32
-                                    else
-                                        failwithf "Version not int32 but %A" x
-                            let x =
-                                match ver with
-                                | Version.V0 ->
-                                    Serialization.BsonSerializer.Deserialize<CommandT>(x)
-                                | x ->
-                                    failwithf "Version = %A not implemented" x
-
-                            Map.add x.Id x st
-                        )
-                        Map.empty
-                Collection = collection
-            }
-
-    let set itemIdOpt setAdditionParams (items: Commands) =
-        let cache = items.Cache
-
-        {
-            items with
-                Cache =
-                    let insertNew id =
-                        let item =
-                            items.Collection
-                            |> Collection.insert id setAdditionParams
-
-                        Map.add item.Id item cache
-
-                    match itemIdOpt with
-                    | Some itemId ->
-                        match Map.tryFind itemId cache with
-                        | Some item ->
-                            let item =
-                                { item with
-                                    Data = setAdditionParams item.Data
-                                }
-
-                            Collection.replace item items.Collection
-
-                            Map.add itemId item cache
-                        | None ->
-                            insertNew (Some itemId)
-                    | None ->
-                        insertNew None
-        }
-
-    let sets (items: CommandsArray) (db: Commands): Commands =
-        items
-        |> Array.fold
-            (fun items item ->
-                let rec f () =
-                    try
-                        set (Some item.Id) (fun _ -> item.Data) items
-                    with e ->
-                        printfn "sets error:\n%s" e.Message
-                        System.Threading.Thread.Sleep 500
-                        f ()
-                f ()
+    let init collectionName (db: IMongoDatabase): Commands =
+        CommonDb.GuildData.init
+            createData
+            (fun ver doc ->
+                match ver with
+                | Some ver ->
+                    match ver with
+                    | Version.V0 ->
+                        None, Serialization.BsonSerializer.Deserialize<CommandT>(doc)
+                    | x ->
+                        failwithf "Version = %A not implemented" x
+                | None ->
+                    failwith "Expected V0 but DataPreVersion"
             )
+            collectionName
             db
 
+    let set (itemIdOpt: option<CommandId>) setAdditionParams (items: Commands) =
+        let id =
+            itemIdOpt
+            |> Option.defaultWith
+                (fun () ->
+                    CommandId.create()
+                )
+
+        CommonDb.GuildData.set
+            createData
+            id
+            setAdditionParams
+            items
+
+    let sets (items: CommandsArray) (db: Commands): Commands =
+        db
+        |> CommonDb.GuildData.sets items
+
     let drop (db: IMongoDatabase) (items: Commands) =
-        db.DropCollection collectionName
+        CommonDb.GuildData.drop db items
 
-        { items with
-            Cache = Map.empty
-        }
-
-    let tryFindById id (items: Commands) =
+    let tryFindById id (items: Commands): CommandT option =
         Map.tryFind id items.Cache
