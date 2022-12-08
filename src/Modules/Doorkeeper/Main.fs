@@ -555,7 +555,8 @@ let reduce (msg: Msg) (state: State): State =
                     id
                     (fun data ->
                         { data with
-                            RoleIds = roleIds
+                            RoleIds =
+                                Array.append data.RoleIds roleIds |> Array.distinct
                         }
                     )
         }
