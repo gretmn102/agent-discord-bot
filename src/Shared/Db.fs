@@ -43,6 +43,11 @@ module CommonDb =
                 Data = data
             }
 
+        let update updating (item: Data<'Id, 'Version, 'Data>): Data<'Id, 'Version, 'Data> =
+            { item with
+                Data = updating item.Data
+            }
+
     type Collection = IMongoCollection<BsonDocument>
 
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

@@ -29,7 +29,7 @@ type Ticks = int64
 type State =
     {
         Settings: RankingSettings.Guilds
-        Rankings: Rankings.GuildRankings
+        Rankings: Rankings.GuildUsers
         CoolDowns: Map<UserId, Ticks>
         MostActiveSettings: MostActiveSettings.GuildDatas
     }
@@ -76,137 +76,130 @@ let updateExp
     update
     (state: State) =
 
-    let exec rankings =
-        let exec (rank: Rankings.RankingData) (state: State) =
-            let oldLevel = getLevelBySumExp rank.Exp
-            let newExp = update rank.Exp
-            let newLevel = getLevelBySumExp newExp
+    let id = Rankings.Id.create e.Guild.Id userId
 
-            if newLevel > 0UL && oldLevel <> newLevel then
-                let foundRole =
-                    setting.LevelRoles
-                    |> Array.tryPick (fun levelRole ->
-                        if levelRole.Level = int newLevel then
-                            match e.Guild.Roles.[levelRole.Role] with
-                            | null -> None
-                            | role -> Some role
-                        else
-                            None
+    let exec (rank: Rankings.GuildUserData) (state: State) =
+        let oldLevel = getLevelBySumExp rank.Exp
+        let newExp = update rank.Exp
+        let newLevel = getLevelBySumExp newExp
+
+        if newLevel > 0UL && oldLevel <> newLevel then
+            let foundRole =
+                setting.LevelRoles
+                |> Array.tryPick (fun levelRole ->
+                    if levelRole.Level = int newLevel then
+                        match e.Guild.Roles.[levelRole.Role] with
+                        | null -> None
+                        | role -> Some role
+                    else
+                        None
+                )
+
+            match foundRole with
+            | None -> ()
+            | Some role ->
+                try
+                    let guildMember = await (e.Guild.GetMemberAsync userId)
+
+                    guildMember.GrantRoleAsync(role)
+                    |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
+
+                    guildMember.Roles
+                    |> Array.ofSeq // because RevokeRoleAsync may invoke "Collection was modified; enumeration operation may not execute."
+                    |> Seq.iter (fun currRole ->
+                        let currRoleId = currRole.Id
+                        if currRoleId <> role.Id
+                           && setting.LevelRoles |> Array.exists (fun x -> currRole.Id = x.Role)
+
+                        then
+                            try
+                                guildMember.RevokeRoleAsync currRole
+                                |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
+                            with e ->
+                                printfn "2 %A" e.Message
                     )
+                with e ->
+                    printfn "1 %A" e.Message
 
-                match foundRole with
-                | None -> ()
-                | Some role ->
+            match setting.OutputChannelId with
+            | Some outputChannelId ->
+                match e.Guild.GetChannel outputChannelId with
+                | null -> ()
+                | outputChannel ->
+                    let msg =
+                        match foundRole with
+                        | None ->
+                            sprintf "<@!%d> поднялся до %d уровня." e.Author.Id newLevel
+                        | Some role ->
+                            sprintf "<@!%d> поднялся до %d уровня и получил роль <@&%d>." e.Author.Id newLevel role.Id
+
+                    let b = Entities.DiscordMessageBuilder()
+
+                    let color =
+                        match foundRole with
+                        | None -> DiscordEmbed.backgroundColorDarkTheme
+                        | Some x -> x.Color
+
+                    let embed =
+                        Entities.DiscordEmbedBuilder()
+                            .WithDescription(msg)
+                            .WithColor(color)
+                            .Build()
+
+                    b.WithEmbed embed |> ignore
+
                     try
-                        let guildMember = await (e.Guild.GetMemberAsync userId)
-
-                        guildMember.GrantRoleAsync(role)
-                        |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
-
-                        guildMember.Roles
-                        |> Array.ofSeq // because RevokeRoleAsync may invoke "Collection was modified; enumeration operation may not execute."
-                        |> Seq.iter (fun currRole ->
-                            let currRoleId = currRole.Id
-                            if currRoleId <> role.Id
-                               && setting.LevelRoles |> Array.exists (fun x -> currRole.Id = x.Role)
-
-                            then
-                                try
-                                    guildMember.RevokeRoleAsync currRole
-                                    |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
-                                with e ->
-                                    printfn "2 %A" e.Message
-                        )
+                        awaiti (outputChannel.SendMessageAsync(b))
                     with e ->
-                        printfn "1 %A" e.Message
+                        printfn "I don't have the permission to write to %d channel" outputChannel.Id
 
-                match setting.OutputChannelId with
-                | Some outputChannelId ->
-                    match e.Guild.GetChannel outputChannelId with
-                    | null -> ()
-                    | outputChannel ->
-                        let msg =
-                            match foundRole with
-                            | None ->
-                                sprintf "<@!%d> поднялся до %d уровня." e.Author.Id newLevel
-                            | Some role ->
-                                sprintf "<@!%d> поднялся до %d уровня и получил роль <@&%d>." e.Author.Id newLevel role.Id
+            | None -> ()
 
-                        let b = Entities.DiscordMessageBuilder()
-
-                        let color =
-                            match foundRole with
-                            | None -> DiscordEmbed.backgroundColorDarkTheme
-                            | Some x -> x.Color
-
-                        let embed =
-                            Entities.DiscordEmbedBuilder()
-                                .WithDescription(msg)
-                                .WithColor(color)
-                                .Build()
-
-                        b.WithEmbed embed |> ignore
-
-                        try
-                            awaiti (outputChannel.SendMessageAsync(b))
-                        with e ->
-                            printfn "I don't have the permission to write to %d channel" outputChannel.Id
-
-                | None -> ()
-
-            let newRank =
-                { rank with
-                    Exp = newExp
-                    DayExp = (newExp - rank.Exp) + rank.DayExp
-                }
-
-            Rankings.replace newRank
-
-            { state with
-                Rankings =
-                    let m = Map.add userId newRank rankings
-                    Map.add e.Guild.Id m state.Rankings
+        let newRank =
+            { rank with
+                Exp = newExp
+                DayExp = (newExp - rank.Exp) + rank.DayExp
             }
 
-        match Map.tryFind userId rankings with
-        | Some rank ->
-            match Map.tryFind userId state.CoolDowns with
-            | Some lastTime ->
-                let now = System.DateTime.Now.Ticks
+        { state with
+            Rankings =
+                state.Rankings
+                |> Rankings.GuildUsers.set
+                    id
+                    (fun _ -> newRank)
+        }
 
-                if now - lastTime - cooldown < 0L then
-                    state
-                else
-                    let state =
-                        { state with
-                            CoolDowns = Map.add userId now state.CoolDowns
-                        }
+    match Rankings.GuildUsers.tryFindById id state.Rankings with
+    | Some rank ->
+        match Map.tryFind userId state.CoolDowns with
+        | Some lastTime ->
+            let now = System.DateTime.Now.Ticks
 
-                    exec rank state
-            | None ->
-                let now = System.DateTime.Now.Ticks
+            if now - lastTime - cooldown < 0L then
+                state
+            else
                 let state =
                     { state with
                         CoolDowns = Map.add userId now state.CoolDowns
                     }
 
-                exec rank state
+                exec rank.Data state
         | None ->
-            let rank = Rankings.insert(e.Guild.Id, userId, 0UL)
-
             let now = System.DateTime.Now.Ticks
             let state =
                 { state with
                     CoolDowns = Map.add userId now state.CoolDowns
                 }
 
-            exec rank state
-
-    match Map.tryFind e.Guild.Id state.Rankings with
-    | Some rankings ->
-        exec rankings
+            exec rank.Data state
     | None ->
-        exec Map.empty
+        let now = System.DateTime.Now.Ticks
+        let state =
+            { state with
+                CoolDowns = Map.add userId now state.CoolDowns
+            }
+
+        exec Rankings.GuildUserData.Empty state
 
 let rankingSettingReduce
     (e: EventArgs.MessageCreateEventArgs)
@@ -367,20 +360,20 @@ let mostActiveSettingReduce
 
 let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostActiveSettings.Data) state =
     let guildId = guild.Id
-    match Map.tryFind guildId state.Rankings with
+    match Rankings.GuildUsers.tryFindGuildUsers guildId state.Rankings with
     | None -> state
-    | Some rankings ->
+    | Some guildUsers ->
         let mostActive =
-            rankings
-            |> Seq.fold
-                (fun lastMostActive (KeyValue(userId, user)) ->
+            guildUsers
+            |> Array.fold
+                (fun lastMostActive currentUser ->
                     match lastMostActive with
-                    | Some (lastMostActive: Rankings.RankingData) ->
-                        if user.DayExp > lastMostActive.DayExp then
-                            user
+                    | Some (lastMostActive: Rankings.GuildUser) ->
+                        if currentUser.Data.DayExp > lastMostActive.Data.DayExp then
+                            currentUser
                         else
                             lastMostActive
-                    | None -> user
+                    | None -> currentUser
                     |> Some
                 )
                 None
@@ -390,23 +383,29 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
             let update mostActiveSetting =
                 MostActiveSettings.replace mostActiveSetting
 
-                let rankings =
-                    rankings
-                    |> Map.map (fun _ user ->
-                        let user =
-                            { user with DayExp = 0UL }
-
-                        Rankings.replace user
-
-                        user
+                let guildUsersSetDayExpToZero =
+                    guildUsers
+                    |> Array.choose (fun guildUser ->
+                        if guildUser.Data.DayExp = 0UL then
+                            None
+                        else
+                            guildUser
+                            |> Rankings.GuildUser.update
+                                (fun data ->
+                                    { data with
+                                        DayExp = 0UL
+                                    }
+                                )
+                            |> Some
                     )
+                    |> Rankings.GuildUsers.sets
 
                 { state with
-                    Rankings = Map.add guildId rankings state.Rankings
+                    Rankings = guildUsersSetDayExpToZero state.Rankings
                     MostActiveSettings = Map.add guildId mostActiveSetting state.MostActiveSettings
                 }
 
-            if mostActiveUser.UserId = mostActiveSetting.LastMostActiveUserId then
+            if mostActiveUser.Id.UserId = mostActiveSetting.LastMostActiveUserId then
                 { mostActiveSetting with
                     LastUpdate = System.DateTime.UtcNow
                 }
@@ -426,7 +425,7 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
                         with _ -> ()
                     | None -> ()
 
-                    match getMember mostActiveUser.UserId with
+                    match getMember mostActiveUser.Id.UserId with
                     | Some guildMember ->
                         try
                             awaiti <| guildMember.GrantRoleAsync(mostActiveRole)
@@ -435,7 +434,7 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
 
                 { mostActiveSetting with
                     LastUpdate = System.DateTime.UtcNow
-                    LastMostActiveUserId = mostActiveUser.UserId
+                    LastMostActiveUserId = mostActiveUser.Id.UserId
                 }
                 |> update
 
@@ -470,13 +469,9 @@ module MostActiveTable =
                     failwithf "MostActiveTable.SortBy %A" x
 
             GetItems = fun () (guildId, state) ->
-                let state =
-                    match Map.tryFind guildId state.Rankings with
-                    | Some ranking -> ranking
-                    | None -> Map.empty
-
-                state
-                |> Map.toArray
+                match Rankings.GuildUsers.tryFindGuildUsers guildId state.Rankings with
+                | Some ranking -> ranking
+                | None -> [||]
 
             ItemsCountPerPage = 10
 
@@ -489,19 +484,19 @@ module MostActiveTable =
             SortFunction = fun sortBy items ->
                 match sortBy with
                 | SortBy.SortByDayExp ->
-                    Array.sortByDescending (fun (_, data) -> data.DayExp) items
+                    Array.sortByDescending (fun user -> user.Data.DayExp) items
                 | SortBy.SortByExp ->
-                    Array.sortByDescending (fun (_, data) -> data.Exp) items
+                    Array.sortByDescending (fun user -> user.Data.Exp) items
                 | SortBy.SortByIndex -> items
                 | x ->
                     failwithf "MostActiveTable.SortBy %A" x
 
             MapFunction =
-                fun _ i (userId, user) ->
+                fun _ i user ->
                     [|
-                        sprintf "%d <@!%d>" i userId
-                        string user.Exp
-                        string user.DayExp
+                        sprintf "%d <@!%d>" i user.Id.UserId
+                        string user.Data.Exp
+                        string user.Data.DayExp
                     |]
         }
 
@@ -539,11 +534,10 @@ let requestReduce
                     (getExpByLevel level)
                     exp
 
-            match Map.tryFind e.Guild.Id state.Rankings with
+            let id = Rankings.Id.create e.Guild.Id userId
+            match Rankings.GuildUsers.tryFindById id state.Rankings with
             | Some ranking ->
-                match Map.tryFind userId ranking with
-                | Some r -> calc r.Exp
-                | None -> calc 0UL
+                calc ranking.Data.Exp
             | None -> calc 0UL
 
         let b = Entities.DiscordMessageBuilder()
@@ -680,8 +674,8 @@ let reduce (msg: Msg) (state: State): State =
         state
 let m =
     let init = {
-        Settings = RankingSettings.Guilds.init "guildRankingSettings" Db.database
-        Rankings = Rankings.getAll ()
+        Settings = RankingSettings.Guilds.init "GuildUsersettings" Db.database
+        Rankings = Rankings.GuildUsers.init "GuildUsers" Db.database
         CoolDowns = Map.empty
         MostActiveSettings = MostActiveSettings.getAll ()
     }
