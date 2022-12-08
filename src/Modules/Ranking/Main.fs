@@ -28,7 +28,7 @@ type Ticks = int64
 
 type State =
     {
-        Settings: RankingSettings.GuildRankingSettings
+        Settings: RankingSettings.Guilds
         Rankings: Rankings.GuildRankings
         CoolDowns: Map<UserId, Ticks>
         MostActiveSettings: MostActiveSettings.GuildDatas
@@ -72,7 +72,7 @@ let updateExp
     (e: EventArgs.MessageCreateEventArgs)
     (userId: UserId)
     cooldown
-    (setting: RankingSettings.RankingSettingData)
+    (setting: RankingSettings.GuildData)
     update
     (state: State) =
 
@@ -221,26 +221,19 @@ let rankingSettingReduce
             await (e.Channel.SendMessageAsync("Processing..."))
 
         if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-            let settings: RankingSettings.GuildRankingSettings =
-                let settings = state.Settings
-
-                match Map.tryFind e.Guild.Id settings with
-                | Some setting ->
-                    let newcomersRoles =
-                        { setting with
+            let settings =
+                state.Settings
+                |> RankingSettings.Guilds.set
+                    e.Guild.Id
+                    (fun settings ->
+                        { settings with
                             OutputChannelId = Some outputChannelId
                         }
-
-                    RankingSettings.replace newcomersRoles
-
-                    Map.add guild.Id newcomersRoles settings
-                | None ->
-                    let x = RankingSettings.insert (guild.Id, [||], Some outputChannelId)
-                    Map.add guild.Id x settings
+                    )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Output channel for ranking has been set")))
 
-            { state with Settings = settings}
+            { state with Settings = settings }
         else
             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission")))
 
@@ -260,26 +253,19 @@ let rankingSettingReduce
                 )
                 |> Array.ofList
 
-            let settings: RankingSettings.GuildRankingSettings =
-                let settings = state.Settings
-
-                match Map.tryFind e.Guild.Id settings with
-                | Some setting ->
-                    let setting =
-                        { setting with
+            let settings =
+                state.Settings
+                |> RankingSettings.Guilds.set
+                    e.Guild.Id
+                    (fun settings ->
+                        { settings with
                             LevelRoles = levelRoles
                         }
-
-                    RankingSettings.replace setting
-
-                    Map.add guild.Id setting settings
-                | None ->
-                    let x = RankingSettings.insert (guild.Id, levelRoles, None)
-                    Map.add guild.Id x settings
+                    )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Roles level has been set")))
 
-            { state with Settings = settings}
+            { state with Settings = settings }
 
         else
             awaiti (replyMessage.ModifyAsync(Entities.Optional("You don't have permission")))
@@ -291,10 +277,10 @@ let rankingSettingReduce
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
-        match Map.tryFind guild.Id state.Settings with
+        match RankingSettings.Guilds.tryFindById guild.Id state.Settings with
         | Some setting ->
             let msg =
-                setting.LevelRoles
+                setting.Data.LevelRoles
                 |> Array.map (fun x -> sprintf "<@&%d> — %d" x.Role x.Level)
                 |> String.concat "\n"
 
@@ -583,7 +569,7 @@ let requestReduce
             await (e.Channel.SendMessageAsync("Processing..."))
 
         if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-            match Map.tryFind guild.Id state.Settings with
+            match RankingSettings.Guilds.tryFindById guild.Id state.Settings with
             | Some setting ->
                 let state =
                     state
@@ -591,7 +577,7 @@ let requestReduce
                         e
                         targetUserId
                         0L
-                        setting
+                        setting.Data
                         (fun _ -> exp)
 
                 let msg = sprintf "User <@!%d> exp has been set to %d" targetUserId exp
@@ -656,14 +642,14 @@ let reduce (msg: Msg) (state: State): State =
     | NewMessageHandle e ->
         if e.Author.IsBot then state
         else
-            match Map.tryFind e.Guild.Id state.Settings with
+            match RankingSettings.Guilds.tryFindById e.Guild.Id state.Settings with
             | Some setting ->
                 state
                 |> updateExp
                     e
                     e.Author.Id
                     coolDown
-                    setting
+                    setting.Data
                     (fun currExp ->
                         currExp + uint64 (r.Next(lowerBoundExp, upperBoundExp + 1)))
 
@@ -694,7 +680,7 @@ let reduce (msg: Msg) (state: State): State =
         state
 let m =
     let init = {
-        Settings = RankingSettings.getAll ()
+        Settings = RankingSettings.Guilds.init "guildRankingSettings" Db.database
         Rankings = Rankings.getAll ()
         CoolDowns = Map.empty
         MostActiveSettings = MostActiveSettings.getAll ()
