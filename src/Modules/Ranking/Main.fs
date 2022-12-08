@@ -31,7 +31,7 @@ type State =
         Settings: RankingSettings.Guilds
         Rankings: Rankings.GuildUsers
         CoolDowns: Map<UserId, Ticks>
-        MostActiveSettings: MostActiveSettings.GuildDatas
+        MostActiveSettings: MostActiveSettings.Guilds
     }
 
 type Msg =
@@ -308,22 +308,15 @@ let mostActiveSettingReduce
             await (e.Channel.SendMessageAsync "Processing...")
 
         if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-            let settings: MostActiveSettings.GuildDatas =
-                let settings = state.MostActiveSettings
-
-                match Map.tryFind e.Guild.Id settings with
-                | Some setting ->
-                    let setting =
+            let settings =
+                state.MostActiveSettings
+                |> MostActiveSettings.Guilds.set
+                    e.Guild.Id
+                    (fun setting ->
                         { setting with
                             MostActiveRoleId = roleId
                         }
-
-                    MostActiveSettings.replace setting
-
-                    Map.add guild.Id setting settings
-                | None ->
-                    let x = MostActiveSettings.insert (guild.Id, roleId, 0UL, System.DateTime.UtcNow)
-                    Map.add guild.Id x settings
+                    )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Most active role has been set")))
 
@@ -334,19 +327,18 @@ let mostActiveSettingReduce
 
             state
 
-
     | GetMostActiveRole ->
         let guild = e.Guild
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 
-        match Map.tryFind guild.Id state.MostActiveSettings with
+        match MostActiveSettings.Guilds.tryFindById guild.Id state.MostActiveSettings with
         | Some setting ->
             let b = Entities.DiscordMessageBuilder()
 
             let embed =
                 Entities.DiscordEmbedBuilder()
-                    .WithDescription(sprintf "<@&%d>" setting.MostActiveRoleId)
+                    .WithDescription(sprintf "<@&%d>" setting.Data.MostActiveRoleId)
                     .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                     .Build()
 
@@ -358,7 +350,7 @@ let mostActiveSettingReduce
 
         state
 
-let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostActiveSettings.Data) state =
+let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostActiveSettings.GuildData) state =
     let guildId = guild.Id
     match Rankings.GuildUsers.tryFindGuildUsers guildId state.Rankings with
     | None -> state
@@ -381,8 +373,6 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
         match mostActive with
         | Some mostActiveUser ->
             let update mostActiveSetting =
-                MostActiveSettings.replace mostActiveSetting
-
                 let guildUsersSetDayExpToZero =
                     guildUsers
                     |> Array.choose (fun guildUser ->
@@ -401,8 +391,13 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
                     |> Rankings.GuildUsers.sets
 
                 { state with
-                    Rankings = guildUsersSetDayExpToZero state.Rankings
-                    MostActiveSettings = Map.add guildId mostActiveSetting state.MostActiveSettings
+                    Rankings =
+                        guildUsersSetDayExpToZero state.Rankings
+                    MostActiveSettings =
+                        state.MostActiveSettings
+                        |> MostActiveSettings.Guilds.set
+                            guildId
+                            (fun _ -> mostActiveSetting)
                 }
 
             if mostActiveUser.Id.UserId = mostActiveSetting.LastMostActiveUserId then
@@ -600,10 +595,10 @@ let requestReduce
             await (e.Channel.SendMessageAsync "Processing...")
 
         if currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator then
-            match Map.tryFind e.Guild.Id state.MostActiveSettings with
+            match MostActiveSettings.Guilds.tryFindById e.Guild.Id state.MostActiveSettings with
             | Some mostActiveSetting ->
                 let state =
-                    mostActiveActivate guild mostActiveSetting state
+                    mostActiveActivate guild mostActiveSetting.Data state
 
                 awaiti <| replyMessage.ModifyAsync(Entities.Optional "Done!")
 
@@ -653,7 +648,7 @@ let reduce (msg: Msg) (state: State): State =
         requestReduce e msg state
 
     | MostActiveActivateAll client ->
-        state.MostActiveSettings
+        state.MostActiveSettings.Cache
         |> Map.fold
             (fun state guildId mostActiveSetting ->
                 let guild =
@@ -664,7 +659,7 @@ let reduce (msg: Msg) (state: State): State =
 
                 match guild with
                 | Some guild ->
-                    mostActiveActivate guild mostActiveSetting state
+                    mostActiveActivate guild mostActiveSetting.Data state
                 | None -> state
             )
             state
@@ -677,7 +672,7 @@ let m =
         Settings = RankingSettings.Guilds.init "GuildUsersettings" Db.database
         Rankings = Rankings.GuildUsers.init "GuildUsers" Db.database
         CoolDowns = Map.empty
-        MostActiveSettings = MostActiveSettings.getAll ()
+        MostActiveSettings = MostActiveSettings.Guilds.init "mostActiveSettings" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->
