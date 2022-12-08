@@ -669,8 +669,8 @@ let reduce (msg: Msg) (state: State): State =
         state
 let m =
     let init = {
-        Settings = RankingSettings.Guilds.init "GuildUsersettings" Db.database
-        Rankings = Rankings.GuildUsers.init "GuildUsers" Db.database
+        Settings = RankingSettings.Guilds.init "guildRankingSettings" Db.database
+        Rankings = Rankings.GuildUsers.init "guildRankings" Db.database
         CoolDowns = Map.empty
         MostActiveSettings = MostActiveSettings.Guilds.init "mostActiveSettings" Db.database
     }
