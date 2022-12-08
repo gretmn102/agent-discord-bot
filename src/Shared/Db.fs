@@ -171,7 +171,7 @@ module CommonDb =
                                         request, Map.add x.Id x st
                                     | Some (id: 'OldId) ->
                                         let insertRequest =
-                                            (WriteModelType.InsertOne, createData x.Id) :: insertRequest
+                                            (WriteModelType.InsertOne, x) :: insertRequest
 
                                         let deleteRequests =
                                             id :: deleteRequests
