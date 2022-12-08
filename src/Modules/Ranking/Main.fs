@@ -158,7 +158,11 @@ let updateExp
         let newRank =
             { rank with
                 Exp = newExp
-                DayExp = (newExp - rank.Exp) + rank.DayExp
+                DayExp =
+                    if newExp > rank.Exp then
+                        (newExp - rank.Exp) + rank.DayExp
+                    else
+                        rank.DayExp
             }
 
         { state with
