@@ -170,13 +170,18 @@ module CommonDb =
                                     | None ->
                                         request, Map.add x.Id x st
                                     | Some (id: 'OldId) ->
-                                        let insertRequest =
-                                            (WriteModelType.InsertOne, x) :: insertRequest
+                                        match Map.tryFind x.Id st with // prevent collisions
+                                        | None ->
+                                            let insertRequest =
+                                                (WriteModelType.InsertOne, x) :: insertRequest
 
-                                        let deleteRequests =
-                                            id :: deleteRequests
+                                            let deleteRequests =
+                                                id :: deleteRequests
 
-                                        (deleteRequests, insertRequest), Map.add x.Id x st
+                                            (deleteRequests, insertRequest), Map.add x.Id x st
+                                        | Some exists ->
+                                            printfn "in db already exist value:\n%A\nbut:\n%A" exists x
+                                            (deleteRequests, insertRequest), st
                                 )
                                 (([], []), Map.empty)
 
