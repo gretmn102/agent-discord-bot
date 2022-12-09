@@ -240,7 +240,7 @@ type Req =
 type State =
     {
         Setting: Setting.GuildData
-        GuildUserRoles: Roles.GuildUserRoles
+        GuildUserRoles: Roles.GuildUsers
     }
 
 module Parser =
@@ -551,13 +551,14 @@ module UserRoleForm =
                                         roleGranted role.Id
                                         setContent "Role has been granted"
 
-                                        let x = Roles.insert (guild.Id, guildMember.Id, role.Id)
-
                                         guildUserRoles
-                                        |> Map.addOrModWith
-                                            x.GuildId
-                                            (fun () -> Map.add x.UserId x Map.empty)
-                                            (fun st -> Map.add x.UserId x st)
+                                        |> Roles.GuildUsers.set
+                                            (Roles.Id.create guild.Id guildMember.Id)
+                                            (fun user ->
+                                                { user with
+                                                    RoleId = role.Id
+                                                }
+                                            )
 
                                     | Left errMsg ->
                                         setContent errMsg
@@ -572,100 +573,97 @@ module UserRoleForm =
 
                         guildUserRoles
 
-                match Map.tryFind guild.Id guildUserRoles with
-                | Some userRoles ->
-                    match Map.tryFind guildMember.Id userRoles with
-                    | Some roleData ->
-                        match guild.GetRole roleData.RoleId with
-                        | null ->
-                            createAndGrantRole ()
-                        | userRole ->
-                            match roleEditModel with
-                            | None ->
-                                createUI addComponents addEmbed guildMember (Some userRole.Id)
-
-                                guildUserRoles
-
-                            | Some roleEditModel ->
-                                let res =
-                                    let res =
-                                        let changeWithoutIcon () =
-                                            try
-                                                userRole.ModifyAsync (
-                                                    name = roleEditModel.Name,
-                                                    color = System.Nullable(roleEditModel.Color)
-                                                )
-                                                |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
-
-                                                Right ()
-                                            with e ->
-                                                Left e.Message
-
-                                        let changeWithIcon iconUrl =
-                                            if guild.Features |> Seq.exists ((=) "ROLE_ICONS") then
-                                                let hasPermissiveRole =
-                                                    guildMember.Roles
-                                                    |> Seq.exists (fun role ->
-                                                        Set.contains role.Id setting.PermissiveIconRoleIds)
-
-                                                if hasPermissiveRole then
-                                                    match WebClientDownloader.getData [] iconUrl with
-                                                    | Left errMsg ->
-                                                        sprintf "Download url by '%s' error:\n%s" iconUrl errMsg
-                                                        |> Left
-                                                    | Right bytes ->
-                                                        try
-                                                            use m = new System.IO.MemoryStream(bytes)
-
-                                                            userRole.ModifyAsync (
-                                                                name = roleEditModel.Name,
-                                                                color = System.Nullable(roleEditModel.Color),
-                                                                icon = m
-                                                            )
-                                                            |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
-
-                                                            Right ()
-                                                        with e ->
-                                                            Left e.Message
-                                                else
-                                                    sprintf "You do not have these permissive icon roles: %s."
-                                                        (setting.PermissiveIconRoleIds |> Seq.map (sprintf "<@&%d>") |> String.concat ", ")
-                                                    |> Left
-                                            else
-                                                Left "This guild don't has ROLE_ICONS feature"
-
-                                        match roleEditModel.IconUrl with
-                                        | Some iconUrl ->
-                                            if userRole.IconUrl = iconUrl then
-                                                changeWithoutIcon ()
-                                            else
-                                                changeWithIcon iconUrl
-                                        | None -> changeWithoutIcon ()
-
-                                    match res with
-                                    | Right () ->
-                                        let roleGranded =
-                                            guildMember.Roles
-                                            |> Seq.exists (fun x -> x.Id = userRole.Id)
-
-                                        if roleGranded then
-                                            "Role has been changed"
-                                        else
-                                            try
-                                                guildMember.GrantRoleAsync userRole
-                                                |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
-
-                                                "Role has been changed and returned to user"
-                                            with e ->
-                                                sprintf "An error occurred when returning the role to the user:\n%s" e.Message
-
-                                    | Left errMsg -> errMsg
-
-                                setContent res
-
-                                guildUserRoles
-                    | None ->
+                let id = Roles.Id.create guild.Id guildMember.Id
+                match Roles.GuildUsers.tryFindById id guildUserRoles with
+                | Some roleData ->
+                    match guild.GetRole roleData.Data.RoleId with
+                    | null ->
                         createAndGrantRole ()
+                    | userRole ->
+                        match roleEditModel with
+                        | None ->
+                            createUI addComponents addEmbed guildMember (Some userRole.Id)
+
+                            guildUserRoles
+
+                        | Some roleEditModel ->
+                            let res =
+                                let res =
+                                    let changeWithoutIcon () =
+                                        try
+                                            userRole.ModifyAsync (
+                                                name = roleEditModel.Name,
+                                                color = System.Nullable(roleEditModel.Color)
+                                            )
+                                            |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                            Right ()
+                                        with e ->
+                                            Left e.Message
+
+                                    let changeWithIcon iconUrl =
+                                        if guild.Features |> Seq.exists ((=) "ROLE_ICONS") then
+                                            let hasPermissiveRole =
+                                                guildMember.Roles
+                                                |> Seq.exists (fun role ->
+                                                    Set.contains role.Id setting.PermissiveIconRoleIds)
+
+                                            if hasPermissiveRole then
+                                                match WebClientDownloader.getData [] iconUrl with
+                                                | Left errMsg ->
+                                                    sprintf "Download url by '%s' error:\n%s" iconUrl errMsg
+                                                    |> Left
+                                                | Right bytes ->
+                                                    try
+                                                        use m = new System.IO.MemoryStream(bytes)
+
+                                                        userRole.ModifyAsync (
+                                                            name = roleEditModel.Name,
+                                                            color = System.Nullable(roleEditModel.Color),
+                                                            icon = m
+                                                        )
+                                                        |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                                        Right ()
+                                                    with e ->
+                                                        Left e.Message
+                                            else
+                                                sprintf "You do not have these permissive icon roles: %s."
+                                                    (setting.PermissiveIconRoleIds |> Seq.map (sprintf "<@&%d>") |> String.concat ", ")
+                                                |> Left
+                                        else
+                                            Left "This guild don't has ROLE_ICONS feature"
+
+                                    match roleEditModel.IconUrl with
+                                    | Some iconUrl ->
+                                        if userRole.IconUrl = iconUrl then
+                                            changeWithoutIcon ()
+                                        else
+                                            changeWithIcon iconUrl
+                                    | None -> changeWithoutIcon ()
+
+                                match res with
+                                | Right () ->
+                                    let roleGranded =
+                                        guildMember.Roles
+                                        |> Seq.exists (fun x -> x.Id = userRole.Id)
+
+                                    if roleGranded then
+                                        "Role has been changed"
+                                    else
+                                        try
+                                            guildMember.GrantRoleAsync userRole
+                                            |> fun t -> t.GetAwaiter() |> fun x -> x.GetResult()
+
+                                            "Role has been changed and returned to user"
+                                        with e ->
+                                            sprintf "An error occurred when returning the role to the user:\n%s" e.Message
+
+                                | Left errMsg -> errMsg
+
+                            setContent res
+
+                            guildUserRoles
                 | None ->
                     createAndGrantRole ()
 
@@ -820,29 +818,28 @@ let reducer =
         onRoleHasBeenRemoved
         onRoleDoesNotExists
         onServerDoesNotHaveUserRoles
-        (guildUserRoles: Roles.GuildUserRoles) =
+        (guildUsers: Roles.GuildUsers) =
 
-        match Map.tryFind guildId guildUserRoles with
+        match Roles.GuildUsers.tryFindGuildUsers guildId guildUsers with
         | Some userRoles ->
-            let userRole =
+            let guildUser =
                 userRoles
-                |> Map.tryPick (fun _ userRole ->
-                    if userRole.RoleId = roleId then
-                        Some userRole
+                |> Seq.tryPick (fun guildUser ->
+                    if guildUser.Data.RoleId = roleId then
+                        Some guildUser
                     else
                         None
                 )
 
-            match userRole with
-            | Some roleRole ->
-                Roles.remove roleRole
+            match guildUser with
+            | Some guildUser ->
+                match Roles.GuildUsers.removeById guildUser.Id guildUsers with
+                | Some guildUserRoles ->
 
-                let guildUserRoles =
-                    let userRole =
-                        Map.remove roleRole.UserId userRoles
-                    Map.add guildId userRole guildUserRoles
+                    onRoleHasBeenRemoved guildUserRoles
+                | None ->
+                    failwithf "expected find %A in guildUsers, but not found" guildUser.Id
 
-                onRoleHasBeenRemoved guildUserRoles
             | None ->
                 onRoleDoesNotExists ()
         | None ->
@@ -918,7 +915,7 @@ let reducer =
 
             | GetUserRoles ->
                 let message =
-                    match Map.tryFind e.Guild.Id state.GuildUserRoles with
+                    match Roles.GuildUsers.tryFindGuildUsers e.Guild.Id state.GuildUserRoles with
                     | Some userRoles ->
                         let b = Entities.DiscordMessageBuilder()
                         let embed = Entities.DiscordEmbedBuilder()
@@ -928,8 +925,8 @@ let reducer =
                                 yield "User roles: "
                                 yield!
                                     userRoles
-                                    |> Seq.map (fun (KeyValue(_, userRole)) ->
-                                        sprintf "* <@!%d> — <@&%d> (%d)" userRole.UserId userRole.RoleId userRole.RoleId
+                                    |> Seq.map (fun userRole ->
+                                        sprintf "* <@!%d> — <@&%d> (%d)" userRole.Id.UserId userRole.Data.RoleId userRole.Data.RoleId
                                     )
                             ] |> String.concat "\n"
 
@@ -1021,11 +1018,11 @@ let reducer =
                             if isNull templateRole then
                                 awaiti <| replyMessage.ModifyAsync(Entities.Optional("The guild owner installed the template role, but it has been removed"))
                             else
-                                match Map.tryFind guild.Id state.GuildUserRoles with
+                                match Roles.GuildUsers.tryFindGuildUsers guild.Id state.GuildUserRoles with
                                 | Some userRoles ->
                                     userRoles
-                                    |> Seq.iter (fun (KeyValue(_, userRole)) ->
-                                        let userRole = guild.GetRole userRole.RoleId
+                                    |> Seq.iter (fun userRole ->
+                                        let userRole = guild.GetRole userRole.Data.RoleId
                                         if isNull userRole then ()
                                         else
                                             awaiti <| userRole.ModifyAsync(
@@ -1055,51 +1052,35 @@ let reducer =
                 if (guildMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
                     || (guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles) then
 
-                    match Map.tryFind guild.Id state.GuildUserRoles with
-                    | Some userRoleDatas ->
-                        match guild.GetRole roleId with
-                        | null ->
-                            awaiti <| e.Channel.SendMessageAsync (sprintf "The %d role not exists in the guild" roleId)
-
-                            state
-                        | role ->
-                            try
-                                let guildMember =
-                                    if guildMember.Id = userId then guildMember
-                                    else
-                                        await <| guild.GetMemberAsync userId
-                                awaiti <| guildMember.GrantRoleAsync(role)
-                            with e -> ()
-
-                            let userRoleData =
-                                match Map.tryFind userId userRoleDatas with
-                                | Some userRoleData ->
-                                    // TODO: confirm to replace
-
-                                    let userRoleData =
-                                        { userRoleData with
-                                            RoleId = roleId }
-
-                                    Roles.replace userRoleData
-
-                                    userRoleData
-
-                                | None ->
-                                    Roles.insert(guild.Id, userId, roleId )
-
-
-                            awaiti <| e.Channel.SendMessageAsync "User roles has been updated"
-
-                            { state with
-                                GuildUserRoles =
-                                    let m = Map.add userId userRoleData userRoleDatas
-                                    Map.add guild.Id m state.GuildUserRoles
-                            }
-
-                    | None ->
-                        awaiti <| e.Channel.SendMessageAsync  "This server doesn't yet have user roles"
+                    match guild.GetRole roleId with
+                    | null ->
+                        awaiti <| e.Channel.SendMessageAsync (sprintf "The %d role not exists in the guild" roleId)
 
                         state
+                    | role ->
+                        try
+                            let guildMember =
+                                if guildMember.Id = userId then guildMember
+                                else
+                                    await <| guild.GetMemberAsync userId
+                            awaiti <| guildMember.GrantRoleAsync(role)
+                        with e -> ()
+
+                        let guildUserRoles =
+                            let id = Roles.Id.create guild.Id userId
+                            state.GuildUserRoles
+                            |> Roles.GuildUsers.set
+                                id
+                                (fun userData ->
+                                    { userData with
+                                        RoleId = roleId }
+                                )
+
+                        { state with
+                            GuildUserRoles =
+                                guildUserRoles
+                        }
+
                 else
                     awaiti <| e.Channel.SendMessageAsync "You don't have permission to manage roles or administrative permission"
 
@@ -1126,23 +1107,23 @@ let reducer =
 
             let existRole =
                 let userId = guildMember.Id
-                Map.tryFind guild.Id state.GuildUserRoles
+
+                let id = Roles.Id.create guild.Id userId
+
+                Roles.GuildUsers.tryFindById id state.GuildUserRoles
                 |> Option.bind (fun x ->
-                    Map.tryFind userId x
-                    |> Option.bind (fun x ->
-                        match guild.GetRole x.RoleId with
-                        | null -> None
-                        | role ->
-                            Some {
-                                Name = role.Name
-                                Color = role.Color
-                                IconUrl =
-                                    if System.String.IsNullOrEmpty role.IconUrl then
-                                        None
-                                    else
-                                        Some role.IconUrl
-                            }
-                    )
+                    match guild.GetRole x.Data.RoleId with
+                    | null -> None
+                    | role ->
+                        Some {
+                            Name = role.Name
+                            Color = role.Color
+                            IconUrl =
+                                if System.String.IsNullOrEmpty role.IconUrl then
+                                    None
+                                else
+                                    Some role.IconUrl
+                        }
                 )
 
             let isIconAllowed =
@@ -1180,7 +1161,7 @@ let reducer =
             let init =
                 {
                     Setting = Setting.GuildData.init Db.database
-                    GuildUserRoles = Roles.getAll ()
+                    GuildUserRoles = Roles.GuildUsers.init "roles" Db.database
                 }
             loop init
         with e ->
