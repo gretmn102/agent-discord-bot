@@ -16,7 +16,7 @@ type Msg =
 
 type State =
     {
-        VoiceNotifications: VoiceNotification.GuildVoiceNotification
+        VoiceNotifications: VoiceNotification.Guilds
     }
 
 module Parser =
@@ -66,7 +66,7 @@ module Parser =
 let voiceNotificationReduce
     (e: EventArgs.MessageCreateEventArgs)
     (msg: VoiceNotificationMsg)
-    (guildVoiceNotification: VoiceNotification.GuildVoiceNotification): VoiceNotification.GuildVoiceNotification =
+    (guildVoiceNotification: VoiceNotification.Guilds): VoiceNotification.Guilds =
 
     match msg with
     | SetOutput outputChannelId ->
@@ -78,19 +78,15 @@ let voiceNotificationReduce
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
             || (Db.superUserId = e.Author.Id) then
 
-            let guildVoiceNotification: VoiceNotification.GuildVoiceNotification =
-                match Map.tryFind e.Guild.Id guildVoiceNotification with
-                | Some voiceNotificationData ->
-                    let voiceNotificationData =
+            let guildVoiceNotification =
+                guildVoiceNotification
+                |> VoiceNotification.Guilds.set
+                    e.Guild.Id
+                    (fun voiceNotificationData ->
                         { voiceNotificationData with
-                            OutputChannelId = Some outputChannelId }
-
-                    VoiceNotification.replace voiceNotificationData
-
-                    Map.add guild.Id voiceNotificationData guildVoiceNotification
-                | None ->
-                    let x = VoiceNotification.insert (guild.Id, Some outputChannelId, None)
-                    Map.add guild.Id x guildVoiceNotification
+                            OutputChannelId = Some outputChannelId
+                        }
+                    )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional("Output channel has been set")))
 
@@ -111,19 +107,15 @@ let voiceNotificationReduce
 
             match FParsecExt.runEither Parser.ptemplateMessage templateMessage with
             | Right _ ->
-                let guildVoiceNotification: VoiceNotification.GuildVoiceNotification =
-                    match Map.tryFind e.Guild.Id guildVoiceNotification with
-                    | Some voiceNotificationData ->
-                        let voiceNotificationData =
+                let guildVoiceNotification =
+                    guildVoiceNotification
+                    |> VoiceNotification.Guilds.set
+                        e.Guild.Id
+                        (fun voiceNotificationData ->
                             { voiceNotificationData with
-                                TemplateMessage = Some templateMessage }
-
-                        VoiceNotification.replace voiceNotificationData
-
-                        Map.add guild.Id voiceNotificationData guildVoiceNotification
-                    | None ->
-                        let x = VoiceNotification.insert (guild.Id, None, Some templateMessage)
-                        Map.add guild.Id x guildVoiceNotification
+                                TemplateMessage = Some templateMessage
+                            }
+                        )
 
                 awaiti (replyMessage.ModifyAsync(Entities.Optional("Template message has been set")))
 
@@ -140,9 +132,9 @@ let voiceNotificationReduce
 let reduce (msg: Msg) (state: State): State =
     match msg with
     | VoiceStateUpdatedHandle e ->
-        match Map.tryFind e.Guild.Id state.VoiceNotifications with
+        match VoiceNotification.Guilds.tryFindById e.Guild.Id state.VoiceNotifications with
         | Some settings ->
-            match settings.OutputChannelId, settings.TemplateMessage with
+            match settings.Data.OutputChannelId, settings.Data.TemplateMessage with
             | Some outputChannelId, Some templateMsg ->
                 match e.After with
                 | null -> state
@@ -198,7 +190,7 @@ let reduce (msg: Msg) (state: State): State =
 
 let m =
     let init = {
-        VoiceNotifications = VoiceNotification.getAll ()
+        VoiceNotifications = VoiceNotification.Guilds.init "voiceNotifications" Db.database
     }
 
     MailboxProcessor.Start (fun mail ->

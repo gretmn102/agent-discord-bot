@@ -2,62 +2,95 @@ module VoiceChannelNotification.Model
 open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
+open MongoDB.Bson.Serialization.Attributes
 
 open Types
 open Db
 
 module VoiceNotification =
-    type VoiceChannelId = ChannelId
-
-    type VoiceNotificationData =
+    [<BsonIgnoreExtraElements>]
+    type DataPreVersion =
         {
-            mutable Id: ObjectId
-            mutable GuildId: GuildId
-            mutable OutputChannelId: ChannelId option
-            mutable TemplateMessage: string option
+            Id: ObjectId
+            GuildId: GuildId
+            OutputChannelId: ChannelId option
+            TemplateMessage: string option
         }
-        static member Init
-            (
-                guildId: GuildId,
-                outputChannelId: ChannelId option,
-                templateMessage: string option
-            ) =
 
+    type GuildData =
+        {
+            OutputChannelId: ChannelId option
+            TemplateMessage: string option
+        }
+        static member Init outputChannelId templateMessage =
             {
-                Id = ObjectId.Empty
-                GuildId = guildId
                 OutputChannelId = outputChannelId
                 TemplateMessage = templateMessage
-
             }
+        static member Empty =
+            {
+                OutputChannelId = None
+                TemplateMessage = None
+            }
+        static member Serialize (data: GuildData) =
+            data |> Json.ser
+        static member Deserialize json =
+            try
+                Ok (Json.des json)
+            with e ->
+                Error e.Message
 
-    let roles = database.GetCollection<VoiceNotificationData>("voiceNotifications")
+    type Version =
+        | V0 = 0
 
-    type GuildVoiceNotification = Map<GuildId, VoiceNotificationData>
+    type Id = GuildId
 
-    let getAll (): GuildVoiceNotification =
-        roles.Find(fun x -> true).ToEnumerable()
-        |> Seq.fold
-            (fun st x ->
-                Map.add x.GuildId x st
-            )
-            Map.empty
+    type Guild = CommonDb.Data<Id, Version, GuildData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Guild =
+        let create id data: Guild =
+            CommonDb.Data.create id Version.V0 data
 
-    let replace (newRoleData: VoiceNotificationData) =
-        roles.ReplaceOne((fun x -> x.Id = newRoleData.Id), newRoleData)
-        |> ignore
+    type Guilds = CommonDb.GuildData<Id, Version, GuildData>
+    [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    [<RequireQualifiedAccess>]
+    module Guilds =
+        let createData id =
+            Guild.create id GuildData.Empty
 
-    let insert
-        (
-            guildId: GuildId,
-            outputChannelId: ChannelId option,
-            templateMessage: string option
-        ) =
+        let init collectionName (db: IMongoDatabase): Guilds =
+            CommonDb.GuildData.init
+                createData
+                (fun ver doc ->
+                    match ver with
+                    | Some ver ->
+                        match ver with
+                        | Version.V0 ->
+                            None, Serialization.BsonSerializer.Deserialize<Guild>(doc)
+                        | x ->
+                            failwithf "Version = %A not implemented" x
+                    | None ->
+                        let oldValue =
+                            Serialization.BsonSerializer.Deserialize<DataPreVersion>(doc)
+                        let newValue =
+                            GuildData.Init oldValue.OutputChannelId oldValue.TemplateMessage
+                            |> Guild.create oldValue.GuildId
 
-        let x = VoiceNotificationData.Init(guildId, outputChannelId, templateMessage)
-        roles.InsertOne(x)
-        x
+                        Some oldValue.Id, newValue
+                )
+                collectionName
+                db
 
-    let remove (roleData: VoiceNotificationData) =
-        roles.DeleteOne(fun x -> x.Id = roleData.Id)
-        |> ignore
+        let set userId setAdditionParams (guildData: Guilds) =
+            CommonDb.GuildData.set
+                createData
+                userId
+                setAdditionParams
+                guildData
+
+        let drop (db: IMongoDatabase) (items: Guilds) =
+            CommonDb.GuildData.drop db items
+
+        let tryFindById id (items: Guilds): Guild option =
+            CommonDb.GuildData.tryFind id items
