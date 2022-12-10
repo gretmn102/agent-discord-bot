@@ -9,6 +9,7 @@ type Request =
     | GetAvatar of UserId option
     | GetUserInfo of UserId option
     | GetGuildInfo of GuildId option
+    | GetRoleOwners of RoleId
 
 module Parser =
     open FParsec
@@ -29,11 +30,16 @@ module Parser =
         skipStringCI "guild" >>. spaces
         >>. opt puint64
 
+    let pgetRoleOwners: _ Parser =
+        skipStringCI "getRoleOwners" >>. spaces
+        >>. (pmentionRole <|> puint64)
+
     let start f: _ Parser =
         choice [
             pgetAvatar |>> GetAvatar
             pgetUserInfo |>> GetUserInfo
             pgetGuildInfo |>> GetGuildInfo
+            pgetRoleOwners |>> GetRoleOwners
         ]
         >>= fun msg ->
             preturn (fun x -> f x msg)
@@ -290,6 +296,53 @@ let reduce (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: R
             | None -> createMessage e.Guild
 
         ignore (await (e.Channel.SendMessageAsync message))
+
+    | GetRoleOwners roleId ->
+        awaiti <| e.Channel.TriggerTypingAsync()
+
+        let role =
+            match e.Guild.GetRole roleId with
+            | null -> None
+            | role -> Some role
+
+        let send msg =
+            let embed = Entities.DiscordEmbedBuilder()
+            embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+            embed.Description <- msg
+
+            let b = Entities.DiscordMessageBuilder()
+            b.Embed <- embed.Build()
+
+            awaiti <| e.Channel.SendMessageAsync b
+
+        match role with
+        | Some role ->
+            let roleOwners =
+                e.Guild.Members
+                |> Seq.choose (fun (KeyValue(userId, user)) ->
+                    let roles = user.Roles
+
+                    if roles |> Seq.exists (fun x -> x.Id = role.Id) then
+                        Some user
+                    else
+                        None
+                )
+
+            let max = 20
+            [
+                sprintf "Владельцы роли <@&%d> (макс. %d пользователей):" role.Id max
+                yield!
+                    roleOwners
+                    |> Seq.map (fun user ->
+                        sprintf "* <@%d>" user.Id
+                    )
+                    |> Seq.truncate max
+            ]
+            |> String.concat "\n"
+            |> send
+
+        | None ->
+            send (sprintf "<@&%d> такой роли не существует" roleId)
 
 let exec: MessageCreateEventHandler Parser.Parser =
     Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
