@@ -8,7 +8,7 @@ open Extensions
 open Model
 
 type Request =
-    | ChallengeToDuel of UserId
+    | ChallengeToDuel of UserId option
     | CreateRatingTable
 
 module Parser =
@@ -22,7 +22,7 @@ module Parser =
 
     let pchannelToDuel: _ Parser =
         skipStringCI challangeToDuelName >>. spaces
-        >>. (puserMention <|> puint64)
+        >>. opt (puserMention <|> puint64)
 
     let start f: _ Parser =
         choice [
@@ -49,7 +49,7 @@ type ResultBattle =
     | DefenderWin
 
 type Req =
-    | Request of EventArgs.MessageCreateEventArgs * Request
+    | Request of DiscordClient * EventArgs.MessageCreateEventArgs * Request
     | Fight of FightState * EventArgs.ComponentInteractionCreateEventArgs
     | GetState of AsyncReplyChannel<State>
 
@@ -133,66 +133,107 @@ let r = new System.Random()
 
 let reduce msg (state: State) =
     match msg with
-    | Request(e, r) ->
+    | Request(client, e, r) ->
         match r with
         | ChallengeToDuel userId ->
             awaiti <| e.Channel.TriggerTypingAsync()
 
-            if e.Author.Id = userId then
+            let send msg =
                 let b =
                     Entities.DiscordMessageBuilder()
-                        .WithContent(sprintf "<@!%d>, нельзя самого себя вызывать на бой!" e.Author.Id)
+                        .WithContent(msg)
 
                 awaiti <| e.Channel.SendMessageAsync(b)
-            else
+
+                state
+
+            let getTargetUserId next =
+                match userId with
+                | Some userId -> next userId
+                | None ->
+                    match e.Message.ReferencedMessage with
+                    | null ->
+                        sprintf "<@%d>, укажи или процитируй любое сообщение противника, чтобы вызвать его на бой! <:catAttack:1029835643834077315>" e.Author.Id
+                        |> send
+                    | referencedMessage ->
+                        next referencedMessage.Author.Id
+
+            let checkUserAreNotCurrentUser targetUserId next =
+                if e.Author.Id = targetUserId then
+                    sprintf "<@%d>, нельзя самого себя вызывать на бой!" e.Author.Id
+                    |> send
+                else
+                    next ()
+
+            let checkUserAreNotCurrentBot targetUserId next =
+                if client.CurrentUser.Id = targetUserId then
+                    sprintf "<@%d>, со мной лучше не драться, кожанный мешок :robot:" e.Author.Id
+                    |> send
+                else
+                    next ()
+
+            let getTargetUser targetUserId next =
                 let targetUser =
                     try
-                        await <| e.Guild.GetMemberAsync userId
-                        |> Right
+                        await <| e.Guild.GetMemberAsync targetUserId
+                        |> Some
                     with _ ->
-                        sprintf "Пользователь с %d ID не найден" userId
-                        |> Left
+                        None
 
                 match targetUser with
-                | Right _ ->
-                    let b = Entities.DiscordMessageBuilder()
+                | Some user -> next user
+                | None ->
+                    sprintf "<@%d>, пользователь с %d ID не найден" e.Author.Id targetUserId
+                    |> send
 
-                    b.Embed <-
-                        Entities.DiscordEmbedBuilder(
-                            Color = Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme),
-                            Title = "Вызов на дуэль!",
-                            Description = sprintf "<@!%d>, <@!%d> вызывает тебя на бой на 🥚! Соглашаешься?! <:angry:927633404353196113>" userId e.Author.Id
-                        ).Build()
+            let checkTargetAreNotBot (target: Entities.DiscordUser) next =
+                if target.IsBot then
+                    sprintf "<@%d>, <@%d> является ботом, а боты драться не умеют :robot:" e.Author.Id target.Id
+                    |> send
+                else
+                    next ()
 
-                    let applyToPartialState str =
-                        let partialStateStr =
-                            { AttackerId = e.Author.Id; DefenderId = userId }
-                            |> Json.serNotIndent
-                        str + partialStateStr
+            getTargetUserId <| fun targetUserId ->
+            checkUserAreNotCurrentUser targetUserId <| fun () ->
+            checkUserAreNotCurrentBot targetUserId <| fun () ->
+            getTargetUser targetUserId <| fun targetUser ->
+            checkTargetAreNotBot targetUser <| fun () ->
+                let b = Entities.DiscordMessageBuilder()
 
-                    let buttons: Entities.DiscordComponent [] =
-                        [|
-                            Entities.DiscordButtonComponent(
-                                ButtonStyle.Primary,
-                                applyToPartialState YesButtonId,
-                                "Да"
-                            )
-                            Entities.DiscordButtonComponent(
-                                ButtonStyle.Danger,
-                                applyToPartialState NoButtonId,
-                                "Нет"
-                            )
-                        |]
+                b.Embed <-
+                    Entities.DiscordEmbedBuilder(
+                        Color = Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme),
+                        Title = "Вызов на дуэль!",
+                        Description = sprintf "<@%d>, <@%d> вызывает тебя на бой на 🥚! Соглашаешься?! <:angry:927633404353196113>" targetUserId e.Author.Id
+                    ).Build()
 
-                    buttons
-                    |> b.AddComponents
-                    |> ignore
+                let applyToPartialState str =
+                    let partialStateStr =
+                        { AttackerId = e.Author.Id; DefenderId = targetUserId }
+                        |> Json.serNotIndent
+                    str + partialStateStr
 
-                    awaiti <| e.Channel.SendMessageAsync b
-                | Left msgErr ->
-                    awaiti <| e.Channel.SendMessageAsync msgErr
+                let buttons: Entities.DiscordComponent [] =
+                    [|
+                        Entities.DiscordButtonComponent(
+                            ButtonStyle.Primary,
+                            applyToPartialState YesButtonId,
+                            "Да"
+                        )
+                        Entities.DiscordButtonComponent(
+                            ButtonStyle.Danger,
+                            applyToPartialState NoButtonId,
+                            "Нет"
+                        )
+                    |]
 
-            state
+                buttons
+                |> b.AddComponents
+                |> ignore
+
+                awaiti <| e.Channel.SendMessageAsync b
+
+                state
         | CreateRatingTable ->
             awaiti <| e.Channel.TriggerTypingAsync()
 
@@ -274,7 +315,7 @@ let m =
 
 let exec: MessageCreateEventHandler Parser.Parser =
     Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request (e, msg))
+        m.Post (Request (client, e, msg))
     )
 
 let (|StartsWith|_|) (value: string) (str: string) =
