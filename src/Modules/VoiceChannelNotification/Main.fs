@@ -188,31 +188,38 @@ let reduce (msg: Msg) (state: State): State =
                 voiceNotificationReduce e msg state.VoiceNotifications
         }
 
-let m =
-    let init = {
-        VoiceNotifications = VoiceNotification.Guilds.init "voiceNotifications" Db.database
+let create db =
+    let m =
+        let init = {
+            VoiceNotifications = VoiceNotification.Guilds.init "voiceNotifications" db
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post(VoiceNotificationMsg (e, msg))
+                )
+            Some exec
+
+        VoiceStateUpdatedHandler =
+            let voiceHandle e =
+                m.Post (VoiceStateUpdatedHandle e)
+            Some voiceHandle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let voiceHandle e =
-    m.Post (VoiceStateUpdatedHandle e)
-
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post(VoiceNotificationMsg (e, msg))
-    )

@@ -43,6 +43,7 @@
     <Compile Include="Shared\Ui\Table.fs" />
     <Compile Include="Shared\Api.fs" />
     <Compile Include="Shared\Db.fs" />
+    <Compile Include="Shared\BotModule.fs" />
     <Compile Include="Modules\NumberToWords\Core.fs" />
     <Compile Include="Modules\NumberToWords\Main.fs" />
     <Compile Include="Modules\UserRole\Model.fs" />

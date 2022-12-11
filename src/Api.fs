@@ -164,7 +164,9 @@ let start (token: string) =
                     | None -> ()
 
                 | Request.Doorkeeper req ->
-                    let res = Doorkeeper.Main.apiRequestHandle req
+                    let res =
+                        // TODO: Doorkeeper.Main.apiRequestHandle req
+                        failwithf "TODO: Doorkeeper.Main.apiRequestHandle req"
 
                     match x.Id with
                     | Some id ->

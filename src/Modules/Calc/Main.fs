@@ -1,6 +1,7 @@
 module Calc.Main
 open DSharpPlus
 
+open Shared
 open Types
 
 type Request = float
@@ -29,7 +30,12 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (r: Request) =
 
     awaiti <| e.Channel.SendMessageAsync (floatToString r)
 
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        reduce e msg
-    )
+let create () =
+    { BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    reduce e msg
+                )
+            Some exec
+    }

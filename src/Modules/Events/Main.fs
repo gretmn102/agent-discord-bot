@@ -141,31 +141,38 @@ let reduce (msg: Msg) (state: State): State =
                 settingReduce e msg state.Setting
         }
 
-let m =
-    let init = {
-        Setting = Model.Guilds.init "womensDaySetting" Db.database
+let create db =
+    let m =
+        let init = {
+            Setting = Model.Guilds.init "womensDaySetting" db
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (SettingMsg (e, msg))
+                )
+            Some exec
+
+        MessageCreateEventHandle =
+            let handle (client, (e: EventArgs.MessageCreateEventArgs)) =
+                m.Post (NewMessageHandle e)
+            Some handle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let handle (e: EventArgs.MessageCreateEventArgs) =
-    m.Post (NewMessageHandle e)
-
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (SettingMsg (e, msg))
-    )

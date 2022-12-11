@@ -287,26 +287,31 @@ let reduce ((client, e, msg): Msg) (state: State): State =
 
         state
 
-let m =
-    let init = ()
+let create () =
+    let m =
+        let init = ()
 
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! (msg: Msg) = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! (msg: Msg) = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
 
-                return! loop state
-            }
-        loop init
-    )
+                    return! loop state
+                }
+            loop init
+        )
 
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (client, e, msg)
-    )
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (client, e, msg)
+                )
+            Some exec
+    }

@@ -3,6 +3,7 @@ open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
 
+open Shared
 open Types
 open Model
 
@@ -115,7 +116,15 @@ let reduce (e: DSharpPlus.EventArgs.MessageCreateEventArgs) msg =
                 else
                     awaiti (e.Channel.SendMessageAsync errorMessage)
 
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        reduce e msg
-    )
+let create () =
+    { BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    reduce e msg
+                )
+            Some exec
+
+        VoiceStateUpdatedHandler =
+            Some voiceHandle
+    }

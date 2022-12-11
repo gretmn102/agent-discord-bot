@@ -145,34 +145,54 @@ let reduce (msg: Msg) (state: State) =
                 db
         }
 
-let m =
-    let init = {
-        ReactionEvents = Model.Guilds.init "reactionEvents" Db.database
+let create db =
+    let m =
+        let init = {
+            ReactionEvents = Model.Guilds.init "reactionEvents" db
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    let handle e =
+        m.Post (GuildReactionHandle e)
+
+
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (Request (e, msg))
+                )
+            Some exec
+
+        MessageReactionAddedHandler =
+            let handle (client: DiscordClient, e: EventArgs.MessageReactionAddEventArgs) =
+                if client.CurrentUser.Id <> e.User.Id then
+                    handle (AddedEvent e)
+            Some handle
+
+        MessageReactionRemoved =
+            let handle (client: DiscordClient, e: EventArgs.MessageReactionRemoveEventArgs) =
+                if client.CurrentUser.Id <> e.User.Id then
+                    handle (RemovedEvent e)
+            Some handle
+
+        MessageDeletedHandler =
+            let messageDeletedHandle e =
+                m.Post (MessageDeletedHandle e)
+            Some messageDeletedHandle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let handle e =
-    m.Post (GuildReactionHandle e)
-
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request (e, msg))
-    )
-
-let messageDeletedHandle e =
-    m.Post (MessageDeletedHandle e)

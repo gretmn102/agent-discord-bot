@@ -3,6 +3,7 @@ open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
 
+open Shared
 open Types
 open Model
 
@@ -380,31 +381,38 @@ let mainReduce req state =
         state
     | Request (e, msg) -> reduce e msg state
 
-let m: MailboxProcessor<Req> =
-    let init = {
-        Characters = GuildUsers.init "characters" Db.database
+let create collectionName (db: MongoDB.Driver.IMongoDatabase) =
+    let m: MailboxProcessor<Req> =
+        let init = {
+            Characters = GuildUsers.init collectionName db
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! req = mail.Receive()
+                    let state =
+                        try
+                            mainReduce req state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    { BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (Request(e, msg))
+                )
+            Some exec
+
+        MessageCreateEventHandle =
+            let handle (client, e) =
+                m.Post (Handle e)
+            Some handle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! req = mail.Receive()
-                let state =
-                    try
-                        mainReduce req state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request(e, msg))
-    )
-
-let handle e =
-    m.Post (Handle e)

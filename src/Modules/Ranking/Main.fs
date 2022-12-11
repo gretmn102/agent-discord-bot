@@ -671,38 +671,6 @@ let reduce (msg: Msg) (state: State): State =
         r.Reply state
 
         state
-let m =
-    let init = {
-        Settings = RankingSettings.Guilds.init "guildRankingSettings" Db.database
-        Rankings = Rankings.GuildUsers.init "guildRankings" Db.database
-        CoolDowns = Map.empty
-        MostActiveSettings = MostActiveSettings.Guilds.init "mostActiveSettings" Db.database
-    }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let handle (e: EventArgs.MessageCreateEventArgs) =
-    m.Post (NewMessageHandle e)
-
-let componentInteractionCreateHandle client e =
-    MostActiveTable.componentInteractionCreateHandle
-        client
-        e
-        (fun () -> m.PostAndReply GetState)
 
 module Parser =
     open FParsec
@@ -776,23 +744,66 @@ module Parser =
         >>= fun msg ->
             preturn (fun x -> f x msg)
 
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request (e, msg))
-    )
+let create db =
+    let m =
+        let init = {
+            Settings = RankingSettings.Guilds.init "guildRankingSettings" db
+            Rankings = Rankings.GuildUsers.init "guildRankings" db
+            CoolDowns = Map.empty
+            MostActiveSettings = MostActiveSettings.Guilds.init "mostActiveSettings" db
+        }
 
-let mostActiveTimerStart (client: DiscordClient) =
-    let scheduler = new Scheduler.Scheduler<unit>(Scheduler.State.Empty)
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
 
-    let nextDay (now: System.DateTime) =
-        let now = now.AddDays 1.0
-        System.DateTime(now.Year, now.Month, now.Day, 0, 0, 0)
+                    return! loop state
+                }
+            loop init
+        )
 
-    scheduler.AddJob { Time = nextDay System.DateTime.Now; Type = () }
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (Request (e, msg))
+                )
+            Some exec
 
-    Scheduler.startAsync scheduler 100 (fun job ->
-        m.Post (MostActiveActivateAll client)
+        MessageCreateEventHandle =
+            let handle (client, (e: EventArgs.MessageCreateEventArgs)) =
+                m.Post (NewMessageHandle e)
+            Some handle
 
-        scheduler.AddJob { Time = nextDay job.Time; Type = () }
-    )
-    |> ignore
+        ComponentInteractionCreateHandle =
+            let componentInteractionCreateHandle (client, e) =
+                MostActiveTable.componentInteractionCreateHandle
+                    client
+                    e
+                    (fun () -> m.PostAndReply GetState)
+            Some componentInteractionCreateHandle
+
+        Scheduler =
+            let mostActiveTimerStart (client: DiscordClient) =
+                let scheduler = new Scheduler.Scheduler<unit>(Scheduler.State.Empty)
+
+                let nextDay (now: System.DateTime) =
+                    let now = now.AddDays 1.0
+                    System.DateTime(now.Year, now.Month, now.Day, 0, 0, 0)
+
+                scheduler.AddJob { Time = nextDay System.DateTime.Now; Type = () }
+
+                Scheduler.startAsync scheduler 100 (fun job ->
+                    m.Post (MostActiveActivateAll client)
+
+                    scheduler.AddJob { Time = nextDay job.Time; Type = () }
+                )
+            Some mostActiveTimerStart
+    }

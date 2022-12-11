@@ -989,42 +989,49 @@ let reduce (msg: Msg) (state: State): State =
 
         state
 
-let m =
-    let init: State = {
-        Players = Players.GuildData.init "fishingPlayers" Db.database
-        Items = ItemsDb.Items.init "fishingItems" Db.database
-        Settings = Settings.GuildData.init "fishingSettings" Db.database
+let create db =
+    let m =
+        let init: State = {
+            Players = Players.GuildData.init "fishingPlayers" db
+            Items = ItemsDb.Items.init "fishingItems" db
+            Settings = Settings.GuildData.init "fishingSettings" db
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (Request (e, msg))
+                )
+            Some exec
+
+        ComponentInteractionCreateHandle =
+            let componentInteractionCreateHandle (client, e) =
+                InventoryTable.componentInteractionCreateHandle
+                    (fun () -> m.PostAndReply GetState)
+                    client
+                    e
+                || BaitChoiceUi.handle client e (fun st ->
+                    m.Post (ToFishHandle(e, st))
+                )
+                || ChestChoiceUi.handle client e (fun st ->
+                    m.Post (OpenUpHandle(e, st))
+                )
+            Some componentInteractionCreateHandle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request (e, msg))
-    )
-
-let componentInteractionCreateHandle client e =
-    InventoryTable.componentInteractionCreateHandle
-        (fun () -> m.PostAndReply GetState)
-        client
-        e
-    || BaitChoiceUi.handle client e (fun st ->
-        m.Post (ToFishHandle(e, st))
-    )
-    || ChestChoiceUi.handle client e (fun st ->
-        m.Post (OpenUpHandle(e, st))
-    )

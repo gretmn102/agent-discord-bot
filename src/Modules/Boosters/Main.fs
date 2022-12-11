@@ -208,31 +208,38 @@ let mainReduce req (state: State) =
             GuildBoostersSettings = reduce e req state.GuildBoostersSettings
         }
 
-let m: MailboxProcessor<Req> =
-    let init = {
-        GuildBoostersSettings = GuildSettings.init "boosterGuildSettings" Db.database
+let create db =
+    let m: MailboxProcessor<Req> =
+        let init = {
+            GuildBoostersSettings = GuildSettings.init "boosterGuildSettings" db
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! req = mail.Receive()
+                    let state =
+                        try
+                            mainReduce req state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    { BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (Request(e, msg))
+                )
+            Some exec
+
+        GuildMemberUpdatedHandler =
+            let handle e =
+                m.Post (Handle e)
+            Some handle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! req = mail.Receive()
-                let state =
-                    try
-                        mainReduce req state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request(e, msg))
-    )
-
-let handle e =
-    m.Post (Handle e)

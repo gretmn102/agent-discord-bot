@@ -3,6 +3,7 @@ open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
 
+open Shared
 open Types
 open Extensions
 
@@ -147,116 +148,136 @@ let reduce (msg: Req) (state: State) =
 
             state
 
-let m: MailboxProcessor<Req> =
-    let init = {
-        Users = Model.Users.init "age" Db.database
-    }
+let create collectionName (db: MongoDB.Driver.IMongoDatabase) =
+    let m: MailboxProcessor<Req> =
+        let init = {
+            Users = Model.Users.init collectionName db
+        }
 
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
 
-                return! loop state
-            }
-        loop init
-    )
+                    return! loop state
+                }
+            loop init
+        )
 
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request (e, msg))
-    )
+    let createAgeStatisticEmbed guildId =
+        let ageStatistic = m.PostAndReply(fun r -> GetAgeStatistics(r, guildId))
 
-let createAgeStatisticEmbed guildId =
-    let ageStatistic = m.PostAndReply(fun r -> GetAgeStatistics(r, guildId))
+        if Map.isEmpty ageStatistic then
+            Entities.DiscordEmbedBuilder()
+                .WithDescription("Пока что никто на этом сервере не прошел опрос.")
+                .Build()
+        else
+            let ages, counts =
+                let f = List.rev >> String.concat "\n"
+                ageStatistic
+                |> Seq.fold
+                    (fun (ages, counts) (KeyValue(age, count)) -> string age::ages, string count::counts)
+                    ([], [])
+                |> fun (ages, counts) -> f ages, f counts
 
-    if Map.isEmpty ageStatistic then
-        Entities.DiscordEmbedBuilder()
-            .WithDescription("Пока что никто на этом сервере не прошел опрос.")
-            .Build()
-    else
-        let ages, counts =
-            let f = List.rev >> String.concat "\n"
-            ageStatistic
-            |> Seq.fold
-                (fun (ages, counts) (KeyValue(age, count)) -> string age::ages, string count::counts)
-                ([], [])
-            |> fun (ages, counts) -> f ages, f counts
+            Entities.DiscordEmbedBuilder()
+                .WithDescription("Статистика сервера такова:")
+                .AddField("Возраст", ages, true)
+                .AddField("Кол-во", counts, true)
+                .Build()
 
-        Entities.DiscordEmbedBuilder()
-            .WithDescription("Статистика сервера такова:")
-            .AddField("Возраст", ages, true)
-            .AddField("Кол-во", counts, true)
-            .Build()
+    let modalHandle (e: EventArgs.ModalSubmitEventArgs) =
+        let interaction = e.Interaction
+        if interaction.Data.CustomId = AgeModalId then
+            match e.Values.TryGetValue AgeInputComponentId with
+            | true, age ->
+                let b = Entities.DiscordInteractionResponseBuilder()
+                b.IsEphemeral <- true
 
-let modalHandle (e: EventArgs.ModalSubmitEventArgs) =
-    let interaction = e.Interaction
-    if interaction.Data.CustomId = AgeModalId then
-        match e.Values.TryGetValue AgeInputComponentId with
-        | true, age ->
-            let b = Entities.DiscordInteractionResponseBuilder()
-            b.IsEphemeral <- true
+                match Int32.tryParse age with
+                | None ->
+                    let content = sprintf "Пожалуйста, введите число в поле \"Возраст\", а не `%s`." age
+                    b.Content <- content
+                | Some age ->
+                    m.Post (InputAge (interaction.User.Id, interaction.Guild.Id, age))
 
-            match Int32.tryParse age with
-            | None ->
-                let content = sprintf "Пожалуйста, введите число в поле \"Возраст\", а не `%s`." age
-                b.Content <- content
-            | Some age ->
-                m.Post (InputAge (interaction.User.Id, interaction.Guild.Id, age))
+                    b.Content <- "Спасибо, что указали возраст."
 
-                b.Content <- "Спасибо, что указали возраст."
+                    b.AddEmbed (createAgeStatisticEmbed interaction.Guild.Id) |> ignore
 
-                b.AddEmbed (createAgeStatisticEmbed interaction.Guild.Id) |> ignore
+                awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
-            awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+            | false, _ -> ()
 
-        | false, _ -> ()
+            true
+        else
+            false
 
-let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-    if e.Message.Author.Id = client.CurrentUser.Id then
-        match e.Id with
-        | AgeCreateModalButtonId ->
-            let b = Entities.DiscordInteractionResponseBuilder()
-                        .WithTitle("Modal User")
-                        .WithCustomId(AgeModalId)
-                        .AddComponents(
-                            Entities.TextInputComponent(
-                                "Возраст",
-                                AgeInputComponentId,
-                                required = true,
-                                style = TextInputStyle.Short
+    let componentInteractionCreateHandle ((client: DiscordClient), (e: EventArgs.ComponentInteractionCreateEventArgs)) =
+        if e.Message.Author.Id = client.CurrentUser.Id then
+            match e.Id with
+            | AgeCreateModalButtonId ->
+                let b = Entities.DiscordInteractionResponseBuilder()
+                            .WithTitle("Modal User")
+                            .WithCustomId(AgeModalId)
+                            .AddComponents(
+                                Entities.TextInputComponent(
+                                    "Возраст",
+                                    AgeInputComponentId,
+                                    required = true,
+                                    style = TextInputStyle.Short
+                                )
                             )
-                        )
 
-            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b)
+                awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b)
 
-            true
+                true
 
-        | AgeGetAgeStatisticsButtonId ->
-            let b = Entities.DiscordInteractionResponseBuilder()
-            b.IsEphemeral <- true
+            | AgeGetAgeStatisticsButtonId ->
+                let b = Entities.DiscordInteractionResponseBuilder()
+                b.IsEphemeral <- true
 
-            if m.PostAndReply (fun r -> IsUserEnteredAge (r, e.User.Id)) then
-                b.AddEmbed (createAgeStatisticEmbed e.Guild.Id) |> ignore
-            else
-                b.Content <- "Чтобы посмотреть статистику, сперва введите свой возраст."
+                if m.PostAndReply (fun r -> IsUserEnteredAge (r, e.User.Id)) then
+                    b.AddEmbed (createAgeStatisticEmbed e.Guild.Id) |> ignore
+                else
+                    b.Content <- "Чтобы посмотреть статистику, сперва введите свой возраст."
 
-            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
-            true
+                true
 
-        | _ -> false
-    else
-        false
+            | _ -> false
+        else
+            false
 
-let guildMemberRemoveHandle (e: EventArgs.GuildMemberRemoveEventArgs) =
-    m.Post (AddOrRemoveGuildId (Remove, e.Member.Id, e.Guild.Id))
+    { BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (Request (e, msg))
+                )
 
-let guildMemberAddedHandle (e: EventArgs.GuildMemberAddEventArgs) =
-    m.Post (AddOrRemoveGuildId (Add, e.Member.Id, e.Guild.Id))
+            Some exec
+
+        GuildMemberAddedHandler =
+            let guildMemberAddedHandle (e: EventArgs.GuildMemberAddEventArgs) =
+                m.Post (AddOrRemoveGuildId (Add, e.Member.Id, e.Guild.Id))
+            Some guildMemberAddedHandle
+
+        GuildMemberRemovedHandler =
+            let guildMemberRemoveHandle (e: EventArgs.GuildMemberRemoveEventArgs) =
+                m.Post (AddOrRemoveGuildId (Remove, e.Member.Id, e.Guild.Id))
+            Some guildMemberRemoveHandle
+
+        ComponentInteractionCreateHandle =
+            Some componentInteractionCreateHandle
+
+        ModalSubmit =
+            Some modalHandle
+    }

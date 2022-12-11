@@ -286,22 +286,4 @@ module CommonDb =
 
             deleteResult, db
 
-let login = getEnvironmentVariable "BotDbL"
-let password = getEnvironmentVariable "BotDbP"
-
-let settings =
-    MongoClientSettings.FromConnectionString (
-        sprintf
-            "mongodb+srv://%s:%s@cluster0.jkwib.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
-            login
-            password
-    )
-
-let client = new MongoClient(settings)
-let database =
-    let dataBaseName =
-        getEnvironmentVariable "DataBaseName"
-
-    client.GetDatabase(dataBaseName)
-
 let superUserId = 796931597898088448UL

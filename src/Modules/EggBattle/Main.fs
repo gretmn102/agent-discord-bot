@@ -292,110 +292,118 @@ let reduce msg (state: State) =
 
         state
 
-let m =
-    let init = {
-        Rating = Rating.GuildUsers.init "EggBattleRatings" Db.database
-    }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request (client, e, msg))
-    )
-
 let (|StartsWith|_|) (value: string) (str: string) =
     if str.StartsWith value then
         Some (str.[value.Length..str.Length - 1])
     else
         None
 
-let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-    if e.Message.Author.Id = client.CurrentUser.Id then
-        let f fightStateStr next =
-            let fightState =
-                try
-                    Right (Json.des fightStateStr: FightState)
-                with e ->
-                    e.Message
-                    |> Left
+let create db =
+    let m =
+        let init = {
+            Rating = Rating.GuildUsers.init "EggBattleRatings" db
+        }
 
-            match fightState with
-            | Right fightState ->
-                if fightState.DefenderId = e.User.Id then
-                    next fightState
-                else
-                    let b =
-                        Entities.DiscordInteractionResponseBuilder()
-                            .AsEphemeral(true)
-                            .WithContent(sprintf "На эту кнопку должен нажать <@!%d>!" fightState.DefenderId)
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
 
-                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                    return! loop state
+                }
+            loop init
+        )
 
-            | Left errMsg ->
-                // remove components
-                let msg = e.Message
-                let b = Entities.DiscordInteractionResponseBuilder()
-                // necessary because throw `System.ArgumentException: You must specify content, an embed, a sticker, or at least one file.`
-                b.AddEmbeds msg.Embeds |> ignore
-                b.Content <- msg.Content
-                awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+    let componentInteractionCreateHandle ((client: DiscordClient), (e: EventArgs.ComponentInteractionCreateEventArgs)) =
+        if e.Message.Author.Id = client.CurrentUser.Id then
+            let f fightStateStr next =
+                let fightState =
+                    try
+                        Right (Json.des fightStateStr: FightState)
+                    with e ->
+                        e.Message
+                        |> Left
 
-                Entities.DiscordFollowupMessageBuilder()
-                    .AsEphemeral(true)
-                    .WithContent(
-                        [
-                            sprintf "Ой, что-то пошло не так. Вызовите снова пользователя на бой командой `.%s @пользователь`:" Parser.challangeToDuelName
-                            "```"
-                            errMsg
-                            "```"
-                        ] |> String.concat "\n"
-                    )
-                |> e.Interaction.CreateFollowupMessageAsync
-                |> awaiti
+                match fightState with
+                | Right fightState ->
+                    if fightState.DefenderId = e.User.Id then
+                        next fightState
+                    else
+                        let b =
+                            Entities.DiscordInteractionResponseBuilder()
+                                .AsEphemeral(true)
+                                .WithContent(sprintf "На эту кнопку должен нажать <@!%d>!" fightState.DefenderId)
 
-        match e.Id with
-        | StartsWith YesButtonId rest ->
-            f rest (fun fightState ->
-                m.Post (Fight (fightState, e))
-            )
+                        awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
-            true
-        | StartsWith NoButtonId rest ->
-            f rest (fun fightState ->
-                let b = Entities.DiscordInteractionResponseBuilder()
+                | Left errMsg ->
+                    // remove components
+                    let msg = e.Message
+                    let b = Entities.DiscordInteractionResponseBuilder()
+                    // necessary because throw `System.ArgumentException: You must specify content, an embed, a sticker, or at least one file.`
+                    b.AddEmbeds msg.Embeds |> ignore
+                    b.Content <- msg.Content
+                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
-                let embed =
-                    Entities.DiscordEmbedBuilder()
-                        .WithColor(DiscordEmbed.backgroundColorDarkTheme)
-                        .WithTitle("Итог сражения!")
-                        .WithDescription(sprintf "<@!%d> отказывается биться с <@!%d>! 👎" fightState.DefenderId fightState.AttackerId)
-                        .Build()
+                    Entities.DiscordFollowupMessageBuilder()
+                        .AsEphemeral(true)
+                        .WithContent(
+                            [
+                                sprintf "Ой, что-то пошло не так. Вызовите снова пользователя на бой командой `.%s @пользователь`:" Parser.challangeToDuelName
+                                "```"
+                                errMsg
+                                "```"
+                            ] |> String.concat "\n"
+                        )
+                    |> e.Interaction.CreateFollowupMessageAsync
+                    |> awaiti
 
-                b.AddEmbed embed |> ignore
+            match e.Id with
+            | StartsWith YesButtonId rest ->
+                f rest (fun fightState ->
+                    m.Post (Fight (fightState, e))
+                )
 
-                awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
-            )
+                true
+            | StartsWith NoButtonId rest ->
+                f rest (fun fightState ->
+                    let b = Entities.DiscordInteractionResponseBuilder()
 
-            true
-        | _ ->
-            RatingTable.componentInteractionCreateHandle
-                client
-                e
-                (fun () -> m.PostAndReply GetState)
-    else
-        false
+                    let embed =
+                        Entities.DiscordEmbedBuilder()
+                            .WithColor(DiscordEmbed.backgroundColorDarkTheme)
+                            .WithTitle("Итог сражения!")
+                            .WithDescription(sprintf "<@!%d> отказывается биться с <@!%d>! 👎" fightState.DefenderId fightState.AttackerId)
+                            .Build()
+
+                    b.AddEmbed embed |> ignore
+
+                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+                )
+
+                true
+            | _ ->
+                RatingTable.componentInteractionCreateHandle
+                    client
+                    e
+                    (fun () -> m.PostAndReply GetState)
+        else
+            false
+
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (Request (client, e, msg))
+                )
+            Some exec
+
+        ComponentInteractionCreateHandle =
+            Some componentInteractionCreateHandle
+    }

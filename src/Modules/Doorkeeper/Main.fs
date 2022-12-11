@@ -578,38 +578,47 @@ let reduce (msg: Msg) (state: State): State =
         | Some newState -> newState
         | None -> state
 
-let m =
-    let init = {
-        Settings = Setting.GuildData.init Db.database
-        Leavers = Leavers.GuildUsers.init "leavers" Db.database
+let create db =
+    let m =
+        let init = {
+            Settings = Setting.GuildData.init db
+            Leavers = Leavers.GuildUsers.init "leavers" db
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    let apiRequestHandle req =
+        m.PostAndReply (fun r -> ApiRequest(req, r))
+
+    { BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (Request (e, msg))
+                )
+            Some exec
+
+        GuildMemberAddedHandler =
+            let guildMemberAddHandle (e: EventArgs.GuildMemberAddEventArgs) =
+                m.Post (GuildMemberAddedHandle e)
+            Some guildMemberAddHandle
+
+        GuildMemberRemovedHandler =
+            let guildMemberRemoveHandle (e: EventArgs.GuildMemberRemoveEventArgs) =
+                m.Post (GuildMemberRemovedHandle e)
+            Some guildMemberRemoveHandle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let guildMemberAddHandle (e: EventArgs.GuildMemberAddEventArgs) =
-    m.Post (GuildMemberAddedHandle e)
-
-let guildMemberRemoveHandle (e: EventArgs.GuildMemberRemoveEventArgs) =
-    m.Post (GuildMemberRemovedHandle e)
-
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request (e, msg))
-    )
-
-let apiRequestHandle req =
-    m.PostAndReply (fun r -> ApiRequest(req, r))

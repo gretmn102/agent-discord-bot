@@ -1,6 +1,7 @@
 module BallotBox.Main
 open DSharpPlus
 
+open Shared
 open Types
 
 type Request =
@@ -33,7 +34,12 @@ let reduce req state appsHubInit =
         | BallotBox(description, choices) ->
             appsHubInit (description, choices) client e
 
-let exec appsHubInit: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        reduce (MessageCreateEventHandler(client, e, msg)) () appsHubInit
-    )
+let create appsHubInit =
+    { BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec appsHubInit: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    reduce (MessageCreateEventHandler(client, e, msg)) () appsHubInit
+                )
+            Some (exec appsHubInit)
+    }

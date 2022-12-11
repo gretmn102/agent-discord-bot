@@ -83,7 +83,12 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (req: Request) =
 
         awaiti <| e.Channel.SendMessageAsync(res)
 
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        reduce e msg
-    )
+let create () =
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    reduce e msg
+                )
+            Some exec
+    }

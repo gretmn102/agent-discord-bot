@@ -52,7 +52,12 @@ let reduce (e: EventArgs.MessageCreateEventArgs) ((emoji, str): Request) =
         | Left errMsg ->
             emojiFont (Left errMsg)
 
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        reduce e msg
-    )
+let create () =
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    reduce e msg
+                )
+            Some exec
+    }

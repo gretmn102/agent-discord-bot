@@ -708,62 +708,69 @@ let reduce (msg: Msg) (state: State): State =
             FlagImages = flagImages
         }
 
-let m =
-    let init: State = {
-        Players = Players.GuildData.init Db.database
-        FlagImages =
-            let isLoadFlagsOnStartup = true
+let create db =
+    let m =
+        let init: State = {
+            Players = Players.GuildData.init db
+            FlagImages =
+                let isLoadFlagsOnStartup = true
 
-            if isLoadFlagsOnStartup then
-                printfn "Downloading flags..."
-                let urls =
-                    Countries.countriesById
-                    |> Seq.map (fun (KeyValue(k, v)) -> v.FlagUrl)
-                let _, webCacher = FlagsRenderer.downloads urls WebCacher.empty
-                printfn "Flags has been downloaded."
-                webCacher
-            else
-                WebCacher.empty
+                if isLoadFlagsOnStartup then
+                    printfn "Downloading flags..."
+                    let urls =
+                        Countries.countriesById
+                        |> Seq.map (fun (KeyValue(k, v)) -> v.FlagUrl)
+                    let _, webCacher = FlagsRenderer.downloads urls WebCacher.empty
+                    printfn "Flags has been downloaded."
+                    webCacher
+                else
+                    WebCacher.empty
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    m.Post (Request (e, msg))
+                )
+            Some exec
+
+        ComponentInteractionCreateHandle =
+            let componentInteractionCreateHandle (client, e) =
+                QuizUi.handle client e (fun x ->
+                    m.PostAndReply (fun r -> AddScore(r, x))
+                )
+                || QuizSelectionUi.handleStartQuiz client e (fun getSetflagImages ->
+                    let flagImages =
+                        m.PostAndReply GetFlagImages
+                        |> getSetflagImages
+
+                    match flagImages with
+                    | Some flagImages ->
+                        m.Post (SetFlagImages flagImages)
+                    | None -> ()
+                )
+                || RatingTableUi.componentInteractionCreateHandle client e (fun () ->
+                    m.PostAndReply GetPlayers
+                )
+                || QuizSelectionUi.handleRating client e (fun () ->
+                    m.PostAndReply GetPlayers
+                )
+            Some componentInteractionCreateHandle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request (e, msg))
-    )
-
-let componentInteractionCreateHandle client e =
-    QuizUi.handle client e (fun x ->
-        m.PostAndReply (fun r -> AddScore(r, x))
-    )
-    || QuizSelectionUi.handleStartQuiz client e (fun getSetflagImages ->
-        let flagImages =
-            m.PostAndReply GetFlagImages
-            |> getSetflagImages
-
-        match flagImages with
-        | Some flagImages ->
-            m.Post (SetFlagImages flagImages)
-        | None -> ()
-    )
-    || RatingTableUi.componentInteractionCreateHandle client e (fun () ->
-        m.PostAndReply GetPlayers
-    )
-    || QuizSelectionUi.handleRating client e (fun () ->
-        m.PostAndReply GetPlayers
-    )

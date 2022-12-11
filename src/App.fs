@@ -3,19 +3,18 @@ open FsharpMyExtension
 open FsharpMyExtension.Either
 open Microsoft.Extensions.Logging
 open System.Threading.Tasks
-open DSharpPlus.VoiceNext
 
 open Types
 open Extensions
 
 let botEventId = new EventId(42, "Bot-Event")
 
-let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateEventArgs) =
+let cmd pstart (client: DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.MessageCreateEventArgs) =
     let authorId = e.Author.Id
     let botId = client.CurrentUser.Id
 
     if authorId <> botId then
-        match CommandParser.start botId e.Message.Content with
+        match pstart botId e.Message.Content with
         | Right res ->
             match res with
             | CommandParser.Pass -> ()
@@ -46,6 +45,58 @@ let cmd (client:DSharpPlus.DiscordClient) (e:DSharpPlus.EventArgs.MessageCreateE
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 
+let initBotModules (db: MongoDB.Driver.IMongoDatabase) =
+    [|
+        CustomCommand.Main.create db
+        Doorkeeper.Main.create db
+        Doorkeeper.Invites.create db
+        UserRole.Main.create db
+        Ranking.Main.create db
+        VoiceChannelNotification.Main.create db
+
+        MessageManager.create ()
+        ReactionEvent.Main.create db
+        Events.Main.create db
+        ChatVoice.Main.create ()
+        Boosters.Main.create db
+        UserInfo.Main.create ()
+        EggBattle.Main.create db
+        Moderation.Main.create ()
+        Ship.Main.create ()
+        EmojiFont.Main.create ()
+        Calc.Main.create ()
+        Roll.Main.create ()
+        Age.Main.create "age" db
+        DiscordWebhook.Main.create "characters" db
+        BallotBox.Main.create (fun setting client e -> AppsHub.start (AppsHub.Hub.InitBallotBox setting) client e)
+        NumberToWords.Main.create ()
+
+        // SimpleQuiz.Main.create db
+        // Fishing.Main.create db
+    |]
+
+open MongoDB.Driver
+let initDb () =
+    let login = getEnvironmentVariable "BotDbL"
+    let password = getEnvironmentVariable "BotDbP"
+
+    let settings =
+        MongoClientSettings.FromConnectionString (
+            sprintf
+                "mongodb+srv://%s:%s@cluster0.jkwib.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
+                login
+                password
+        )
+
+    let client = new MongoClient(settings)
+    let database =
+        let dataBaseName =
+            getEnvironmentVariable "DataBaseName"
+
+        client.GetDatabase(dataBaseName)
+
+    database
+
 [<EntryPoint>]
 let main argv =
     let tokenEnvVar =
@@ -64,7 +115,7 @@ let main argv =
             #endif
         getEnvironmentVariable serverConnectionVarName
 
-    Api.start ablyToken
+    // Api.start ablyToken
 
     match tryGetEnvironmentVariable tokenEnvVar with
     | None ->
@@ -84,39 +135,81 @@ let main argv =
 
         let client = new DSharpPlus.DiscordClient(config)
 
-        let voice = client.UseVoiceNext()
+        let database = initDb ()
+        let botModules = initBotModules database
 
+        let schedulers =
+            botModules
+            |> Array.choose (fun x ->
+                x.Scheduler
+            )
         client.add_Ready(Emzi0767.Utilities.AsyncEventHandler (fun client readyEventArgs ->
             client.Logger.LogInformation(botEventId, "Client is ready to process events.")
 
+            schedulers
+            |> Array.iter (fun f ->
+                let isContinued = f client
+                ()
+            )
+
             Task.CompletedTask
         ))
 
+        let guildAvailableHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.GuildAvailableHandler
+            )
         client.add_GuildAvailable(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            Doorkeeper.Invites.guildAvailableHandle e.Guild
+            guildAvailableHandlers
+            |> Array.iter (fun f -> f e)
 
             Task.CompletedTask
         ))
 
+        let parseExcludeCommands =
+            let pcommands =
+                botModules
+                |> Array.choose (fun x ->
+                    x.MessageCreateEventHandleExclude
+                )
+                |> CommandParser.initCommandParser
+            CommandParser.start pcommands
+
+        let messageCreateHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.MessageCreateEventHandle
+            )
         client.add_MessageCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            Ranking.Main.handle e
-            Events.Main.handle e
-            DiscordWebhook.Main.handle e
-            CustomCommand.Main.handle client e
+            cmd parseExcludeCommands client e
 
-            cmd client e
+            messageCreateHandlers
+            |> Array.iter (fun f -> f (client, e))
 
             Task.CompletedTask
         ))
 
+        let messageDeletedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.MessageDeletedHandler
+            )
         client.add_MessageDeleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            ReactionEvent.Main.messageDeletedHandle e
+            messageDeletedHandlers
+            |> Array.iter (fun f -> f e)
 
             Task.CompletedTask
         ))
 
+        let guildRoleDeletedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.GuildRoleDeletedHandler
+            )
         client.add_GuildRoleDeleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            UserRole.Main.guildRoleDeletedHandler e
+            guildRoleDeletedHandlers
+            |> Array.iter (fun f -> f e)
 
             Task.CompletedTask
         ))
@@ -126,16 +219,24 @@ let main argv =
 
             Task.CompletedTask
         ))
+
+        let componentInteractionCreatedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.ComponentInteractionCreateHandle
+            )
+            |> List.ofArray
         client.add_ComponentInteractionCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             client.Logger.LogInformation(botEventId, "Component created", [||])
+
             let isHandled =
-                Age.Main.componentInteractionCreateHandle client e
-                || UserRole.Main.componentInteractionCreateHandle client e
-                || Ranking.Main.componentInteractionCreateHandle client e
-                || Doorkeeper.Invites.componentInteractionCreateHandle client e
-                || EggBattle.Main.componentInteractionCreateHandle client e
-                // || Fishing.Main.componentInteractionCreateHandle client e
-                // || SimpleQuiz.Main.componentInteractionCreateHandle client e
+                componentInteractionCreatedHandlers
+                |> List.exactlyFold
+                    (fun st f ->
+                        let st = f (client, e)
+                        st, st
+                    )
+                    false
 
             if not isHandled then
                 AppsHub.resp client e
@@ -143,68 +244,120 @@ let main argv =
             Task.CompletedTask
         ))
 
+        let voiceStateUpdatedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.VoiceStateUpdatedHandler
+            )
         client.add_VoiceStateUpdated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            ChatVoice.Main.voiceHandle e
-            VoiceChannelNotification.Main.voiceHandle e
+            voiceStateUpdatedHandlers
+            |> Array.iter (fun f -> f e)
 
             Task.CompletedTask
         ))
 
+        let guildMemberAddedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.GuildMemberAddedHandler
+            )
         client.add_GuildMemberAdded (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            Doorkeeper.Main.guildMemberAddHandle e
-            Doorkeeper.Invites.guildMemberAddedHandle e
-            Age.Main.guildMemberAddedHandle e
+            guildMemberAddedHandlers
+            |> Array.iter (fun f -> f e)
 
             Task.CompletedTask
         ))
 
+        let guildMemberRemovedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.GuildMemberRemovedHandler
+            )
         client.add_GuildMemberRemoved (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            Doorkeeper.Main.guildMemberRemoveHandle e
-            Age.Main.guildMemberRemoveHandle e
+            guildMemberRemovedHandlers
+            |> Array.iter (fun f -> f e)
 
             Task.CompletedTask
         ))
 
+        let guildMemberUpdatedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.GuildMemberUpdatedHandler
+            )
         client.add_GuildMemberUpdated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            Boosters.Main.handle e
+            guildMemberUpdatedHandlers
+            |> Array.iter (fun f -> f e)
 
             Task.CompletedTask
         ))
 
+        let messageReactionAddedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.MessageReactionAddedHandler
+            )
         client.add_MessageReactionAdded (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            if client.CurrentUser.Id <> e.User.Id then
-                ReactionEvent.Main.handle (ReactionEvent.Main.AddedEvent e)
+            messageReactionAddedHandlers
+            |> Array.iter (fun f -> f (client, e))
 
             Task.CompletedTask
         ))
 
+        let messageReactionAddedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.MessageReactionRemoved
+            )
         client.add_MessageReactionRemoved (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            if client.CurrentUser.Id <> e.User.Id then
-                ReactionEvent.Main.handle (ReactionEvent.Main.RemovedEvent e)
+            messageReactionAddedHandlers
+            |> Array.iter (fun f -> f (client, e))
 
             Task.CompletedTask
         ))
 
+        let inviteCreatedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.InviteCreatedHandler
+            )
         client.add_InviteCreated (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            Doorkeeper.Invites.inviteCreatedHandle e
+            inviteCreatedHandlers
+            |> Array.iter (fun f -> f e)
 
             Task.CompletedTask
         ))
 
+        let inviteDeletedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.InviteDeletedHandler
+            )
         client.add_InviteDeleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            Doorkeeper.Invites.inviteDeletedHandle e
+            inviteDeletedHandlers
+            |> Array.iter (fun f -> f e)
 
             Task.CompletedTask
         ))
 
+        let componentInteractionCreatedHandlers =
+            botModules
+            |> Array.choose (fun x ->
+                x.ModalSubmit
+            )
+            |> List.ofArray
         client.add_ModalSubmitted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            Age.Main.modalHandle e
-            UserRole.Main.modalHandle e
+            let isHandled =
+                componentInteractionCreatedHandlers
+                |> List.exactlyFold
+                    (fun st f ->
+                        let st = f e
+                        st, st
+                    )
+                    false
 
             Task.CompletedTask
         ))
-
-        Ranking.Main.mostActiveTimerStart client
 
         awaiti <| client.ConnectAsync()
 

@@ -19,32 +19,8 @@ type Cmd =
 
 let prefix = pchar '.'
 
-let pcommand: _ Parser =
-    let pmessageCreateEventHandler = choice [
-        UserRole.Main.exec
-        Doorkeeper.Main.exec
-        VoiceChannelNotification.Main.exec
-        Ranking.Main.exec
-        MessageManager.exec
-        ReactionEvent.Main.exec
-        Events.Main.exec
-        ChatVoice.Main.exec
-        DiscordWebhook.Main.exec
-        Boosters.Main.exec
-        Doorkeeper.Invites.exec
-        UserInfo.Main.exec
-        Age.Main.exec
-        EggBattle.Main.exec
-        Moderation.Main.exec
-        Ship.Main.exec
-        EmojiFont.Main.exec
-        Calc.Main.exec
-        Roll.Main.exec
-        BallotBox.Main.exec (fun setting client e -> AppsHub.start (AppsHub.Hub.InitBallotBox setting) client e)
-        NumberToWords.Main.exec
-        // SimpleQuiz.Main.exec
-        // Fishing.Main.exec
-    ]
+let initCommandParser (commands: Parser<MessageCreateEventHandler> seq): _ Parser =
+    let pmessageCreateEventHandler = choice commands
 
     choice [
         stringReturn "someGirlsQuiz" (Cyoa AppsHub.Hub.SomeGirlsQuiz)
@@ -56,8 +32,9 @@ let pcommand: _ Parser =
         pmessageCreateEventHandler |>> MessageCreateEventHandler
     ]
 
-let start botId str =
+let start (pcommand: _ Parser) botId =
     let p =
         (attempt (puserMentionTarget botId) >>. spaces >>. (optional prefix >>. pcommand <|>% Unknown))
         <|> ((prefix >>? pcommand) <|>% Pass)
-    FParsecExt.runEither p str
+
+    FParsecExt.runEither p

@@ -350,42 +350,62 @@ let reduce (req: Req) (state: State) =
 
         state
 
-let m =
-    let init = {
-        InvitesState = Map.empty
-        Setting = Model.InvitesSetting.Guilds.init "invitesSetting" Db.database
+let create db =
+    let m =
+        let init = {
+            InvitesState = Map.empty
+            Setting = Model.InvitesSetting.Guilds.init "invitesSetting" db
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! msg = mail.Receive()
+                    let state =
+                        try
+                            reduce msg state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                  Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                      m.Post (Request(e, msg))
+                  )
+            Some exec
+
+        GuildMemberAddedHandler =
+            let guildMemberAddedHandle guild =
+                m.Post (GuildMemberAddedHandle guild)
+            Some guildMemberAddedHandle
+
+        GuildAvailableHandler =
+            let guildAvailableHandle (e: EventArgs.GuildCreateEventArgs) =
+                m.Post (GuildAvailableHandle e.Guild)
+            Some guildAvailableHandle
+
+        ComponentInteractionCreateHandle =
+            let componentInteractionCreateHandle ((client: DiscordClient), (e: EventArgs.ComponentInteractionCreateEventArgs)) =
+                InviteTable.componentInteractionCreateHandle
+                    client
+                    e
+                    (fun () -> m.PostAndReply GetState)
+            Some componentInteractionCreateHandle
+
+        InviteCreatedHandler =
+            let inviteCreatedHandle e =
+                m.Post (InviteCreatedHandle e)
+            Some inviteCreatedHandle
+
+        InviteDeletedHandler =
+            let inviteDeletedHandle e =
+                m.Post (InviteDeletedHandle e)
+            Some inviteDeletedHandle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! msg = mail.Receive()
-                let state =
-                    try
-                        reduce msg state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let guildMemberAddedHandle guild =
-    m.Post (GuildMemberAddedHandle guild)
-let inviteCreatedHandle e =
-    m.Post (InviteCreatedHandle e)
-let inviteDeletedHandle e =
-    m.Post (InviteDeletedHandle e)
-let guildAvailableHandle e =
-    m.Post (GuildAvailableHandle e)
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        m.Post (Request(e, msg))
-    )
-let componentInteractionCreateHandle (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-    InviteTable.componentInteractionCreateHandle
-        client
-        e
-        (fun () -> m.PostAndReply GetState)

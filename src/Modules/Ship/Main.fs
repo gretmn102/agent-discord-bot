@@ -164,7 +164,12 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (botId: UserId) msg =
         let msg = await (e.Channel.SendMessageAsync "Processing...")
         Async.Start (f msg)
 
-let exec: MessageCreateEventHandler Parser.Parser =
-    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
-        reduce e client.CurrentUser.Id msg
-    )
+let create () =
+    { Shared.BotModule.empty with
+        MessageCreateEventHandleExclude =
+            let exec: MessageCreateEventHandler Parser.Parser =
+                Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                    reduce e client.CurrentUser.Id msg
+                )
+            Some exec
+    }

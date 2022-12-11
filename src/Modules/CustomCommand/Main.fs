@@ -266,28 +266,33 @@ let reduce (req: Handler) (state: State) =
 
             state
 
-let m =
-    let commands = Model.Commands.init "customCommands" Db.database
-    let init = {
-        Commands = commands
-        CommandsParser = CommandsParser.create commands.Cache
+let create db =
+    let m =
+        let commands = Model.Commands.init "customCommands" db
+        let init = {
+            Commands = commands
+            CommandsParser = CommandsParser.create commands.Cache
+        }
+
+        MailboxProcessor.Start (fun mail ->
+            let rec loop (state: State) =
+                async {
+                    let! req = mail.Receive()
+                    let state =
+                        try
+                            reduce req state
+                        with e ->
+                            printfn "%A" e
+                            state
+
+                    return! loop state
+                }
+            loop init
+        )
+
+    { Shared.BotModule.empty with
+        MessageCreateEventHandle =
+            let handle (client, e) =
+                m.Post (NewMessageHandle (client, e))
+            Some handle
     }
-
-    MailboxProcessor.Start (fun mail ->
-        let rec loop (state: State) =
-            async {
-                let! req = mail.Receive()
-                let state =
-                    try
-                        reduce req state
-                    with e ->
-                        printfn "%A" e
-                        state
-
-                return! loop state
-            }
-        loop init
-    )
-
-let handle client e =
-    m.Post (NewMessageHandle (client, e))
