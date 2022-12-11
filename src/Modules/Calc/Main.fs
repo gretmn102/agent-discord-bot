@@ -33,7 +33,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (r: Request) =
 let create () =
     { BotModule.empty with
         MessageCreateEventHandleExclude =
-            let exec: MessageCreateEventHandler Parser.Parser =
+            let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
                     reduce e msg
                 )

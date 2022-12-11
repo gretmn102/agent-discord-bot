@@ -160,7 +160,3 @@ module IMongoCollection =
             )
 
         0L = collection.CountDocuments((fun _ -> true), countOptions)
-
-open DSharpPlus
-
-type MessageCreateEventHandler = ((DiscordClient * EventArgs.MessageCreateEventArgs) -> unit)

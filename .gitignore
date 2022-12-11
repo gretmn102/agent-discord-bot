@@ -396,3 +396,4 @@ paket-files/
 /deploy/
 /src/.env
 /tests/.env
+.env

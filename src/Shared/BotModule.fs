@@ -6,6 +6,8 @@ open Types
 
 type 'a Parser = Parser<'a, unit>
 
+type MessageCreateEventHandler = ((DiscordClient * EventArgs.MessageCreateEventArgs) -> unit)
+
 type BotModule =
     {
         MessageCreateEventHandleExclude: Option<MessageCreateEventHandler Parser>

@@ -15,11 +15,11 @@ type Cmd =
     | Unknown
     | Pass
 
-    | MessageCreateEventHandler of MessageCreateEventHandler
+    | MessageCreateEventHandler of Shared.BotModule.MessageCreateEventHandler
 
 let prefix = pchar '.'
 
-let initCommandParser (commands: Parser<MessageCreateEventHandler> seq): _ Parser =
+let initCommandParser (commands: Parser<Shared.BotModule.MessageCreateEventHandler> seq): _ Parser =
     let pmessageCreateEventHandler = choice commands
 
     choice [

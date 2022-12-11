@@ -37,7 +37,7 @@ let reduce req state appsHubInit =
 let create appsHubInit =
     { BotModule.empty with
         MessageCreateEventHandleExclude =
-            let exec appsHubInit: MessageCreateEventHandler Parser.Parser =
+            let exec appsHubInit: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
                     reduce (MessageCreateEventHandler(client, e, msg)) () appsHubInit
                 )

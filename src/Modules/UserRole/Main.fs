@@ -300,7 +300,7 @@ module Parser =
                 ((pmentionRole <|> puint64) .>> spaces)
                 (puserMention <|> puint64)
 
-    let start f: MessageCreateEventHandler Parser =
+    let start f: _ Parser =
         choice [
             pgiveOrChangeRole |>> GiveOrChangeRole
             premoveUserRole |>> RemoveUserRole
@@ -1180,7 +1180,7 @@ let create (db: MongoDB.Driver.IMongoDatabase) =
 
     { BotModule.empty with
         MessageCreateEventHandleExclude =
-            let exec: MessageCreateEventHandler Parser.Parser =
+            let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
                     reducer.Post(Request (e, msg))
                 )
