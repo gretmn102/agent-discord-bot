@@ -3,8 +3,11 @@ open DSharpPlus
 open FParsec
 open System.Threading.Tasks
 open FsharpMyExtension
+open Microsoft.Extensions.Logging
 
 open Types
+
+let botEventId = new EventId(1, "Bot-Module")
 
 type 'a Parser = Parser<'a, unit>
 
@@ -51,12 +54,17 @@ let empty: BotModule =
     }
 
 let bindToClientsEvents initCommandParser startCommandParser cmd appsHubResp (client: DiscordClient) (botModules: BotModule []) =
+    let logger = client.Logger
+
     let schedulers =
         botModules
         |> Array.choose (fun x ->
             x.Scheduler
         )
-    client.add_Ready(Emzi0767.Utilities.AsyncEventHandler (fun client readyEventArgs ->
+
+    client.add_GuildDownloadCompleted (Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+        logger.LogInformation(botEventId, "Guild download completed.")
+
         schedulers
         |> Array.iter (fun f ->
             let isContinued = f client
@@ -72,6 +80,8 @@ let bindToClientsEvents initCommandParser startCommandParser cmd appsHubResp (cl
             x.GuildAvailableHandler
         )
     client.add_GuildAvailable(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+        logger.LogInformation(botEventId, sprintf "Guild \"%s\" (%d) available" e.Guild.Name e.Guild.Id)
+
         guildAvailableHandlers
         |> Array.iter (fun f -> f e)
 
