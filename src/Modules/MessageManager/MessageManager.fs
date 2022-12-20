@@ -132,6 +132,16 @@ let reduce ((client, e, msg): Msg) (state: State): State =
         | channel ->
             next channel
 
+    let getMessage (channel: Entities.DiscordChannel) (messageId: MessageId) next =
+        match await (channel.GetMessageAsync messageId) with
+        | null ->
+            sprintf "Not found %d message" messageId
+            |> send
+
+            state
+        | msg ->
+            next msg
+
     match msg with
     | SendMessage (targetChannelId, res) ->
         awaiti <| e.Channel.TriggerTypingAsync()
@@ -158,16 +168,6 @@ let reduce ((client, e, msg): Msg) (state: State): State =
         state
 
     | EditMessage(messagePath, res) ->
-        let getMessage (channel: Entities.DiscordChannel) next =
-            match await (channel.GetMessageAsync messagePath.MessageId) with
-            | null ->
-                sprintf "Not found %d message" messagePath.MessageId
-                |> send
-
-                state
-            | msg ->
-                next msg
-
         let checkMessageBelongToBot (message: Entities.DiscordMessage) next =
             if message.Author.Id = client.CurrentUser.Id then
                 next ()
@@ -185,7 +185,7 @@ let reduce ((client, e, msg): Msg) (state: State): State =
         getJson res <| fun rawJson ->
         deserializeDiscordMessage rawJson <| fun newMessage ->
         getChannel messagePath.ChannelId <| fun channel ->
-        getMessage channel <| fun oldMessage ->
+        getMessage channel messagePath.MessageId <| fun oldMessage ->
         checkMessageBelongToBot oldMessage <| fun () ->
 
         awaiti <| oldMessage.ModifyAsync(newMessage)
@@ -194,47 +194,46 @@ let reduce ((client, e, msg): Msg) (state: State): State =
         state
 
     | GetMessage messagePath ->
-        let currentMember = getGuildMember e.Guild e.Author
-        let replyMessage =
-            await (e.Channel.SendMessageAsync("Processing..."))
-        if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
+        let checkMessageBelongToCurrentGuild (messagePath: MessagePath) next =
             if e.Guild.Id = messagePath.GuildId then
-                match e.Guild.GetChannel messagePath.ChannelId with
-                | null ->
-                    let msg =
-                        sprintf "Not found %d channel" messagePath.ChannelId
-
-                    awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
-                | channel ->
-                    match await (channel.GetMessageAsync messagePath.MessageId) with
-                    | null ->
-                        let msg =
-                            sprintf "Not found %d message" messagePath.MessageId
-
-                        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
-                    | msg ->
-                        let msg =
-                            {
-                                Content = msg.Content
-                                Embeds = msg.Embeds
-                                Components = msg.Components
-                                Flags = msg.Flags
-                                Attachments = msg.Attachments
-                            }
-
-                        let msg =
-                            sprintf "```\n%s\n```" (Net.Serialization.DiscordJson.SerializeObject(msg))
-
-                        awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+                next ()
             else
-                let msg =
-                    sprintf "You can specify a message only for the current guild"
+                sprintf "You can specify a message only for the current guild"
+                |> send
 
-                awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+                state
+
+        awaiti <| e.Channel.TriggerTypingAsync()
+
+        let currentMember = getGuildMember e.Guild e.Author
+
+        checkAccess currentMember <| fun () ->
+        checkMessageBelongToCurrentGuild messagePath <| fun () ->
+        getChannel messagePath.ChannelId <| fun channel ->
+        getMessage channel messagePath.MessageId <| fun msg ->
+
+        let msg =
+            {
+                Content = msg.Content
+                Embeds = msg.Embeds
+                Components = msg.Components
+                Flags = msg.Flags
+                Attachments = msg.Attachments
+            }
+            |> DiscordJson.SerializeObject
+
+        let resultMsg =
+            sprintf "```\n%s\n```" msg
+
+        if resultMsg.Length > 4096 then
+            let b = Entities.DiscordMessageBuilder()
+            let fileName = "message.txt"
+            let bytes = System.Text.Encoding.UTF8.GetBytes msg
+            use m = new System.IO.MemoryStream(bytes)
+            b.WithFile(fileName, m) |> ignore
+            awaiti <| e.Channel.SendMessageAsync b
         else
-            let msg =
-                sprintf "%s you don't have administration permission for this command" e.Author.Mention
-            awaiti (replyMessage.ModifyAsync(Entities.Optional msg))
+            send resultMsg
 
         state
 
