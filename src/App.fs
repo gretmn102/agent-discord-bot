@@ -72,7 +72,6 @@ let initBotModules (db: MongoDB.Driver.IMongoDatabase) =
         NumberToWords.Main.create ()
 
         // SimpleQuiz.Main.create db
-        // Fishing.Main.create db
     |]
 
 open MongoDB.Driver

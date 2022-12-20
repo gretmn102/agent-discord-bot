@@ -72,9 +72,6 @@
     <Compile Include="Modules\Moderation\Main.fs" />
     <Compile Include="Modules\Calc\Core.fs" />
     <Compile Include="Modules\Calc\Main.fs" />
-    <Compile Include="Modules\Fishing\EditorTypes.fs" />
-    <Compile Include="Modules\Fishing\Model.fs" />
-    <Compile Include="Modules\Fishing\Main.fs" />
     <Compile Include="Modules\Roll\Main.fs" />
     <Compile Include="Modules\SimpleQuiz\Countries.fs" />
     <Compile Include="Modules\SimpleQuiz\Model.fs" />
