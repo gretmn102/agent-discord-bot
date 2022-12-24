@@ -251,7 +251,13 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: State) =
                     let keys, names, avatars =
                         Array.foldBack
                             (fun (key, profile: Profile) (keys, names, avatars) ->
-                                let avatarUrl = sprintf "[img](%s)" profile.AvatarUrl
+                                let avatarUrl =
+                                    let res = sprintf "[img](%s)" profile.AvatarUrl
+                                    if res.Length < 1024 then
+                                        res
+                                    else
+                                        "image URL longer than 1024 characters"
+
                                 key::keys, profile.Username::names, avatarUrl::avatars
                             )
                             profiles
