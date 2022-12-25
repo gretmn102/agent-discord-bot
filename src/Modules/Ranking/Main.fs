@@ -454,7 +454,7 @@ module MostActiveTable =
 
             GetState = getState
 
-            Title = fun _ _ -> "Наиболее активные ребята"
+            Title = fun _ _ -> "Наиболее разговорчивые участники"
 
             GetHeaders = fun sortBy ->
                 match sortBy with
