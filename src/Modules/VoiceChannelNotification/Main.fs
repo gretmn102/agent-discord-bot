@@ -47,7 +47,7 @@ module Parser =
 
     let psetVoiceNotificationOutput: _ Parser =
         skipStringCI "setVoiceNotificationOutput" >>. spaces
-        >>. (pmentionRole <|> puint64 .>> spaces)
+        >>. (pchannelMention <|> puint64 .>> spaces)
         |>> SetOutput
 
     let psetVoiceNotificationTemplateMsg: _ Parser =
