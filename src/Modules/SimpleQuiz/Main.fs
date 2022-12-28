@@ -530,7 +530,7 @@ module QuizSelectionUi =
                     await <| client.GetChannelAsync 930127222373777509UL // todo: remove hard code
                 let embed = Entities.DiscordMessageBuilder()
                 let fileName = "flags.png"
-                embed.WithFile(fileName, stream) |> ignore
+                embed.AddFile(fileName, stream) |> ignore
                 let x =
                     await <| client.SendMessageAsync(channelForImages, embed)
 
@@ -593,7 +593,7 @@ let actionReduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) (state: St
                 let addEmbed c = b.Embed <- c
                 let addFile stream =
                     let fileName = "flags.png"
-                    b.WithFile(fileName, stream) |> ignore
+                    b.AddFile(fileName, stream) |> ignore
                     sprintf "attachment://%s" fileName
 
                 let flagImages =

@@ -91,7 +91,7 @@ let cmdBuilder2
         use m = new System.IO.MemoryStream()
         Core.img user1Avatar user2Avatar perc m
         m.Position <- 0L
-        b.WithFile(fileName, m) |> ignore
+        b.AddFile(fileName, m) |> ignore
 
         awaiti (e.Channel.SendMessageAsync b)
 
@@ -156,7 +156,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (botId: UserId) msg =
                 use m = new System.IO.MemoryStream()
                 Core.massShip usersAvatars m
                 m.Position <- 0L
-                b.WithFile(fileName, m) |> ignore
+                b.AddFile(fileName, m) |> ignore
                 let! _ = Async.AwaitTask (msg.ModifyAsync(b))
                 ()
             }

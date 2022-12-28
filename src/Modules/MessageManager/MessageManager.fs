@@ -230,7 +230,7 @@ let reduce ((client, e, msg): Msg) (state: State): State =
             let fileName = "message.txt"
             let bytes = System.Text.Encoding.UTF8.GetBytes msg
             use m = new System.IO.MemoryStream(bytes)
-            b.WithFile(fileName, m) |> ignore
+            b.AddFile(fileName, m) |> ignore
             awaiti <| e.Channel.SendMessageAsync b
         else
             send resultMsg

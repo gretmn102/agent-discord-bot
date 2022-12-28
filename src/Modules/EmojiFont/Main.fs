@@ -28,7 +28,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) ((emoji, str): Request) =
         m.Position <- 0L
 
         let b = DSharpPlus.Entities.DiscordMessageBuilder()
-        b.WithFile("image.png", m) |> ignore
+        b.AddFile("image.png", m) |> ignore
 
         awaiti (e.Channel.SendMessageAsync b)
 

@@ -130,6 +130,7 @@ let main argv =
             DSharpPlus.DiscordIntents.AllUnprivileged
             ||| DSharpPlus.DiscordIntents.GuildMembers
             ||| DSharpPlus.DiscordIntents.GuildPresences
+            ||| DSharpPlus.DiscordIntents.MessageContents
         )
 
         let client = new DSharpPlus.DiscordClient(config)
