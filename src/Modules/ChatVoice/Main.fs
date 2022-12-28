@@ -51,15 +51,19 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                     match Map.tryFind channel.Id voiceChats with
                     | Some beforeChatId ->
                         let guild = e.Guild
-                        let channel = guild.GetChannel beforeChatId
-                        let guildMember =
-                            getGuildMember e.Guild e.User
 
-                        try
-                            channel.AddOverwriteAsync(guildMember, deny=accessChannelsPermission)
-                            |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
-                        with e ->
-                            printfn "channel.AddOverwriteAsync: %s" e.Message
+                        match guild.GetChannel beforeChatId with
+                        | null ->
+                            printfn "voice channel <#%d> not found" beforeChatId
+                        | channel ->
+                            let guildMember =
+                                getGuildMember e.Guild e.User
+
+                            try
+                                channel.AddOverwriteAsync(guildMember, deny=accessChannelsPermission)
+                                |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
+                            with e ->
+                                printfn "channel.AddOverwriteAsync: %s" e.Message
                     | None -> ()
 
         do // show
@@ -72,15 +76,19 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                     match Map.tryFind channel.Id voiceChats with
                     | Some beforeChatId ->
                         let guild = e.Guild
-                        let channel = guild.GetChannel beforeChatId
-                        let guildMember =
-                            getGuildMember e.Guild e.User
 
-                        try
-                            channel.AddOverwriteAsync(guildMember, allow=accessChannelsPermission)
-                            |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
-                        with e ->
-                            printfn "channel.AddOverwriteAsync: %A" e.Message
+                        match guild.GetChannel beforeChatId with
+                        | null ->
+                            printfn "voice channel <#%d> not found" beforeChatId
+                        | channel ->
+                            let guildMember =
+                                getGuildMember e.Guild e.User
+
+                            try
+                                channel.AddOverwriteAsync(guildMember, allow=accessChannelsPermission)
+                                |> fun x -> x.GetAwaiter() |> fun x -> x.GetResult()
+                            with e ->
+                                printfn "channel.AddOverwriteAsync: %A" e.Message
                     | None -> ()
     | None -> ()
 
