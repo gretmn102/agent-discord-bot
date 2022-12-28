@@ -3,6 +3,7 @@ open FsharpMyExtension
 open FsharpMyExtension.Either
 open Microsoft.Extensions.Logging
 open System.Threading.Tasks
+open DSharpPlus
 
 open Types
 open Extensions
@@ -121,19 +122,27 @@ let main argv =
         printfn "Environment variable `%s` is not set!" tokenEnvVar
         1
     | Some token ->
-        let config = DSharpPlus.DiscordConfiguration()
+        let createConfig () =
+            let config = DSharpPlus.DiscordConfiguration()
 
-        config.set_Token token
-        config.set_TokenType DSharpPlus.TokenType.Bot
-        config.set_AutoReconnect true
-        config.set_Intents (
-            DSharpPlus.DiscordIntents.AllUnprivileged
-            ||| DSharpPlus.DiscordIntents.GuildMembers
-            ||| DSharpPlus.DiscordIntents.GuildPresences
-            ||| DSharpPlus.DiscordIntents.MessageContents
-        )
+            config.set_Token token
+            config.set_TokenType DSharpPlus.TokenType.Bot
+            config.set_AutoReconnect true
+            config.set_Intents (
+                DSharpPlus.DiscordIntents.AllUnprivileged
+                ||| DSharpPlus.DiscordIntents.GuildMembers
+                ||| DSharpPlus.DiscordIntents.GuildPresences
+                ||| DSharpPlus.DiscordIntents.MessageContents
+            )
+            config
 
-        let client = new DSharpPlus.DiscordClient(config)
+        let client = new DSharpPlus.DiscordClient(createConfig ())
+        let rest = new DSharpPlus.DiscordRestClient(createConfig ())
+
+        let botOwner =
+            awaiti <| rest.InitializeAsync ()
+            rest.CurrentApplication.Owners
+            |> Seq.tryHead
 
         let database = initDb ()
         let botModules = initBotModules database
@@ -154,6 +163,31 @@ let main argv =
 
         client.add_ClientErrored(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
             client.Logger.LogError(botEventId, e.Exception, "Exception occured", [||])
+
+            let getBotOwner () =
+                match botOwner with
+                | Some botOwner ->
+                    try
+                        await <| rest.CreateDmAsync botOwner.Id
+                        |> Ok
+                    with e ->
+                        Error e
+                | None ->
+                    Error (new System.Exception("not found bot owner"))
+
+            match getBotOwner () with
+            | Ok channel ->
+                let embed = Entities.DiscordEmbedBuilder()
+                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                embed.Description <-
+                    sprintf "```\n%A\n```" e.Exception
+
+                let b = Entities.DiscordMessageBuilder()
+                b.Embed <- embed.Build()
+
+                awaiti <| channel.SendMessageAsync b
+            | Error x ->
+                printfn "get bot owner returned error:\n%A" x
 
             Task.CompletedTask
         ))

@@ -1,5 +1,6 @@
 FSharp.Core
 DSharpPlus
+DSharpPlus.Rest
 FParsec
 FSharpMyExt
 SixLabors.ImageSharp
