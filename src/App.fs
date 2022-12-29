@@ -71,6 +71,7 @@ let initBotModules (db: MongoDB.Driver.IMongoDatabase) =
         DiscordWebhook.Main.create "characters" db
         BallotBox.Main.create (fun setting client e -> AppsHub.start (AppsHub.Hub.InitBallotBox setting) client e)
         NumberToWords.Main.create ()
+        EmojiManager.Main.create ()
 
         // SimpleQuiz.Main.create db
     |]
