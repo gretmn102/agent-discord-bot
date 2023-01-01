@@ -5,9 +5,10 @@ open DSharpPlus
 
 open Types
 open Extensions
+open DiscordMessage
 
 type SettingMsg =
-    | SetEventSetting of RoleId list * bool
+    | SetEventSetting of Model.GuildData
     | GetEventSetting
 
 type Msg =
@@ -29,10 +30,32 @@ module Parser =
         pcodeBlock <|> manySatisfy (fun _ -> true)
 
     let psetEvent: _ Parser =
+        let pbool =
+            (pstringCI "true" >>% true) <|> (pstring "false" >>% false)
+
         pstringCI "setEvent" >>. spaces
-        >>. tuple2
+        >>. pipe3
                 (many1 ((puint64 <|> pmentionRole) .>> spaces))
-                ((pstringCI "true" >>% true) <|> (pstring "false" >>% false))
+                (pbool .>> spaces)
+                (many1 (pemoji .>> spaces))
+                (fun roleIds isEnabled unicodeOrCustomEmojis ->
+                    let emojis =
+                        unicodeOrCustomEmojis
+                        |> List.map (fun unicodeOrCustomEmoji ->
+                            match unicodeOrCustomEmoji with
+                            | UnicodeOrCustomEmoji.CustomEmoji x ->
+                                sprintf "<:%s:%d>" x.Name x.Id
+
+                            | UnicodeOrCustomEmoji.UnicodeEmoji emoji ->
+                                emoji
+                        )
+                        |> Array.ofList
+
+                    Model.GuildData.Init
+                        (Set.ofList roleIds)
+                        isEnabled
+                        emojis
+                )
 
     let start f: _ Parser =
         choice [
@@ -77,7 +100,7 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: Model.Guilds
         awaiti (e.Channel.SendMessageAsync message)
 
         state
-    | SetEventSetting (filteringRoleId, isEnabled) ->
+    | SetEventSetting newParams ->
         let guild = e.Guild
         let currentMember = getGuildMember guild e.Author
         let replyMessage =
@@ -89,10 +112,7 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: Model.Guilds
                 |> Model.Guilds.set
                     guild.Id
                     (fun settings ->
-                        { settings with
-                            FilteringRoleId = Set.ofList filteringRoleId
-                            IsEnabled = isEnabled
-                        }
+                        newParams
                     )
 
             awaiti (replyMessage.ModifyAsync(Entities.Optional "Done"))
@@ -105,13 +125,6 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: Model.Guilds
             state
 
 let r = System.Random ()
-let flowers =
-    [|
-        // TODO: formalize
-        // "💮"; "🥀"; "💐"; "🌷"; "🌹"; "🥀"; "🌺"; "🌸"; "🌼"; "🌻"; "🏵️"; "🍀"; "🦋"; "🎁"; "🎀"
-        "🎅"; "🐇"; "❄️"; "☃️"; "⛄"; "🎉"; "🎁"; "🎄"; "🥂"; "💝"; "✨"; "🎈"
-    |]
-    |> Array.map Entities.DiscordEmoji.FromUnicode
 
 let reduce (msg: Msg) (state: State): State =
     match msg with
@@ -127,13 +140,45 @@ let reduce (msg: Msg) (state: State): State =
                         |> Seq.exists (fun x -> Set.contains x.Id setting.Data.FilteringRoleId)
 
                     if existsRole then
-                        let flower =
-                            flowers.[r.Next(0, flowers.Length)]
+                        let emojis =
+                            setting.Data.Emojis
 
-                        try
-                            awaiti <| e.Message.CreateReactionAsync flower
-                        with e ->
-                            ()
+                        if not <| Array.isEmpty emojis then
+                            let parseEmoji rawEmoji next =
+                                match FParsecExt.runResult Parser.pemoji rawEmoji with
+                                | Ok x -> next x
+                                | Error _ -> ()
+
+                            let getUnicodeOrCustomEmoji unicodeOrCustomEmoji next =
+                                match unicodeOrCustomEmoji with
+                                | UnicodeOrCustomEmoji.CustomEmoji x ->
+                                    let getEmoji (emojiId: EmojiId) =
+                                        try
+                                            await <| e.Guild.GetEmojiAsync emojiId
+                                            |> Ok
+                                        with e ->
+                                            // TODO: handle disconnect
+                                            Error "Такого эмодзи не существует."
+
+                                    match getEmoji x.Id with
+                                    | Ok emoji -> next (emoji :> Entities.DiscordEmoji)
+                                    | _ -> ()
+
+                                | UnicodeOrCustomEmoji.UnicodeEmoji emoji ->
+                                    Entities.DiscordEmoji.FromUnicode emoji
+                                    |> next
+
+                            let rawEmoji =
+                                emojis.[r.Next(0, emojis.Length)]
+
+                            parseEmoji rawEmoji <| fun unicodeOrCustomEmoji ->
+                            getUnicodeOrCustomEmoji unicodeOrCustomEmoji <| fun emoji ->
+
+                            try
+                                awaiti <| e.Message.CreateReactionAsync emoji
+                            with e ->
+                                ()
+
             | None -> ()
         state
 

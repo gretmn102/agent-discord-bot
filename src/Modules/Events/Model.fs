@@ -26,22 +26,26 @@ type GuildData =
     {
         FilteringRoleId: RoleId Set
         IsEnabled: bool
+        Emojis: string []
     }
-    static member Init filteringRoleId isEnabled =
+    static member Init filteringRoleId isEnabled emojis : GuildData =
         {
             FilteringRoleId = filteringRoleId
             IsEnabled = isEnabled
+            Emojis = emojis
         }
     static member Empty =
         {
             FilteringRoleId = Set.empty
             IsEnabled = false
+            Emojis = [||]
         }
     static member Serialize (data: GuildData) =
         data |> Json.ser
     static member Deserialize json =
         try
-            Ok (Json.des json)
+            let x: GuildData = Json.des json
+            Ok x
         with e ->
             Error e.Message
 
@@ -80,7 +84,10 @@ module Guilds =
                         let newItem =
                             Guild.create
                                 oldItem.Id
-                                (GuildData.Init (Set.singleton oldItem.Data.FilteringRoleId) oldItem.Data.IsEnabled)
+                                (GuildData.Init
+                                    (Set.singleton oldItem.Data.FilteringRoleId)
+                                    oldItem.Data.IsEnabled
+                                    [||])
 
                         Some (box oldItem.Id), newItem
                     | x ->
@@ -89,7 +96,7 @@ module Guilds =
                     let oldValue =
                         Serialization.BsonSerializer.Deserialize<DataPreVersion>(doc)
                     let newValue =
-                        GuildData.Init (Set.singleton oldValue.FilteringRoleId) oldValue.IsEnabled
+                        GuildData.Init (Set.singleton oldValue.FilteringRoleId) oldValue.IsEnabled [||]
                         |> Guild.create oldValue.GuildId
 
                     Some (box oldValue.Id), newValue
