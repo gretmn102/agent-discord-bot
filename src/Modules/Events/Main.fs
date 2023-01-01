@@ -7,7 +7,7 @@ open Types
 open Extensions
 
 type SettingMsg =
-    | SetEventSetting of RoleId * bool
+    | SetEventSetting of RoleId list * bool
     | GetEventSetting
 
 type Msg =
@@ -31,7 +31,7 @@ module Parser =
     let psetEvent: _ Parser =
         pstringCI "setEvent" >>. spaces
         >>. tuple2
-                (puint64 <|> pmentionRole .>> spaces)
+                (many1 ((puint64 <|> pmentionRole) .>> spaces))
                 ((pstringCI "true" >>% true) <|> (pstring "false" >>% false))
 
     let start f: _ Parser =
@@ -90,7 +90,7 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: Model.Guilds
                     guild.Id
                     (fun settings ->
                         { settings with
-                            FilteringRoleId = filteringRoleId
+                            FilteringRoleId = Set.ofList filteringRoleId
                             IsEnabled = isEnabled
                         }
                     )
@@ -124,7 +124,7 @@ let reduce (msg: Msg) (state: State): State =
                     let guildMember = getGuildMember e.Guild e.Author
                     let existsRole =
                         guildMember.Roles
-                        |> Seq.exists (fun x -> x.Id = setting.Data.FilteringRoleId)
+                        |> Seq.exists (fun x -> Set.contains x.Id setting.Data.FilteringRoleId)
 
                     if existsRole then
                         let flower =

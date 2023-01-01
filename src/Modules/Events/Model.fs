@@ -16,9 +16,15 @@ type DataPreVersion =
         IsEnabled: bool
     }
 
-type GuildData =
+type GuildDataV0 =
     {
         FilteringRoleId: RoleId
+        IsEnabled: bool
+    }
+
+type GuildData =
+    {
+        FilteringRoleId: RoleId Set
         IsEnabled: bool
     }
     static member Init filteringRoleId isEnabled =
@@ -28,7 +34,7 @@ type GuildData =
         }
     static member Empty =
         {
-            FilteringRoleId = 0UL
+            FilteringRoleId = Set.empty
             IsEnabled = false
         }
     static member Serialize (data: GuildData) =
@@ -41,6 +47,7 @@ type GuildData =
 
 type Version =
     | V0 = 0
+    | V1 = 1
 
 type Id = UserId
 
@@ -49,7 +56,7 @@ type Guild = CommonDb.Data<Id, Version, GuildData>
 [<RequireQualifiedAccess>]
 module Guild =
     let create id data: Guild =
-        CommonDb.Data.create id Version.V0 data
+        CommonDb.Data.create id Version.V1 data
 
 type Guilds = CommonDb.GuildData<Id, Version, GuildData>
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -65,18 +72,27 @@ module Guilds =
                 match ver with
                 | Some ver ->
                     match ver with
-                    | Version.V0 ->
+                    | Version.V1 ->
                         None, Serialization.BsonSerializer.Deserialize<Guild>(doc)
+                    | Version.V0 ->
+                        let oldItem =
+                            Serialization.BsonSerializer.Deserialize<CommonDb.Data<Id, Version, GuildDataV0>>(doc)
+                        let newItem =
+                            Guild.create
+                                oldItem.Id
+                                (GuildData.Init (Set.singleton oldItem.Data.FilteringRoleId) oldItem.Data.IsEnabled)
+
+                        Some (box oldItem.Id), newItem
                     | x ->
                         failwithf "Version = %A not implemented" x
                 | None ->
                     let oldValue =
                         Serialization.BsonSerializer.Deserialize<DataPreVersion>(doc)
                     let newValue =
-                        GuildData.Init oldValue.FilteringRoleId oldValue.IsEnabled
+                        GuildData.Init (Set.singleton oldValue.FilteringRoleId) oldValue.IsEnabled
                         |> Guild.create oldValue.GuildId
 
-                    Some oldValue.Id, newValue
+                    Some (box oldValue.Id), newValue
             )
             collectionName
             db
