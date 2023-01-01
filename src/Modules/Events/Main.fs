@@ -107,7 +107,9 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: Model.Guilds
 let r = System.Random ()
 let flowers =
     [|
-        "💮"; "🥀"; "💐"; "🌷"; "🌹"; "🥀"; "🌺"; "🌸"; "🌼"; "🌻"; "🏵️"; "🍀"; "🦋"; "🎁"; "🎀"
+        // TODO: formalize
+        // "💮"; "🥀"; "💐"; "🌷"; "🌹"; "🥀"; "🌺"; "🌸"; "🌼"; "🌻"; "🏵️"; "🍀"; "🦋"; "🎁"; "🎀"
+        "🎅"; "🐇"; "❄️"; "☃️"; "⛄"; "🎉"; "🎁"; "🎄"; "🥂"; "💝"; "✨"; "🎈"
     |]
     |> Array.map Entities.DiscordEmoji.FromUnicode
 
