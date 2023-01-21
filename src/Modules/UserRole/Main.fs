@@ -230,6 +230,7 @@ type Request =
     | RemoveUserRole of RoleId
     | UpdateRolesPermission
     | SetTemplateRole of RoleId
+    | GetTemplateRole
     | SetUserRoleToUser of RoleId * UserId
 
 type Req =
@@ -291,6 +292,9 @@ module Parser =
         pstringCI "setTemplateRole" >>. spaces
         >>. (pmentionRole <|> puint64)
 
+    let pgetTemplateRole: _ Parser =
+        pstringCI "getTemplateRole"
+
     let pupdateUserRolesPermissions: _ Parser =
         pstringCI "updateUserRolesPermissions" >>. spaces
 
@@ -308,6 +312,7 @@ module Parser =
             psetUserRoleToUser |>> SetUserRoleToUser
 
             psetTemplateRole |>> SetTemplateRole
+            pgetTemplateRole >>% GetTemplateRole
             pupdateUserRolesPermissions >>% UpdateRolesPermission
 
             PermissiveRoleList.Parser.start |>> PermissiveRoleCmd
@@ -1006,6 +1011,35 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
                         state.Setting
 
                 { state with Setting = templateRoles }
+            | GetTemplateRole ->
+                awaiti <| e.Channel.TriggerTypingAsync()
+
+                let send msg =
+                    let embed = Entities.DiscordEmbedBuilder()
+                    embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                    embed.Description <- msg
+
+                    let b = Entities.DiscordMessageBuilder()
+                    b.Embed <- embed.Build()
+
+                    awaiti <| e.Channel.SendMessageAsync b
+
+                let msg =
+                    let undefinedTemplateRole =
+                        "На этом сервере еще не установлена шаблонная роль."
+                    match Setting.GuildData.tryFind e.Guild.Id state.Setting with
+                    | Some x ->
+                        match x.TemplateRoleId with
+                        | Some roleId ->
+                            sprintf "<@&%d> — шаблонная роль на данном сервере." roleId
+                        | _ ->
+                            undefinedTemplateRole
+                    | _ ->
+                        undefinedTemplateRole
+
+                send msg
+
+                state
             | UpdateRolesPermission ->
                 let replyMessage =
                     await (e.Channel.SendMessageAsync("Processing..."))
