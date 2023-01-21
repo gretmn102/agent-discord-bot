@@ -1184,6 +1184,32 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
 
             state
 
+    let reduceError (msg: Req) (state: State) =
+        match msg with
+        | ModalHandle(r, _) ->
+            r.Reply true
+        | Request(_, r) ->
+            match r with
+            | GetTemplateRole
+            | RemoveUserRole(_)
+            | UpdateRolesPermission
+            | SetTemplateRole(_)
+            | SetUserRoleToUser(_, _)
+            | GiveOrChangeRole(_)
+            | GetUserRoles ->
+                ()
+            | PermissiveRoleCmd cmd
+            | PermissiveIconRoleCmd cmd ->
+                match cmd with
+                | AbstrRoleList.Cmd.AddRoleId _
+                | AbstrRoleList.Cmd.RemoveRoleId _
+                | AbstrRoleList.Cmd.GetRoles ->
+                    ()
+        | GuildRoleDeletedHandler(_) ->
+            ()
+        | ComponentInteractionCreateHandle(r, _, _) ->
+            r.Reply true
+
     MailboxProcessor.Start (fun mail ->
         let rec loop (state: State) =
             async {
@@ -1192,6 +1218,7 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
                     try
                         reduce msg state
                     with e ->
+                        reduceError msg state
                         printfn "%A" e
                         state
 
