@@ -123,6 +123,7 @@ let main argv =
         printfn "Environment variable `%s` is not set!" tokenEnvVar
         1
     | Some token ->
+        printfn "%s" token
         let createConfig () =
             let config = DSharpPlus.DiscordConfiguration()
 
