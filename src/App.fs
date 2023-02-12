@@ -124,6 +124,7 @@ let main argv =
         1
     | Some token ->
         printfn "%s" token
+        printfn "%s" ablyToken
         let createConfig () =
             let config = DSharpPlus.DiscordConfiguration()
 
