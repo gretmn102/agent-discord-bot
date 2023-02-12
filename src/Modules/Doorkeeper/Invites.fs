@@ -350,6 +350,21 @@ let reduce (req: Req) (state: State) =
 
         state
 
+let reduceError (msg: Req) (state: State) =
+    match msg with
+    | GuildMemberAddedHandle e ->
+        ()
+    | GuildAvailableHandle e ->
+        ()
+    | InviteCreatedHandle e ->
+        ()
+    | InviteDeletedHandle e ->
+        ()
+    | Request(e, _) ->
+        ()
+    | GetState r ->
+        r.Reply state.Setting
+
 let create db =
     let m =
         let init = {
@@ -365,6 +380,7 @@ let create db =
                         try
                             reduce msg state
                         with e ->
+                            reduceError msg state
                             printfn "%A" e
                             state
 

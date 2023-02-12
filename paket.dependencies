@@ -1,7 +1,7 @@
 storage: none
 source https://api.nuget.org/v3/index.json
 
-framework: netstandard2.0, netcoreapp3.1
+framework: net6.0
 nuget FSharp.Core
 nuget DSharpPlus
 nuget DSharpPlus.Rest
@@ -29,7 +29,7 @@ nuget DiscordBotExtensions
 
 group Build
     source https://api.nuget.org/v3/index.json
-    framework: netstandard2.0
+    framework: net6.0
     storage: none
 
     nuget FSharp.Core
