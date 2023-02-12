@@ -123,80 +123,34 @@ let main argv =
         printfn "Environment variable `%s` is not set!" tokenEnvVar
         1
     | Some token ->
-        printfn "%s" token
-
         let createConfig () =
-            let config = DSharpPlus.DiscordConfiguration()
-
+            let config = DiscordConfiguration()
             config.set_Token token
-            config.set_TokenType DSharpPlus.TokenType.Bot
-            config.set_AutoReconnect true
-            config.set_Intents (
-                DSharpPlus.DiscordIntents.AllUnprivileged
-                ||| DSharpPlus.DiscordIntents.GuildMembers
-                ||| DSharpPlus.DiscordIntents.GuildPresences
-                ||| DSharpPlus.DiscordIntents.MessageContents
-            )
             config
 
-        let client = new DSharpPlus.DiscordClient(createConfig ())
-        let rest = new DSharpPlus.DiscordRestClient(createConfig ())
+        let rest = new DiscordRestClient(createConfig ())
 
-        let botOwner =
-            awaiti <| rest.InitializeAsync ()
-            rest.CurrentApplication.Owners
-            |> Seq.tryHead
+        let botEventId = EventId(1, "botEventId")
+        let botOwnerEventId = EventId(2, "botOwner")
 
-        let database = initDb ()
-        let botModules = initBotModules database
+        let startClient botOwner =
+            let client = new DiscordClient(createConfig ())
+            client.add_Ready(Emzi0767.Utilities.AsyncEventHandler (fun client readyEventArgs ->
+                client.Logger.LogInformation(botEventId, "Client is ready to process events.")
+                client.Logger.LogInformation(botOwnerEventId, sprintf "%A" botOwner)
+                Task.CompletedTask
+            ))
 
-        botModules
-        |> Shared.BotModule.bindToClientsEvents
-            CommandParser.initCommandParser
-            CommandParser.start
-            cmd
-            AppsHub.resp
-            client
+            client.ConnectAsync()
 
-        client.add_Ready(Emzi0767.Utilities.AsyncEventHandler (fun client readyEventArgs ->
-            client.Logger.LogInformation(botEventId, "Client is ready to process events.")
+        let main =
+            async {
+                do! rest.InitializeAsync () |> Async.AwaitTask
+                let botOwner = rest.CurrentApplication.Owners |> Seq.tryHead
+                do! startClient botOwner |> Async.AwaitTask
+                do! Task.Delay -1 |> Async.AwaitTask
+            }
 
-            Task.CompletedTask
-        ))
-
-        client.add_ClientErrored(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            client.Logger.LogError(botEventId, e.Exception, "Exception occured", [||])
-
-            let getBotOwner () =
-                match botOwner with
-                | Some botOwner ->
-                    try
-                        await <| rest.CreateDmAsync botOwner.Id
-                        |> Ok
-                    with e ->
-                        Error e
-                | None ->
-                    Error (new System.Exception("not found bot owner"))
-
-            match getBotOwner () with
-            | Ok channel ->
-                let embed = Entities.DiscordEmbedBuilder()
-                embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                embed.Description <-
-                    sprintf "```\n%A\n```" e.Exception
-
-                let b = Entities.DiscordMessageBuilder()
-                b.Embed <- embed.Build()
-
-                awaiti <| channel.SendMessageAsync b
-            | Error x ->
-                printfn "get bot owner returned error:\n%A" x
-
-            Task.CompletedTask
-        ))
-
-        awaiti <| client.ConnectAsync()
-
-        awaiti <| Task.Delay -1
+        main |> Async.RunSynchronously
 
         0
