@@ -459,11 +459,11 @@ module MostActiveTable =
             GetHeaders = fun sortBy ->
                 match sortBy with
                 | SortBy.SortByDayExp ->
-                    [| "Учасники"; "ОбщОпыт"; "СутОпыт▼" |]
+                    [| "Участники"; "ОбщОпыт"; "СутОпыт▼" |]
                 | SortBy.SortByExp ->
-                    [| "Учасники"; "ОбщОпыт▼"; "СутОпыт" |]
+                    [| "участники"; "ОбщОпыт▼"; "СутОпыт" |]
                 | SortBy.SortByIndex ->
-                    [| "Учасники▼"; "ОбщОпыт"; "СутОпыт" |]
+                    [| "участники▼"; "ОбщОпыт"; "СутОпыт" |]
                 | x ->
                     failwithf "MostActiveTable.SortBy %A" x
 

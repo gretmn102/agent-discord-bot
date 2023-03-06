@@ -350,7 +350,7 @@ module RatingTableUi =
                 let mark targetIndex =
                     let markChar = "▼"
 
-                    [| "Учасники"; "Угадано"; "Не угадано" |]
+                    [| "участники"; "Угадано"; "Не угадано" |]
                     |> Array.mapi (fun i headerName ->
                         if i = targetIndex then
                             sprintf "%s%s" headerName markChar
