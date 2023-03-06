@@ -78,16 +78,10 @@ let initBotModules (db: MongoDB.Driver.IMongoDatabase) =
 
 open MongoDB.Driver
 let initDb () =
-    let login = getEnvironmentVariable "BotDbL"
-    let password = getEnvironmentVariable "BotDbP"
+    let dbConnection = getEnvironmentVariable "DbConnection"
 
     let settings =
-        MongoClientSettings.FromConnectionString (
-            sprintf
-                "mongodb+srv://%s:%s@cluster0.jkwib.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
-                login
-                password
-        )
+        MongoClientSettings.FromConnectionString (dbConnection)
 
     let client = new MongoClient(settings)
     let database =
