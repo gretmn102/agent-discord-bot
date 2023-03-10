@@ -46,13 +46,13 @@ let cmd pstart (client: DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.Messa
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 
-let initBotModules (db: MongoDB.Driver.IMongoDatabase) =
+let initBotModules (db: MongoDB.Driver.IMongoDatabase) (logger: ILogger<_>) =
     [|
         CustomCommand.Main.create db
         Doorkeeper.Main.create db
         Doorkeeper.Invites.create db
         UserRole.Main.create db
-        Ranking.Main.create db
+        Ranking.Main.create db logger
         VoiceChannelNotification.Main.create db
 
         MessageManager.create ()
@@ -140,7 +140,7 @@ let main argv =
             |> Seq.tryHead
 
         let database = initDb ()
-        let botModules = initBotModules database
+        let botModules = initBotModules database client.Logger
 
         botModules
         |> Shared.BotModule.bindToClientsEvents

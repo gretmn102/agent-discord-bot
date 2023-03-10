@@ -1,6 +1,7 @@
 module Ranking.Main
 open FsharpMyExtension
 open DSharpPlus
+open Microsoft.Extensions.Logging
 
 open Types
 open Extensions
@@ -744,7 +745,8 @@ module Parser =
         >>= fun msg ->
             preturn (fun x -> f x msg)
 
-let create db =
+let create db (logger: ILogger<_>) =
+    let loggerEventId = new EventId(32, "ranking")
     let m =
         let init = {
             Settings = RankingSettings.Guilds.init "guildRankingSettings" db
@@ -794,16 +796,21 @@ let create db =
             let mostActiveTimerStart (client: DiscordClient) =
                 let scheduler = new Scheduler.Scheduler<unit>(Scheduler.State.Empty)
 
-                let nextDay (now: System.DateTime) =
+                let calcNextDay (now: System.DateTime) =
                     let now = now.AddDays 1.0
                     System.DateTime(now.Year, now.Month, now.Day, 0, 0, 0)
 
-                scheduler.AddJob { Time = nextDay System.DateTime.Now; Type = () }
+                let nextDay = calcNextDay System.DateTime.Now
+
+                scheduler.AddJob { Time = nextDay; Type = () }
+
+                logger.LogInformation(loggerEventId, (sprintf "background worker is started. Next event will start at %A" nextDay))
 
                 Scheduler.startAsync scheduler 100 (fun job ->
+                    logger.LogInformation(loggerEventId, (sprintf "flooder of day is activated. Next event will start at %A" nextDay))
                     m.Post (MostActiveActivateAll client)
 
-                    scheduler.AddJob { Time = nextDay job.Time; Type = () }
+                    scheduler.AddJob { Time = calcNextDay job.Time; Type = () }
                 )
             Some mostActiveTimerStart
     }
