@@ -351,7 +351,7 @@ module UserRoleForm =
 
         let embed =
             Entities.DiscordEmbedBuilder()
-                .WithAuthor(sprintf "Пользовательская роль", iconUrl = "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/120/google/313/performing-arts_1f3ad.png")
+                .WithAuthor(sprintf "Пользовательская роль", iconUrl = "https://cdn.discordapp.com/attachments/912291464074117161/1084233059148243036/rcLxeMj6i-23417404191.png")
                 .WithColor(DiscordEmbed.backgroundColorDarkTheme)
                 .WithDescription(content)
                 // .WithFooter(sprintf "OwnerId: %d" guildMember.Id)
