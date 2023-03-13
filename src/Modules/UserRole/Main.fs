@@ -236,7 +236,7 @@ type Request =
 type Req =
     | Request of EventArgs.MessageCreateEventArgs * Request
     | GuildRoleDeletedHandler of EventArgs.GuildRoleDeleteEventArgs
-    | ModalHandle of AsyncReplyChannel<bool> * EventArgs.ModalSubmitEventArgs
+    | ModalHandle of EventArgs.ModalSubmitEventArgs
     | ComponentInteractionCreateHandle of AsyncReplyChannel<bool> * DiscordClient * EventArgs.ComponentInteractionCreateEventArgs
 
 type State =
@@ -707,118 +707,116 @@ module UserRoleForm =
 
     let modalHandle (e: EventArgs.ModalSubmitEventArgs) (state: State) =
         let interaction = e.Interaction
-        if interaction.Data.CustomId = UserRoleFormModalId then
-            let name =
-                match e.Values.TryGetValue UserRoleFormModalRoleNameId with
-                | true, roleName ->
-                    if System.String.IsNullOrWhiteSpace roleName then
-                        Left "Название роли не должно быть пустым или состоять из пробелов"
-                    else Right roleName
-                | false, _ -> Left (sprintf "Internal error: %s not found" UserRoleFormModalRoleNameId)
 
-            let color =
-                match e.Values.TryGetValue UserRoleFormModalColorId with
-                | true, hexOrDecColorStr ->
-                    match FParsecExt.runEither Parser.phexOrDecColor hexOrDecColorStr  with
-                    | Left errMsg ->
-                        sprintf "Пожалуйста, введите цвет в шестнадцатеричном формате (например, `#ffa500` даст оранжевый цвет), а не `%s`. Цвет можно выбрать на [W3Schools](https://www.w3schools.com/colors/colors_picker.asp), например."
-                            hexOrDecColorStr
-                        |> Left
+        let name =
+            match e.Values.TryGetValue UserRoleFormModalRoleNameId with
+            | true, roleName ->
+                if System.String.IsNullOrWhiteSpace roleName then
+                    Left "Название роли не должно быть пустым или состоять из пробелов"
+                else Right roleName
+            | false, _ -> Left (sprintf "Internal error: %s not found" UserRoleFormModalRoleNameId)
 
-                    | Right color -> Right color
+        let color =
+            match e.Values.TryGetValue UserRoleFormModalColorId with
+            | true, hexOrDecColorStr ->
+                match FParsecExt.runEither Parser.phexOrDecColor hexOrDecColorStr  with
+                | Left errMsg ->
+                    sprintf "Пожалуйста, введите цвет в шестнадцатеричном формате (например, `#ffa500` даст оранжевый цвет), а не `%s`. Цвет можно выбрать на [W3Schools](https://www.w3schools.com/colors/colors_picker.asp), например."
+                        hexOrDecColorStr
+                    |> Left
 
-                | false, _ -> Left (sprintf "Internal error: %s not found" UserRoleFormModalColorId)
+                | Right color -> Right color
 
-            let iconUrl =
-                match e.Values.TryGetValue UserRoleFormModalIconUrl with
-                | true, iconUrl ->
-                    if System.String.IsNullOrWhiteSpace iconUrl then
-                        Right None
-                    else
-                        // todo: validate url
-                        Right (Some iconUrl)
-                | false, _ ->
+            | false, _ -> Left (sprintf "Internal error: %s not found" UserRoleFormModalColorId)
+
+        let iconUrl =
+            match e.Values.TryGetValue UserRoleFormModalIconUrl with
+            | true, iconUrl ->
+                if System.String.IsNullOrWhiteSpace iconUrl then
                     Right None
+                else
+                    // todo: validate url
+                    Right (Some iconUrl)
+            | false, _ ->
+                Right None
 
-            let state =
-                match name, color, iconUrl with
-                | Right name, Right color, Right iconUrl ->
-                    let b = Entities.DiscordInteractionResponseBuilder()
-                    b.IsEphemeral <- true
+        let state =
+            match name, color, iconUrl with
+            | Right name, Right color, Right iconUrl ->
+                let b = Entities.DiscordInteractionResponseBuilder()
+                b.IsEphemeral <- true
 
-                    let changed = ref false
+                let changed = ref false
 
-                    let guildUserRoles =
-                        giveOrChangeRole
-                            e.Interaction.User.Id
-                            e.Interaction.Guild
-                            (fun content -> b.Content <- content)
-                            (b.AddComponents >> ignore)
-                            (b.AddEmbed >> ignore)
-                            (fun embed ->
-                                let b =
-                                    Entities.DiscordInteractionResponseBuilder()
-                                        .AsEphemeral(true)
-                                        .AddEmbed(embed)
+                let guildUserRoles =
+                    giveOrChangeRole
+                        e.Interaction.User.Id
+                        e.Interaction.Guild
+                        (fun content -> b.Content <- content)
+                        (b.AddComponents >> ignore)
+                        (b.AddEmbed >> ignore)
+                        (fun embed ->
+                            let b =
+                                Entities.DiscordInteractionResponseBuilder()
+                                    .AsEphemeral(true)
+                                    .AddEmbed(embed)
 
-                                awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-                            )
-                            (fun userRoleId ->
-                                let b = Entities.DiscordInteractionResponseBuilder()
+                            awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+                        )
+                        (fun userRoleId ->
+                            let b = Entities.DiscordInteractionResponseBuilder()
 
-                                let guildMember = getGuildMember e.Interaction.Guild e.Interaction.User
+                            let guildMember = getGuildMember e.Interaction.Guild e.Interaction.User
 
-                                createUI (b.AddComponents >> ignore) (b.AddEmbed >> ignore) guildMember (Some userRoleId)
-                                awaiti <| interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
+                            createUI (b.AddComponents >> ignore) (b.AddEmbed >> ignore) guildMember (Some userRoleId)
+                            awaiti <| interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
 
-                                changed := true
-                            )
-                            (Some {
-                                Name = name
-                                Color = color
-                                IconUrl = iconUrl
-                            })
-                            state
+                            changed := true
+                        )
+                        (Some {
+                            Name = name
+                            Color = color
+                            IconUrl = iconUrl
+                        })
+                        state
 
-                    if !changed then
-                        let b =
-                            Entities.DiscordFollowupMessageBuilder()
-                                .AsEphemeral(true)
-                                .WithContent(b.Content)
-                                .AddComponents(b.Components)
-                                .AddEmbeds(b.Embeds)
-
-                        awaiti <| interaction.CreateFollowupMessageAsync(b)
-                    else
-                        awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-
-                    { state with
-                        GuildUserRoles = guildUserRoles
-                    }
-                | _ ->
-                    let f = function Left errMsg -> Some errMsg | Right _ -> None
-
-                    let embed =
-                        Entities.DiscordEmbedBuilder()
-                            .WithColor(DiscordEmbed.backgroundColorDarkTheme)
-                            .WithDescription(
-                                [f name; f color]
-                                |> List.choose id
-                                |> String.concat "\n"
-                            ).Build()
-
+                if !changed then
                     let b =
-                        Entities.DiscordInteractionResponseBuilder()
+                        Entities.DiscordFollowupMessageBuilder()
                             .AsEphemeral(true)
-                            .AddEmbed(embed)
+                            .WithContent(b.Content)
+                            .AddComponents(b.Components)
+                            .AddEmbeds(b.Embeds)
 
+                    awaiti <| interaction.CreateFollowupMessageAsync(b)
+                else
                     awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
-                    state
+                { state with
+                    GuildUserRoles = guildUserRoles
+                }
+            | _ ->
+                let f = function Left errMsg -> Some errMsg | Right _ -> None
 
-            true, state
-        else
-            false, state
+                let embed =
+                    Entities.DiscordEmbedBuilder()
+                        .WithColor(DiscordEmbed.backgroundColorDarkTheme)
+                        .WithDescription(
+                            [f name; f color]
+                            |> List.choose id
+                            |> String.concat "\n"
+                        ).Build()
+
+                let b =
+                    Entities.DiscordInteractionResponseBuilder()
+                        .AsEphemeral(true)
+                        .AddEmbed(embed)
+
+                awaiti <| interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+
+                state
+
+        state
 
 let reducer (db: MongoDB.Driver.IMongoDatabase) =
     let removeUserRole
@@ -1136,10 +1134,8 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
                         PermissiveIconRoleList.reducer e state.Setting cmd
                 }
 
-        | ModalHandle (r, e) ->
-            let isHandled, state = UserRoleForm.modalHandle e state
-            r.Reply isHandled
-            state
+        | ModalHandle e ->
+            UserRoleForm.modalHandle e state
 
         | ComponentInteractionCreateHandle(r, client, e) ->
             let guild = e.Guild
@@ -1186,8 +1182,8 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
 
     let reduceError (msg: Req) (state: State) =
         match msg with
-        | ModalHandle(r, _) ->
-            r.Reply true
+        | ModalHandle _ ->
+            ()
         | Request(_, r) ->
             match r with
             | GetTemplateRole
@@ -1254,7 +1250,12 @@ let create (db: MongoDB.Driver.IMongoDatabase) =
 
         ModalSubmit =
             let modalHandle (e: EventArgs.ModalSubmitEventArgs) =
-                reducer.PostAndReply (fun r -> ModalHandle(r, e))
+                if e.Interaction.Data.CustomId = UserRoleForm.UserRoleFormModalId then
+                    reducer.Post (ModalHandle e)
+                    true
+                else
+                    false
+
             Some modalHandle
 
         GuildRoleDeletedHandler =
