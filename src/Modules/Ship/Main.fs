@@ -60,8 +60,6 @@ let cmdBuilder2
         let who = await (e.Guild.GetMemberAsync whoId)
         let whom = await (e.Guild.GetMemberAsync whomId)
 
-        let fileName = "Modules/Ship/heart.png"
-
         let perc =
             match opt with
             | Target x -> x
@@ -80,7 +78,9 @@ let cmdBuilder2
             else
                 sprintf "Между %s и %s что-то есть!" (nickOrName who) (nickOrName whom)
 
-        embed.WithImageUrl (sprintf "attachment://%s" fileName) |> ignore
+        let imageName = "ship.png"
+
+        embed.WithImageUrl (sprintf "attachment://%s" imageName) |> ignore
 
         let b = Entities.DiscordMessageBuilder()
         b.Embed <- embed.Build()
@@ -91,7 +91,7 @@ let cmdBuilder2
         use m = new System.IO.MemoryStream()
         Core.img user1Avatar user2Avatar perc m
         m.Position <- 0L
-        b.AddFile(fileName, m) |> ignore
+        b.AddFile(imageName, m) |> ignore
 
         awaiti (e.Channel.SendMessageAsync b)
 
