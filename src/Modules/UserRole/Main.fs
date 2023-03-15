@@ -237,7 +237,7 @@ type Req =
     | Request of EventArgs.MessageCreateEventArgs * Request
     | GuildRoleDeletedHandler of EventArgs.GuildRoleDeleteEventArgs
     | ModalHandle of EventArgs.ModalSubmitEventArgs
-    | ComponentInteractionCreateHandle of AsyncReplyChannel<bool> * DiscordClient * EventArgs.ComponentInteractionCreateEventArgs
+    | ComponentInteractionCreateHandle of DiscordClient * EventArgs.ComponentInteractionCreateEventArgs
 
 type State =
     {
@@ -369,67 +369,59 @@ module UserRoleForm =
         |]
 
     let componentInteractionCreateHandle (existRole: RoleEditModel option) isIconAllowed (client: DiscordClient) (e: EventArgs.ComponentInteractionCreateEventArgs) =
-        if e.Message.Author.Id = client.CurrentUser.Id then
-            if e.Id.StartsWith GiveOrChangeRoleButtonId then
-                let ownerId = uint64 e.Id.[GiveOrChangeRoleButtonId.Length..]
-                if e.User.Id = ownerId then
-                    let b =
-                        Entities.DiscordInteractionResponseBuilder()
-                            .WithTitle("Пользовательская роль")
-                            .WithCustomId(UserRoleFormModalId)
-                            .WithContent("Цвет роли должен быть в шестнадцатеричном формате (например, `#ffa500` даст оранжевый цвет). Его можно выбрать на [W3Schools](https://www.w3schools.com/colors/colors_picker.asp), например, или еще где-нибудь.")
-                            .AddComponents([|
-                                Entities.TextInputComponent(
-                                    "Название роли",
-                                    UserRoleFormModalRoleNameId,
-                                    required = true,
-                                    placeholder = "Главная роль!",
-                                    style = TextInputStyle.Short,
-                                    value = (match existRole with None -> "" | Some role -> role.Name)
-                                )
+        let ownerId = uint64 e.Id.[GiveOrChangeRoleButtonId.Length..]
+        if e.User.Id = ownerId then
+            let b =
+                Entities.DiscordInteractionResponseBuilder()
+                    .WithTitle("Пользовательская роль")
+                    .WithCustomId(UserRoleFormModalId)
+                    .WithContent("Цвет роли должен быть в шестнадцатеричном формате (например, `#ffa500` даст оранжевый цвет). Его можно выбрать на [W3Schools](https://www.w3schools.com/colors/colors_picker.asp), например, или еще где-нибудь.")
+                    .AddComponents([|
+                        Entities.TextInputComponent(
+                            "Название роли",
+                            UserRoleFormModalRoleNameId,
+                            required = true,
+                            placeholder = "Главная роль!",
+                            style = TextInputStyle.Short,
+                            value = (match existRole with None -> "" | Some role -> role.Name)
+                        )
 
-                            |]: Entities.DiscordComponent [])
-                            .AddComponents(
-                                Entities.TextInputComponent(
-                                    "Цвет роли",
-                                    UserRoleFormModalColorId,
-                                    required = true,
-                                    placeholder = "#ffa500",
-                                    style = TextInputStyle.Short,
-                                    value = (match existRole with None -> "" | Some role -> sprintf "#%x" role.Color.Value)
-                                )
-                            )
+                    |]: Entities.DiscordComponent [])
+                    .AddComponents(
+                        Entities.TextInputComponent(
+                            "Цвет роли",
+                            UserRoleFormModalColorId,
+                            required = true,
+                            placeholder = "#ffa500",
+                            style = TextInputStyle.Short,
+                            value = (match existRole with None -> "" | Some role -> sprintf "#%x" role.Color.Value)
+                        )
+                    )
 
-                    let b =
-                        if isIconAllowed then
-                            b.AddComponents(
-                                Entities.TextInputComponent(
-                                    "Ссылка на иконку",
-                                    UserRoleFormModalIconUrl,
-                                    required = false,
-                                    placeholder = "",
-                                    style = TextInputStyle.Short,
-                                    value = (match existRole with None -> "" | Some role -> match role.IconUrl with None -> "" | Some x -> x)
-                                )
-                            )
-                        else
-                            b
-
-                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b)
+            let b =
+                if isIconAllowed then
+                    b.AddComponents(
+                        Entities.TextInputComponent(
+                            "Ссылка на иконку",
+                            UserRoleFormModalIconUrl,
+                            required = false,
+                            placeholder = "",
+                            style = TextInputStyle.Short,
+                            value = (match existRole with None -> "" | Some role -> match role.IconUrl with None -> "" | Some x -> x)
+                        )
+                    )
                 else
-                    let b =
-                        Entities.DiscordInteractionResponseBuilder()
+                    b
 
-                    b.IsEphemeral <- true
-                    b.Content <- sprintf "Этот интерфейс принадлежит <@!%d>. Создайте себе свой командой `.%s`" ownerId Parser.roleNameCmd
-
-                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
-
-                true
-            else
-                false
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, b)
         else
-            false
+            let b =
+                Entities.DiscordInteractionResponseBuilder()
+
+            b.IsEphemeral <- true
+            b.Content <- sprintf "Этот интерфейс принадлежит <@!%d>. Создайте себе свой командой `.%s`" ownerId Parser.roleNameCmd
+
+            awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
 
     let giveOrChangeRole
         userId
@@ -1137,7 +1129,7 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
         | ModalHandle e ->
             UserRoleForm.modalHandle e state
 
-        | ComponentInteractionCreateHandle(r, client, e) ->
+        | ComponentInteractionCreateHandle(client, e) ->
             let guild = e.Guild
             let guildMember = getGuildMember guild e.User
 
@@ -1176,35 +1168,9 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
 
                 isGuildHasRoleIconsFeature () && isMemberHasRoleIconPermission ()
 
-            r.Reply <| UserRoleForm.componentInteractionCreateHandle existRole isIconAllowed client e
+            UserRoleForm.componentInteractionCreateHandle existRole isIconAllowed client e
 
             state
-
-    let reduceError (msg: Req) (state: State) =
-        match msg with
-        | ModalHandle _ ->
-            ()
-        | Request(_, r) ->
-            match r with
-            | GetTemplateRole
-            | RemoveUserRole(_)
-            | UpdateRolesPermission
-            | SetTemplateRole(_)
-            | SetUserRoleToUser(_, _)
-            | GiveOrChangeRole(_)
-            | GetUserRoles ->
-                ()
-            | PermissiveRoleCmd cmd
-            | PermissiveIconRoleCmd cmd ->
-                match cmd with
-                | AbstrRoleList.Cmd.AddRoleId _
-                | AbstrRoleList.Cmd.RemoveRoleId _
-                | AbstrRoleList.Cmd.GetRoles ->
-                    ()
-        | GuildRoleDeletedHandler(_) ->
-            ()
-        | ComponentInteractionCreateHandle(r, _, _) ->
-            r.Reply true
 
     MailboxProcessor.Start (fun mail ->
         let rec loop (state: State) =
@@ -1214,7 +1180,6 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
                     try
                         reduce msg state
                     with e ->
-                        reduceError msg state
                         printfn "%A" e
                         state
 
@@ -1245,7 +1210,15 @@ let create (db: MongoDB.Driver.IMongoDatabase) =
 
         ComponentInteractionCreateHandle =
             let componentInteractionCreateHandle ((client: DiscordClient), (e: EventArgs.ComponentInteractionCreateEventArgs)) =
-                reducer.PostAndReply (fun r -> ComponentInteractionCreateHandle (r, client, e))
+                if e.Message.Author.Id = client.CurrentUser.Id then
+                    if e.Id.StartsWith UserRoleForm.GiveOrChangeRoleButtonId then
+                        reducer.Post (ComponentInteractionCreateHandle (client, e))
+                        true
+                    else
+                        false
+                else
+                    false
+
             Some componentInteractionCreateHandle
 
         ModalSubmit =
