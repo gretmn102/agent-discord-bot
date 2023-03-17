@@ -235,6 +235,7 @@ type Request =
 
 type Req =
     | Request of EventArgs.MessageCreateEventArgs * Request
+    | InteractionRequest of EventArgs.InteractionCreateEventArgs * Request
     | GuildRoleDeletedHandler of EventArgs.GuildRoleDeleteEventArgs
     | ModalHandle of EventArgs.ModalSubmitEventArgs
     | ComponentInteractionCreateHandle of DiscordClient * EventArgs.ComponentInteractionCreateEventArgs
@@ -879,6 +880,42 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
                 | None -> state
 
             state
+
+        | InteractionRequest(e, msg) ->
+            match msg with
+            | GiveOrChangeRole roleEditModel ->
+                let giveOrChangeRole roleEditModel state =
+                    let b = Entities.DiscordInteractionResponseBuilder()
+
+                    let state =
+                        UserRoleForm.giveOrChangeRole
+                            e.Interaction.User.Id
+                            e.Interaction.Guild
+                            (fun content -> b.Content <- content)
+                            (b.AddComponents >> ignore)
+                            (b.AddEmbed >> ignore)
+                            (fun content ->
+                                awaiti <| e.Interaction.Channel.SendMessageAsync content
+                            )
+                            (fun roleGrantedId -> ())
+                            roleEditModel
+                            state
+
+                    awaiti <| e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, b)
+
+                    state
+
+                let roles =
+                    try
+                        giveOrChangeRole roleEditModel state
+                    with e ->
+                        printfn "%A" e
+                        state.GuildUserRoles
+
+                { state with GuildUserRoles = roles }
+            | x ->
+                failwithf "'%A' not implemented yet!" x
+
         | Request(e, msg) ->
             match msg with
             | GiveOrChangeRole roleEditModel ->
@@ -1200,6 +1237,29 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
 let create (db: MongoDB.Driver.IMongoDatabase) =
     let reducer = reducer db
 
+    let commands =
+        let role =
+            let slashCommandName = "role"
+            InteractionCommand.SlashCommand {|
+                CommandName = slashCommandName
+                Command =
+                    new Entities.DiscordApplicationCommand(
+                        slashCommandName,
+                        "Создать, изменить, посмотреть свою личную роль",
+                        ``type`` = ApplicationCommandType.SlashCommand,
+                        name_localizations = Map [
+                            "ru", "роль"
+                        ]
+                    )
+
+                Handler = fun e ->
+                    reducer.Post(InteractionRequest (e, GiveOrChangeRole None))
+            |}
+
+        [|
+            role
+        |]
+
     { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
@@ -1235,4 +1295,7 @@ let create (db: MongoDB.Driver.IMongoDatabase) =
             let guildRoleDeletedHandler (e: EventArgs.GuildRoleDeleteEventArgs) =
                 reducer.Post(GuildRoleDeletedHandler e)
             Some guildRoleDeletedHandler
+
+        InteractionCommands =
+            Some commands
     }
