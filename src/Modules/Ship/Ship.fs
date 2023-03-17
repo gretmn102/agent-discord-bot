@@ -71,10 +71,7 @@ let img user1Avatar user2Avatar perc (outputStream:System.IO.MemoryStream) =
         let txtBrush = new SolidBrush(getColor prec)
 
         let fontSize =
-            // 320 66.5
-            // 133 x
-            // (300. * x) / 320.
-            (66.5f * float32 height) / 320.f
+            (80f * float32 height) / 320.f
 
         let font = new SixLabors.Fonts.Font(fontFamily, fontSize)
         let str = sprintf "%d%%" prec
