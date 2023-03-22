@@ -10,8 +10,6 @@ open DiscordMessage.Parser
 type 'a Parser = Parser<'a, unit>
 
 type Cmd =
-    | Cyoa of AppsHub.Hub.CyoaT
-    | SomeQuiz
     | Unknown
     | Pass
 
@@ -23,12 +21,6 @@ let initCommandParser (commands: Parser<Shared.BotModule.MessageCreateEventHandl
     let pmessageCreateEventHandler = choice commands
 
     choice [
-        stringReturn "someGirlsQuiz" (Cyoa AppsHub.Hub.SomeGirlsQuiz)
-        stringReturn "cyoa" (Cyoa AppsHub.Hub.SomeCyoa)
-        stringReturn "quizWithMultiChoices" (Cyoa AppsHub.Hub.QuizWithMultiChoices)
-        stringReturn "quizPizza" (Cyoa AppsHub.Hub.QuizPizza)
-        stringReturn "quiz" SomeQuiz
-
         pmessageCreateEventHandler |>> MessageCreateEventHandler
     ]
 

@@ -328,3 +328,42 @@ let start appType (client:DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.Mes
             MessageId = msg.Id
         }
     m.Post(SecondInit(e.Author.Id, appType, msgPath))
+
+module BotModule =
+    open DSharpPlus
+
+    type Request =
+        | Cyoa of Hub.CyoaT
+        | SomeQuiz
+
+    module Parser =
+        open FParsec
+
+        open DiscordMessage.Parser
+
+        type 'a Parser = Parser<'a, unit>
+
+        let start f: _ Parser =
+            choice [
+                stringReturn "someGirlsQuiz" (Cyoa Hub.SomeGirlsQuiz)
+                stringReturn "cyoa" (Cyoa Hub.SomeCyoa)
+                stringReturn "quizWithMultiChoices" (Cyoa Hub.QuizWithMultiChoices)
+                stringReturn "quizPizza" (Cyoa Hub.QuizPizza)
+                stringReturn "quiz" SomeQuiz
+            ]
+            >>= fun msg ->
+                preturn (fun x -> f x msg)
+
+    let create () =
+        { Shared.BotModule.empty with
+            MessageCreateEventHandleExclude =
+                let exec: _ Parser.Parser =
+                    Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
+                        match msg with
+                        | Cyoa x ->
+                            start (Hub.InitCyoa x) client e
+                        | SomeQuiz ->
+                            start Hub.InitQuiz client e
+                    )
+                Some exec
+        }

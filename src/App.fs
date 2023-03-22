@@ -20,11 +20,6 @@ let cmd pstart (client: DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.Messa
             match res with
             | CommandParser.Pass -> ()
 
-            | CommandParser.Cyoa x ->
-                AppsHub.start (AppsHub.Hub.InitCyoa x) client e
-            | CommandParser.SomeQuiz ->
-                AppsHub.start AppsHub.Hub.InitQuiz client e
-
             | CommandParser.Unknown ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()
                 b.Description <-
@@ -72,6 +67,7 @@ let initBotModules (db: MongoDB.Driver.IMongoDatabase) (logger: ILogger<_>) =
         BallotBox.Main.create (fun setting client e -> AppsHub.start (AppsHub.Hub.InitBallotBox setting) client e)
         NumberToWords.Main.create ()
         EmojiManager.Main.create ()
+        AppsHub.BotModule.create ()
 
         // SimpleQuiz.Main.create db
     |]
