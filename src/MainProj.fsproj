@@ -80,7 +80,6 @@
     <Compile Include="Modules\Cyoa\Core.fs" />
     <Compile Include="Modules\EmojiManager\Main.fs" />
     <Compile Include="AppsHub.fs" />
-    <Compile Include="CommandParser.fs" />
     <Compile Include="Api.fs" />
     <Compile Include="App.fs" />
   </ItemGroup>

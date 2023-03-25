@@ -10,37 +10,6 @@ open Extensions
 
 let botEventId = new EventId(42, "Bot-Event")
 
-let cmd pstart (client: DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.MessageCreateEventArgs) =
-    let authorId = e.Author.Id
-    let botId = client.CurrentUser.Id
-
-    if authorId <> botId then
-        match pstart botId e.Message.Content with
-        | Right res ->
-            match res with
-            | CommandParser.Pass -> ()
-
-            | CommandParser.Unknown ->
-                let b = DSharpPlus.Entities.DiscordEmbedBuilder()
-                b.Description <-
-                    [
-                        "Неизвестная команда. Доступные команды:"
-                        "`.команды` — кастомные команды, доступные на этом сервере"
-                        "`.numberToWords <число>` — возвращает число словами, например, `.numberToWords 21435` выдаст:"
-                        "```"
-                        "двадцать одна тысяча четыреста тридцать пять```"
-                        "`.avatar @user` — аватарка указанного пользователя"
-                    ] |> String.concat "\n"
-
-                b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                awaiti (client.SendMessageAsync (e.Channel, b.Build()))
-
-            | CommandParser.MessageCreateEventHandler exec ->
-                exec (client, e)
-
-        | Left x ->
-            awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
-
 let initBotModules (db: MongoDB.Driver.IMongoDatabase) (logger: ILogger<_>) =
     [|
         CustomCommand.Main.create db
@@ -138,11 +107,29 @@ let main argv =
         let database = initDb ()
         let botModules = initBotModules database client.Logger
 
+        let prefix = "."
+
         botModules
         |> Shared.BotModule.bindToClientsEvents
-            CommandParser.initCommandParser
-            CommandParser.start
-            cmd
+            prefix
+            (fun client e ->
+                let b = DSharpPlus.Entities.DiscordEmbedBuilder()
+                b.Description <-
+                    [
+                        "Доступные команды:"
+                        "`.команды` — кастомные команды, доступные на этом сервере"
+                        "`.numberToWords <число>` — возвращает число словами, например, `.numberToWords 21435` выдаст:"
+                        "```"
+                        "двадцать одна тысяча четыреста тридцать пять```"
+                        "`.avatar @user` — аватарка указанного пользователя"
+                    ] |> String.concat "\n"
+
+                b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                awaiti (client.SendMessageAsync (e.Channel, b.Build()))
+            )
+            (fun client e ->
+                ()
+            )
             AppsHub.resp
             client
 
