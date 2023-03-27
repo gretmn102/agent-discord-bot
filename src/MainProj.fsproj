@@ -30,6 +30,11 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\paket-files\github.com\gretmn102\rp-discord-bot\src\rp-discord-bot.fsproj">
+      <Name>rp-discord-bot.fsproj</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="..\paket-files\github.com\gretmn102\TextCardsMaker\DrawText\DrawText\Grid.fs" />
     <Compile Include="Modules\NumberToWords\Core.fs" />
     <Compile Include="Modules\NumberToWords\Main.fs" />
@@ -60,8 +65,6 @@
     <Compile Include="Modules\CustomCommand\MessageTemplate.fs" />
     <Compile Include="Modules\CustomCommand\Model.fs" />
     <Compile Include="Modules\CustomCommand\Main.fs" />
-    <Compile Include="Modules\DiscordWebhook\Model.fs" />
-    <Compile Include="Modules\DiscordWebhook\Main.fs" />
     <Compile Include="Modules\Boosters\Model.fs" />
     <Compile Include="Modules\Boosters\Main.fs" />
     <Compile Include="Modules\UserInfo\Main.fs" />

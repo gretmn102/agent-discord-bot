@@ -32,7 +32,7 @@ let initBotModules (db: MongoDB.Driver.IMongoDatabase) (logger: ILogger<_>) =
         Calc.Main.create ()
         Roll.Main.create ()
         Age.Main.create "age" db
-        DiscordWebhook.Main.create "characters" db
+        Characters.Main.create "characters" db
         BallotBox.Main.create (fun setting client e -> AppsHub.start (AppsHub.Hub.InitBallotBox setting) client e)
         NumberToWords.Main.create ()
         EmojiManager.Main.create ()
