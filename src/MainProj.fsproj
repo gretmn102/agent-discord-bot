@@ -35,7 +35,6 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\paket-files\github.com\gretmn102\TextCardsMaker\DrawText\DrawText\Grid.fs" />
     <Compile Include="Modules\NumberToWords\Core.fs" />
     <Compile Include="Modules\NumberToWords\Main.fs" />
     <Compile Include="Modules\UserRole\Model.fs" />
@@ -76,10 +75,6 @@
     <Compile Include="Modules\Calc\Core.fs" />
     <Compile Include="Modules\Calc\Main.fs" />
     <Compile Include="Modules\Roll\Main.fs" />
-    <Compile Include="Modules\SimpleQuiz\Countries.fs" />
-    <Compile Include="Modules\SimpleQuiz\Model.fs" />
-    <Compile Include="Modules\SimpleQuiz\FlagsRenderer.fs" />
-    <Compile Include="Modules\SimpleQuiz\Main.fs" />
     <Compile Include="Modules\Cyoa\Core.fs" />
     <Compile Include="Modules\EmojiManager\Main.fs" />
     <Compile Include="AppsHub.fs" />

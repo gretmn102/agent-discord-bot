@@ -37,8 +37,6 @@ let initBotModules (db: MongoDB.Driver.IMongoDatabase) (logger: ILogger<_>) =
         NumberToWords.Main.create ()
         EmojiManager.Main.create ()
         AppsHub.BotModule.create ()
-
-        // SimpleQuiz.Main.create db
     |]
 
 open MongoDB.Driver
