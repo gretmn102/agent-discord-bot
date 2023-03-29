@@ -4,6 +4,7 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'TestBot|AnyCPU' ">
     <DefineConstants>TRACE;TEST_BOT</DefineConstants>
