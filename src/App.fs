@@ -36,6 +36,7 @@ let initBotModules (db: MongoDB.Driver.IMongoDatabase) (logger: ILogger<_>) =
         BallotBox.Main.create (fun setting client e -> AppsHub.start (AppsHub.Hub.InitBallotBox setting) client e)
         NumberToWords.Main.create ()
         EmojiManager.Main.create ()
+        ImageChannel.Main.create db
         AppsHub.BotModule.create ()
     |]
 

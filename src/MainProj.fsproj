@@ -78,6 +78,9 @@
     <Compile Include="Modules\Roll\Main.fs" />
     <Compile Include="Modules\Cyoa\Core.fs" />
     <Compile Include="Modules\EmojiManager\Main.fs" />
+    <Compile Include="Modules\ImageChannel\Model.fs" />
+    <Compile Include="Modules\ImageChannel\View.fs" />
+    <Compile Include="Modules\ImageChannel\Main.fs" />
     <Compile Include="AppsHub.fs" />
     <Compile Include="Api.fs" />
     <Compile Include="App.fs" />
