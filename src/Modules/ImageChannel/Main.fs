@@ -12,6 +12,7 @@ type SlashCommand =
 
 type Msg =
     | RequestSlashCommand of EventArgs.InteractionCreateEventArgs * SlashCommand
+    | MessageCreateHandle of EventArgs.MessageCreateEventArgs
 
 type State =
     {
@@ -19,6 +20,17 @@ type State =
     }
 
 let reduce msg (state: State) =
+    let intrepGuildSettings guildId req state =
+        let req, newMarriedCouples =
+            Model.GuildSettingsDb.interp guildId req state.GuildSettingsDb
+
+        let state =
+            { state with
+                GuildSettingsDb = newMarriedCouples
+            }
+
+        req, state
+
     let interp guildId response responseEphemeral getMemberAsync cmd state =
         let rec interp cmd state =
             match cmd with
@@ -35,13 +47,7 @@ let reduce msg (state: State) =
                 interp (next ()) state
 
             | Model.MarriedCouplesCm req ->
-                let req, newMarriedCouples =
-                    Model.GuildSettingsDb.interp guildId req state.GuildSettingsDb
-
-                let state =
-                    { state with
-                        GuildSettingsDb = newMarriedCouples
-                    }
+                let req, state = intrepGuildSettings guildId req state
                 interp req state
 
             | Model.CreateChannelsView(channels, next) ->
@@ -104,6 +110,40 @@ let reduce msg (state: State) =
             interp (Model.addChannel channelId) state
         | GetChannels ->
             interp Model.getChannels state
+
+    | MessageCreateHandle e ->
+        let userId = e.Author.Id
+        let guildId = e.Guild.Id
+
+        let rec interp req state =
+            match req with
+            | Model.MessageCreateHandleCmd.SettingsReq req ->
+                let req, state = intrepGuildSettings guildId req state
+                interp req state
+
+            | Model.MessageCreateHandleCmd.AuthorIsBot((), next) ->
+                let req =
+                    next e.Author.IsBot
+
+                interp req state
+
+            | Model.MessageCreateHandleCmd.MessageHasAttachment((), next) ->
+                let req =
+                    next (e.Message.Attachments.Count > 0)
+                interp req state
+
+            | Model.MessageCreateHandleCmd.RemoveMessage((), next) ->
+                let res =
+                    try
+                        awaiti <| e.Message.DeleteAsync()
+                        Ok ()
+                    with e ->
+                        Error e.Message
+
+                interp (next res) state
+            | Model.MessageCreateHandleCmd.End -> state
+
+        interp (Model.messageCreateHandle e.Channel.Id userId e.Message.Id) state
 
 let create db =
     let reducer =
@@ -230,4 +270,9 @@ let create db =
     { Shared.BotModule.empty with
         InteractionCommands =
             Some commands
+
+        MessageCreateEventHandle =
+            let handle (client, (e: EventArgs.MessageCreateEventArgs)) =
+                reducer.Post (MessageCreateHandle e)
+            Some handle
     }

@@ -58,6 +58,72 @@ let getChannels =
         return End
     }
 
+[<RequireQualifiedAccess>]
+type MessageCreateHandleCmd =
+    | SettingsReq of SettingsReq<MessageCreateHandleCmd>
+    | AuthorIsBot of Req<unit, bool, MessageCreateHandleCmd>
+    | RemoveMessage of Req<unit, Result<unit, string>, MessageCreateHandleCmd>
+    | MessageHasAttachment of Req<unit, bool, MessageCreateHandleCmd>
+    | End
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module MessageCreateHandleCmd =
+    let apply fn arg next =
+        MessageCreateHandleCmd.SettingsReq (fn arg (fun res ->
+            next res
+        ))
+
+    let removeMessage userId next =
+        MessageCreateHandleCmd.RemoveMessage(userId, next)
+
+    let authorIsBot userId next =
+        MessageCreateHandleCmd.AuthorIsBot(userId, next)
+
+    let messageHasAttachment userId next =
+        MessageCreateHandleCmd.MessageHasAttachment(userId, next)
+
+let messageCreateHandle (channel: ChannelId) (authorId: UserId) messageId =
+    let testAuthorIsNotBot next =
+        pipeBackwardBuilder {
+            let! isBot = MessageCreateHandleCmd.authorIsBot ()
+            if isBot then
+                return MessageCreateHandleCmd.End
+            else
+                return next ()
+        }
+
+    let testChannelIsEnabled next =
+        pipeBackwardBuilder {
+            let! channels = MessageCreateHandleCmd.apply SettingsReq.getChannels ()
+            if Set.contains channel channels then
+                return next ()
+            else
+                return MessageCreateHandleCmd.End
+        }
+
+    let testMessageHasAttachment next =
+        pipeBackwardBuilder {
+            let! has = MessageCreateHandleCmd.messageHasAttachment ()
+            if has then
+                return MessageCreateHandleCmd.End
+            else
+                return next ()
+        }
+
+    pipeBackwardBuilder {
+        do! testAuthorIsNotBot
+        do! testChannelIsEnabled
+        do! testMessageHasAttachment
+        let! result = MessageCreateHandleCmd.removeMessage ()
+        do
+            match result with
+            | Error errMsg ->
+                printfn "%A" errMsg // TODO
+            | _ -> ()
+
+        return MessageCreateHandleCmd.End
+    }
+
 module GuildSettingsDb =
     open MongoDB.Driver
     open MongoDB.Bson
