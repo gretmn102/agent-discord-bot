@@ -8,6 +8,7 @@ open Extensions
 
 type SlashCommand =
     | AddChannel of ChannelId
+    | RemoveChannel of ChannelId
     | GetChannels
 
 type Msg =
@@ -108,6 +109,8 @@ let reduce msg (state: State) =
         match act with
         | AddChannel channelId ->
             interp (Model.addChannel channelId) state
+        | RemoveChannel channelId ->
+            interp (Model.removeChannel channelId) state
         | GetChannels ->
             interp Model.getChannels state
 
@@ -171,8 +174,12 @@ let create db =
         let settings =
             let channels =
                 let commandName = "channels"
+
                 let addName = "add"
                 let addOptName = "target-channel"
+
+                let removeName = "remove"
+                let removeOptName = "target-channel"
 
                 let getName = "get-list"
 
@@ -190,6 +197,19 @@ let create db =
                                     options = [|
                                         Entities.DiscordApplicationCommandOption(
                                             addOptName,
+                                            "channel",
+                                            ApplicationCommandOptionType.Channel,
+                                            required = true
+                                        )
+                                    |]
+                                )
+                                Entities.DiscordApplicationCommandOption(
+                                    removeName,
+                                    "remove channel",
+                                    ApplicationCommandOptionType.SubCommand,
+                                    options = [|
+                                        Entities.DiscordApplicationCommandOption(
+                                            removeOptName,
                                             "channel",
                                             ApplicationCommandOptionType.Channel,
                                             required = true
@@ -226,6 +246,22 @@ let create db =
                                         reducer.Post(RequestSlashCommand (e, AddChannel channelId))
                                     | None ->
                                         failwithf "not found `%A` in %A" addOptName (List.ofSeq data.Options)
+
+                                elif data.Name = removeName then
+                                    let channelId =
+                                        data.Options
+                                        |> Seq.tryPick (fun x ->
+                                            if x.Name = removeOptName then
+                                                let v = x.Value :?> ChannelId
+                                                Some v
+                                            else
+                                                None
+                                        )
+                                    match channelId with
+                                    | Some channelId ->
+                                        reducer.Post(RequestSlashCommand (e, RemoveChannel channelId))
+                                    | None ->
+                                        failwithf "not found `%A` in %A" removeOptName (List.ofSeq data.Options)
 
                                 else
                                     failwithf "%A not implemented yet" data.Name

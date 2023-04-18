@@ -6,12 +6,16 @@ type Req<'Arg, 'Res, 'Next> = 'Arg * ('Res -> 'Next)
 
 type SettingsReq<'Next> =
     | AddChannel of Req<ChannelId, unit, 'Next>
+    | RemoveChannel of Req<ChannelId, bool, 'Next>
     | GetChannels of Req<unit, ChannelId Set, 'Next>
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module SettingsReq =
     let addChannel arg next =
         AddChannel(arg, next)
+
+    let removeChannel arg next =
+        RemoveChannel(arg, next)
 
     let getChannels arg next =
         GetChannels(arg, next)
@@ -48,6 +52,19 @@ let addChannel (channelId: ChannelId) =
         do! Cmd.print true
                 (sprintf "Теперь бот будет удалять сообщения без картинок в <#%d>." channelId)
         return End
+    }
+
+let removeChannel (channelId: ChannelId) =
+    pipeBackwardBuilder {
+        let! isRemoved = Cmd.apply SettingsReq.removeChannel channelId
+        if isRemoved then
+            do! Cmd.print true
+                    (sprintf "Теперь бот будет **не** будет удалять сообщения без картинок в <#%d>." channelId)
+            return End
+        else
+            do! Cmd.print true
+                    (sprintf "Канал <#%d> и так не рассматривался ботом." channelId)
+            return End
     }
 
 let getChannels =
@@ -210,6 +227,36 @@ module GuildSettingsDb =
                 )
             let req = next ()
             req, guildSettings
+        | RemoveChannel(channelId, next) ->
+            let id = createId guildId
+
+            let findGuildSettings () next' =
+                match GuildData.tryFindById id guildSettings with
+                | Some data ->
+                    next' data
+                | None ->
+                    next false, guildSettings
+
+            let testChannelIsContains (data: Data) next' =
+                if Set.contains channelId data.Data.Channels then
+                    next' ()
+                else
+                    next false, guildSettings
+
+            pipeBackwardBuilder {
+                let! data = findGuildSettings ()
+                do! testChannelIsContains data
+
+                let guildSettings =
+                    guildSettings
+                    |> GuildData.set id (fun x ->
+                        { x with
+                            Channels = Set.remove channelId x.Channels
+                        }
+                    )
+
+                return next true, guildSettings
+            }
 
         | GetChannels((), f) ->
             let id = createId guildId
