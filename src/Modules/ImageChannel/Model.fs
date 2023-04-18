@@ -24,6 +24,7 @@ type Cmd =
     | MarriedCouplesCm of SettingsReq<Cmd>
     | Print of Req<{| IsEphemeral: bool; Description: string |}, unit, Cmd>
     | UserIsBot of Req<UserId, bool, Cmd>
+    | AuthorIsAdmin of Req<unit, bool, Cmd>
     | CreateChannelsView of Req<ChannelId [], unit, Cmd>
     | End
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -43,11 +44,25 @@ module Cmd =
     let userIsBot userId next =
         UserIsBot(userId, next)
 
+    let authorIsAdmin arg next =
+        AuthorIsAdmin(arg, next)
+
     let createChannelsView arg next =
         CreateChannelsView(arg, next)
 
+let testAuthorIsAdmin () next =
+    pipeBackwardBuilder {
+        let! isAdmin = Cmd.authorIsAdmin ()
+        if isAdmin then
+            return next ()
+        else
+            do! Cmd.print true "Для использования этой команды нужны права администратора."
+            return End
+    }
+
 let addChannel (channelId: ChannelId) =
     pipeBackwardBuilder {
+        do! testAuthorIsAdmin ()
         do! Cmd.apply SettingsReq.addChannel channelId
         do! Cmd.print true
                 (sprintf "Теперь бот будет удалять сообщения без картинок в <#%d>." channelId)
@@ -56,6 +71,7 @@ let addChannel (channelId: ChannelId) =
 
 let removeChannel (channelId: ChannelId) =
     pipeBackwardBuilder {
+        do! testAuthorIsAdmin ()
         let! isRemoved = Cmd.apply SettingsReq.removeChannel channelId
         if isRemoved then
             do! Cmd.print true

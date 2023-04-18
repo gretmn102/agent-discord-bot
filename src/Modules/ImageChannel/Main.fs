@@ -32,7 +32,7 @@ let reduce msg (state: State) =
 
         req, state
 
-    let interp guildId response responseEphemeral getMemberAsync cmd state =
+    let interp guildId (author: Entities.DiscordMember) response responseEphemeral getMemberAsync cmd state =
         let rec interp cmd state =
             match cmd with
             | Model.Print(args, next) ->
@@ -77,14 +77,19 @@ let reduce msg (state: State) =
 
                     state
 
+            | Model.AuthorIsAdmin((), next) ->
+                let isAdmin = author.Permissions &&& Permissions.Administrator = Permissions.Administrator
+                let req = next isAdmin
+                interp req state
+
             | Model.End -> state
 
         interp cmd state
 
     match msg with
     | RequestSlashCommand(e, act) ->
-        let userId = e.Interaction.User.Id
-        let guildId = e.Interaction.Guild.Id
+        let user = e.Interaction.User
+        let guild = e.Interaction.Guild
 
         let interp =
             let response (b: Entities.DiscordMessageBuilder) =
@@ -102,9 +107,14 @@ let reduce msg (state: State) =
                 awaiti <| e.Interaction.CreateResponseAsync (typ, b)
 
             let getMemberAsync userId =
-                e.Interaction.Guild.GetMemberAsync userId
+                guild.GetMemberAsync userId
 
-            interp guildId response responseEphemeral getMemberAsync
+            interp
+                guild.Id
+                (getGuildMember guild user)
+                response
+                responseEphemeral
+                getMemberAsync
 
         match act with
         | AddChannel channelId ->
