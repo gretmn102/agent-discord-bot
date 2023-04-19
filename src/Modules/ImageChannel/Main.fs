@@ -282,6 +282,37 @@ let create db =
                             false
                 |}
 
+            let help =
+                {|
+                    Command =
+                        Entities.DiscordApplicationCommandOption(
+                            "help",
+                            "help",
+                            ApplicationCommandOptionType.SubCommand
+                        )
+
+                    Handler = fun (e: EventArgs.InteractionCreateEventArgs) (data: Entities.DiscordInteractionDataOption) ->
+                        let embed = new Entities.DiscordEmbedBuilder()
+                        embed.Title <- "Каналы с изображениями"
+                        embed.Color <- DiscordEmbed.backgroundColorDarkTheme
+                        embed.Description <-
+                            [
+                                "Модуль, который удаляет в указанных каналах сообщения, не содержащие изображения. Это нужно для того, чтобы пользователи создавали ветки под интересующими их изображениями и оставляли комментарии."
+                                ""
+                                "• </image-channel channels add:1097782673407221851> — добавить канал с изображениями"
+                                "• </image-channel channels remove:1097782673407221851>  — удалить канал с изображениями"
+                                "• </image-channel channels get-list:1097782673407221851> — просмотреть список добавленных каналов"
+                            ]
+                            |> String.concat "\n"
+                        let b = new Entities.DiscordInteractionResponseBuilder()
+                        b.AddEmbed embed |> ignore
+                        let typ =
+                            InteractionResponseType.ChannelMessageWithSource
+                        awaiti <| e.Interaction.CreateResponseAsync(typ, b)
+
+                        true
+                |}
+
             let slashCommandName = "image-channel"
 
             InteractionCommand.SlashCommand {|
@@ -292,7 +323,7 @@ let create db =
                         "Managing ImageChannel settings",
                         [|
                             channels.Command
-                            // messageTemplates.Command
+                            help.Command
                         |],
                         ``type`` = ApplicationCommandType.SlashCommand
                     )
@@ -302,7 +333,7 @@ let create db =
                     |> Seq.iter (fun data ->
                         let isHandled =
                             channels.Handler e data
-                            // || messageTemplates.Handler e data
+                            || help.Handler e data
 
                         if not isHandled then
                             failwithf "%A not implemented yet" data.Name
