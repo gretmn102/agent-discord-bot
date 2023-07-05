@@ -23,6 +23,8 @@ jobs:
       - name: Build
         run: dotnet fake build -t Deploy
       - name: Test
+        env:
+          ABLY_TOKEN_TEST: ${{ secrets.ABLY_TOKEN_TEST }}
         run: dotnet fake build -t RunTests
       - uses: actions/upload-artifact@v3
         with:
