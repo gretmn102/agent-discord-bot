@@ -4,19 +4,11 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <AssemblyName>tests</AssemblyName>
-    <Optimize>true</Optimize>
-    <Tailcalls>true</Tailcalls>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\src\MainProj.fsproj">
       <Name>MainProj.fsproj</Name>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="..\src\.env">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>.env</TargetPath>
-    </Content>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Modules\BallotBox\tests.fs" />
