@@ -2,11 +2,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
-    <Optimize>true</Optimize>
-    <Tailcalls>true</Tailcalls>
     <AssemblyName>agent-discord-bot</AssemblyName>
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
+  <Target Name="SpicNSpan" AfterTargets="Clean">
+    <RemoveDir Directories="$(BaseOutputPath)" />
+    <RemoveDir Directories="$(BaseIntermediateOutputPath)" />
+  </Target>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'TestBot|AnyCPU' ">
     <DefineConstants>TRACE;TEST_BOT</DefineConstants>
   </PropertyGroup>
