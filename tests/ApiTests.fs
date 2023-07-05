@@ -142,7 +142,7 @@ let pingTests =
     testList "pingTests" [
         testCase "base" <| fun () ->
             let token =
-                getEnvironmentVariable "AblyTokenTest"
+                getEnvironmentVariable "ABLY_TOKEN_TEST"
 
             Api.start token
 
