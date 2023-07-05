@@ -30,7 +30,7 @@ let pshipTests =
                     "  Note: The error occurred at the end of the input stream."
                     "  Expecting: integer number (32-bit, signed) or 'rand' (case-insensitive)"
                     ""
-                ] |> String.concat "\r\n"
+                ] |> String.concat System.Environment.NewLine
             Assert.Equal("", Left exp, FParsecExt.runEither pship "ship")
         )
     ]
