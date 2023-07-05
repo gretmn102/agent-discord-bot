@@ -19,6 +19,8 @@ nuget Svg
 nuget MongoDB.Driver
 nuget ably.io
 nuget dotenv.net
+nuget Saturn == 0.14.1
+nuget Giraffe == 4.1
 
 git https://github.com/gretmn102/rp-discord-bot.git
 
