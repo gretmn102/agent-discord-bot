@@ -46,11 +46,11 @@ module Parser =
 
 let reduce (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: Request) =
     match msg with
-    | GetAvatar otherUserIdOrSelf ->
+    | GetAvatar otherUserId ->
         awaiti <| e.Channel.TriggerTypingAsync()
 
         let message =
-            let createAvatarMessage (user: Entities.DiscordUser) =
+            let getAvatarByUser (user: Entities.DiscordUser) =
                 let embed = Entities.DiscordEmbedBuilder()
                 embed.WithAuthor(user.Username) |> ignore
                 embed.ImageUrl <- user.AvatarUrl
@@ -59,8 +59,7 @@ let reduce (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: R
                 b.Embed <- embed.Build()
                 b
 
-            match otherUserIdOrSelf with
-            | Some userId ->
+            let getAvatarByUserId userId =
                 let user =
                     try
                         await (client.GetUserAsync userId)
@@ -71,8 +70,20 @@ let reduce (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: R
                     let b = Entities.DiscordMessageBuilder()
                     b.Content <- sprintf "User %d not found" userId
                     b
-                | user -> createAvatarMessage user
-            | None -> createAvatarMessage e.Author
+                | user -> getAvatarByUser user
+
+            match otherUserId with
+            | Some userId ->
+                if e.Author.Id = userId then
+                    getAvatarByUser e.Author
+                else
+                    getAvatarByUserId userId
+            | None ->
+                match e.Message.ReferencedMessage with
+                | null ->
+                    getAvatarByUser e.Author
+                | referencedMessage ->
+                    getAvatarByUser referencedMessage.Author
 
         ignore (await (e.Channel.SendMessageAsync message))
 
