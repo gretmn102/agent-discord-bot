@@ -2,8 +2,9 @@ module ReactionEvent.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
-
-open Types
+open DiscordBotExtensions
+open DiscordBotExtensions.DiscordMessage
+open DiscordBotExtensions.Types
 
 type Request =
     | SetReactionEvent of MessagePath * DiscordMessage.UnicodeOrCustomEmoji * RoleId list
@@ -71,7 +72,7 @@ let reduce (msg: Msg) (state: State) =
         match Model.Guilds.tryFindById id state.ReactionEvents with
         | None -> ()
         | Some item ->
-            let guildMember = getGuildMember x.Guild x.User
+            let guildMember = DiscordGuild.getMember x.User x.Guild
             let grantOrRevokeRole =
                 match x.Changed with
                 | Added -> guildMember.GrantRoleAsync
@@ -92,7 +93,7 @@ let reduce (msg: Msg) (state: State) =
     | Request(e, req) ->
         match req with
         | SetReactionEvent(messagePath, emoji, roleIds) ->
-            let currentMember = getGuildMember e.Guild e.Author
+            let currentMember = DiscordGuild.getMember e.Author e.Guild
             let replyMessage =
                 await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -171,7 +172,7 @@ let create db =
         m.Post (GuildReactionHandle e)
 
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

@@ -3,9 +3,10 @@ open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
 open DSharpPlus.Net.Serialization
-
-open Types
-open Extensions
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
+open DiscordBotExtensions.DiscordMessage
 
 type MessageUrl = string
 
@@ -146,7 +147,7 @@ let reduce ((client, e, msg): Msg) (state: State): State =
     | SendMessage (targetChannelId, res) ->
         awaiti <| e.Channel.TriggerTypingAsync()
 
-        let currentMember = getGuildMember e.Guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author e.Guild
 
         checkAccess currentMember <| fun () ->
         getJson res <| fun rawJson ->
@@ -179,7 +180,7 @@ let reduce ((client, e, msg): Msg) (state: State): State =
 
         awaiti <| e.Channel.TriggerTypingAsync()
 
-        let currentMember = getGuildMember e.Guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author e.Guild
 
         checkAccess currentMember <| fun () ->
         getJson res <| fun rawJson ->
@@ -205,7 +206,7 @@ let reduce ((client, e, msg): Msg) (state: State): State =
 
         awaiti <| e.Channel.TriggerTypingAsync()
 
-        let currentMember = getGuildMember e.Guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author e.Guild
 
         checkAccess currentMember <| fun () ->
         checkMessageBelongToCurrentGuild messagePath <| fun () ->
@@ -238,7 +239,7 @@ let reduce ((client, e, msg): Msg) (state: State): State =
         state
 
     | SwitchBotReactions(messagePath, emojis) ->
-        let currentMember = getGuildMember e.Guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author e.Guild
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
         if (currentMember.Permissions &&& Permissions.Administrator = Permissions.Administrator) then
@@ -316,7 +317,7 @@ let create () =
             loop init
         )
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

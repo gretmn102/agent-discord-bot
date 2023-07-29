@@ -3,10 +3,9 @@ module Doorkeeper.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
-
-open Shared
-open Types
-open Extensions
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 open Model
 
 module Builder =
@@ -207,6 +206,7 @@ let actionReduce
         let guild = e.Guild
 
         let getGuildMember userId next =
+            // TODO: DiscordGuild.getMember
             match await (guild.GetMemberAsync userId) with
             | null ->
                 sendMessage (
@@ -250,7 +250,7 @@ let actionReduce
                 )
 
         let isCurrentUserHasRight roleId next =
-            let currentMember = Types.getGuildMember guild e.Author
+            let currentMember = DiscordGuild.getMember e.Author guild
 
             if currentMember.Roles |> Seq.exists (fun x -> x.Id = roleId) then
                 next ()
@@ -426,7 +426,7 @@ let settingReduce
     | SettingReq.Set settingOpt ->
         match settingOpt with
         | Ok setting ->
-            let currentMember = getGuildMember e.Guild e.Author
+            let currentMember = DiscordGuild.getMember e.Author e.Guild
 
             settings
             |> isUserHasAdministrativeRight sendMessage currentMember ^<| fun () settings ->

@@ -3,9 +3,8 @@ open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
 open MongoDB.Bson.Serialization.Attributes
-
-open Types
-open Db
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Db
 
 [<BsonIgnoreExtraElements>]
 type DataPreVersion =

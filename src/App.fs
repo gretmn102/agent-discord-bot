@@ -4,9 +4,9 @@ open FsharpMyExtension.Either
 open Microsoft.Extensions.Logging
 open System.Threading.Tasks
 open DSharpPlus
-
-open Types
-open Extensions
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
 let botEventId = new EventId(42, "Bot-Event")
 
@@ -42,7 +42,7 @@ let initBotModules (db: MongoDB.Driver.IMongoDatabase) (logger: ILogger<_>) =
 
 open MongoDB.Driver
 let initDb () =
-    let dbConnection = getEnvironmentVariable "DbConnection"
+    let dbConnection = EnvironmentExt.getEnvironmentVariable "DbConnection"
 
     let settings =
         MongoClientSettings.FromConnectionString (dbConnection)
@@ -50,7 +50,7 @@ let initDb () =
     let client = new MongoClient(settings)
     let database =
         let dataBaseName =
-            getEnvironmentVariable "DataBaseName"
+            EnvironmentExt.getEnvironmentVariable "DataBaseName"
 
         client.GetDatabase(dataBaseName)
 
@@ -72,11 +72,11 @@ let main argv =
             #else
             "AblyToken"
             #endif
-        getEnvironmentVariable serverConnectionVarName
+        EnvironmentExt.getEnvironmentVariable serverConnectionVarName
 
     // Api.start ablyToken
 
-    match tryGetEnvironmentVariable tokenEnvVar with
+    match EnvironmentExt.tryGetEnvironmentVariable tokenEnvVar with
     | None ->
         printfn "Environment variable `%s` is not set!" tokenEnvVar
         1
@@ -109,7 +109,7 @@ let main argv =
         let prefix = "."
 
         botModules
-        |> Shared.BotModule.bindToClientsEvents
+        |> BotModule.bindToClientsEvents
             prefix
             (fun client e ->
                 let b = DSharpPlus.Entities.DiscordEmbedBuilder()

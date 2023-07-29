@@ -3,9 +3,9 @@ open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
 open MongoDB.Bson.Serialization.Attributes
-
-open Types
-open Db
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Db
 
 module Roles =
     [<BsonIgnoreExtraElements>]
@@ -487,7 +487,7 @@ module Setting =
         let init (db: IMongoDatabase): GuildData =
             let collection = db.GetCollection<BsonDocument>(collectionName)
 
-            if IMongoCollection.isEmpty collection then
+            if MongoCollection.isEmpty collection then
                 let guildData =
                     {
                         Cache = Map.empty

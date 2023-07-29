@@ -2,8 +2,9 @@ module VoiceChannelNotification.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
 
-open Types
 open Model
 
 type VoiceNotificationMsg =
@@ -71,7 +72,7 @@ let voiceNotificationReduce
     match msg with
     | SetOutput outputChannelId ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -98,7 +99,7 @@ let voiceNotificationReduce
 
     | SetTemplateMsg templateMessage ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -153,7 +154,7 @@ let reduce (msg: Msg) (state: State): State =
 
                         if isDiff then
                             let outputChannel = e.Guild.GetChannel(outputChannelId)
-                            let guildMember = getGuildMember e.Guild e.User
+                            let guildMember = DiscordGuild.getMember e.User e.Guild
 
                             let message =
                                 FParsecExt.runEither Parser.ptemplateMessage templateMsg
@@ -210,7 +211,7 @@ let create db =
             loop init
         )
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

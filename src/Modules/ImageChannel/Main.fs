@@ -2,9 +2,9 @@ module ImageChannel.Main
 open DSharpPlus
 open FsharpMyExtension
 open FsharpMyExtension.Either
-
-open Types
-open Extensions
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
 type SlashCommand =
     | AddChannel of ChannelId
@@ -111,7 +111,7 @@ let reduce msg (state: State) =
 
             interp
                 guild.Id
-                (getGuildMember guild user)
+                (DiscordGuild.getMember user guild)
                 response
                 responseEphemeral
                 getMemberAsync
@@ -344,7 +344,7 @@ let create db =
             settings
         |]
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         InteractionCommands =
             Some commands
 

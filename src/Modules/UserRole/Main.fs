@@ -2,10 +2,10 @@ module UserRole.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
-open Shared
-open Types
-open Extensions
 open Model
 
 module AbstrRoleList =
@@ -49,7 +49,7 @@ module AbstrRoleList =
                 await (e.Channel.SendMessageAsync("Processing..."))
 
             let guild = e.Guild
-            let currentMember = getGuildMember guild e.Author
+            let currentMember = DiscordGuild.getMember e.Author guild
 
             if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
                 let state =
@@ -75,7 +75,7 @@ module AbstrRoleList =
 
             let guild = e.Guild
             let guildId = guild.Id
-            let currentMember = getGuildMember guild e.Author
+            let currentMember = DiscordGuild.getMember e.Author guild
 
             if currentMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
                 match Setting.GuildData.tryFind guildId state with
@@ -759,7 +759,7 @@ module UserRoleForm =
                         (fun userRoleId ->
                             let b = Entities.DiscordInteractionResponseBuilder()
 
-                            let guildMember = getGuildMember e.Interaction.Guild e.Interaction.User
+                            let guildMember = DiscordGuild.getMember e.Interaction.User e.Interaction.Guild
 
                             createUI (b.AddComponents >> ignore) (b.AddEmbed >> ignore) guildMember (Some userRoleId)
                             awaiti <| interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, b)
@@ -988,7 +988,7 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
                     await (e.Channel.SendMessageAsync("Processing..."))
 
                 let guild = e.Guild
-                let guildMember = getGuildMember guild e.Author
+                let guildMember = DiscordGuild.getMember e.Author guild
                 let guildUserRoles =
                     if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
                         state.GuildUserRoles
@@ -1018,7 +1018,7 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
                     await (e.Channel.SendMessageAsync("Processing..."))
 
                 let guild = e.Guild
-                let guildMember = getGuildMember guild e.Author
+                let guildMember = DiscordGuild.getMember e.Author guild
                 let templateRoles =
                     if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
                         let guildPermissiveRoles =
@@ -1072,7 +1072,7 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
                     await (e.Channel.SendMessageAsync("Processing..."))
 
                 let guild = e.Guild
-                let guildMember = getGuildMember guild e.Author
+                let guildMember = DiscordGuild.getMember e.Author guild
                 if guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles then
                     match Setting.GuildData.tryFind guild.Id state.Setting with
                     | Some templateRole ->
@@ -1113,7 +1113,7 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
                 awaiti <| e.Channel.TriggerTypingAsync()
 
                 let guild = e.Guild
-                let guildMember = getGuildMember guild e.Author
+                let guildMember = DiscordGuild.getMember e.Author guild
                 if (guildMember.Permissions &&& Permissions.Administrator = Permissions.Administrator)
                     || (guildMember.Permissions &&& Permissions.ManageRoles = Permissions.ManageRoles) then
 
@@ -1168,7 +1168,7 @@ let reducer (db: MongoDB.Driver.IMongoDatabase) =
 
         | ComponentInteractionCreateHandle(client, e) ->
             let guild = e.Guild
-            let guildMember = getGuildMember guild e.User
+            let guildMember = DiscordGuild.getMember e.User guild
 
             let existRole =
                 let userId = guildMember.Id

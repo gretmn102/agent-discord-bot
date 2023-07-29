@@ -2,10 +2,10 @@ module Boosters.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
-open Shared
-open Types
-open Extensions
 open Model
 
 type Request =
@@ -43,7 +43,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) msg (state: Model.GuildSettings
     match msg with
     | SetSetting(channelId, messageTemplate) ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 

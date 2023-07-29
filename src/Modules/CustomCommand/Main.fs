@@ -2,9 +2,11 @@ module CustomCommand.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
-open Types
-open Extensions
+open CustomCommand
 
 type CommandManagementRequest =
     | Set of json: DataOrUrl option
@@ -290,7 +292,7 @@ let create db =
             loop init
         )
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandle =
             let handle (client, e) =
                 m.Post (NewMessageHandle (client, e))

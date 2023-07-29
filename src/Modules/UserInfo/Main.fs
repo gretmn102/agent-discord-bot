@@ -1,9 +1,9 @@
 module UserInfo.Main
 open FsharpMyExtension
 open DSharpPlus
-
-open Types
-open Extensions
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
 type Request =
     | GetAvatar of UserId option
@@ -356,7 +356,7 @@ let reduce (client: DiscordClient) (e: EventArgs.MessageCreateEventArgs) (msg: R
             send (sprintf "<@&%d> такой роли не существует" roleId)
 
 let create () =
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

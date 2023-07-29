@@ -2,8 +2,8 @@ module EmojiFont.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
-
-open Types
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
 
 type Request = DiscordMessage.UnicodeOrCustomEmoji * string
 
@@ -39,10 +39,10 @@ let reduce (e: EventArgs.MessageCreateEventArgs) ((emoji, str): Request) =
         let emojiImg = WebClientDownloader.getData [] emojiSrc
         emojiFont emojiImg
     | DiscordMessage.UnicodeEmoji emoji ->
-        match StandartDiscordEmoji.getEmojiSheet () with
+        match StandardDiscordEmojisContainer.getEmojiSheet () with
         | Right emojiSheet ->
             use m = new System.IO.MemoryStream()
-            if StandartDiscordEmoji.getEmoji emojiSheet emoji m then
+            if StandardDiscordEmojisContainer.getEmoji emojiSheet emoji m then
                 m.ToArray()
                 |> Right
                 |> emojiFont
@@ -53,7 +53,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) ((emoji, str): Request) =
             emojiFont (Left errMsg)
 
 let create () =
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

@@ -2,9 +2,7 @@ module CustomCommand.MessageTemplate
 open FParsec
 open FsharpMyExtension
 open FsharpMyExtension.Either
-
-open Types
-open DiscordMessage.Parser
+open DiscordBotExtensions.DiscordMessage.Parser
 
 type 'a Parser = Parser<'a, unit>
 

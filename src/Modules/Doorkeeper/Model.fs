@@ -3,10 +3,10 @@ open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
 open MongoDB.Bson.Serialization.Attributes
-
-open Types
-open Shared.MessageTemplate
-open Db
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.MessageTemplate
+open DiscordBotExtensions.Db
 
 module NewcomersRolesOld =
     type PassSettings =
@@ -509,7 +509,7 @@ module Setting =
         let init (db: IMongoDatabase): GuildData =
             let collection = db.GetCollection<BsonDocument>(collectionName)
 
-            if IMongoCollection.isEmpty collection then
+            if MongoCollection.isEmpty collection then
                 let guildData =
                     {
                         Cache = Map.empty

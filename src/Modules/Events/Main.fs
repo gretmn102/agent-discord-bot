@@ -2,10 +2,10 @@ module Events.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
-
-open Types
-open Extensions
-open DiscordMessage
+open DiscordBotExtensions
+open DiscordBotExtensions.DiscordMessage
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
 type SettingMsg =
     | SetEventSetting of Model.GuildData
@@ -102,7 +102,7 @@ let settingReduce (e: EventArgs.MessageCreateEventArgs) msg (state: Model.Guilds
         state
     | SetEventSetting newParams ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -134,7 +134,7 @@ let reduce (msg: Msg) (state: State): State =
             match Model.Guilds.tryFindById e.Guild.Id state.Setting with
             | Some setting ->
                 if setting.Data.IsEnabled then
-                    let guildMember = getGuildMember e.Guild e.Author
+                    let guildMember = DiscordGuild.getMember e.Author e.Guild
                     let existsRole =
                         guildMember.Roles
                         |> Seq.exists (fun x -> Set.contains x.Id setting.Data.FilteringRoleId)
@@ -210,7 +210,7 @@ let create db =
             loop init
         )
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

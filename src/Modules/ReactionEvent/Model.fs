@@ -3,9 +3,9 @@ open FsharpMyExtension
 open MongoDB.Driver
 open MongoDB.Bson
 open MongoDB.Bson.Serialization.Attributes
-
-open Types
-open Db
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Db
 
 type Settings = Map<GuildId, RoleId []>
 

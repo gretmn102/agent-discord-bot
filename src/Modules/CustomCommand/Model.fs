@@ -3,9 +3,8 @@ open FsharpMyExtension
 open FsharpMyExtension.ResultExt
 open MongoDB.Driver
 open MongoDB.Bson
-
-open Types
-open Db
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Db
 
 type Embed =
     {

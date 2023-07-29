@@ -2,9 +2,9 @@ module ApiTests
 open Fuchu
 open IO.Ably
 open IO.Ably.Realtime
-
-open Types
-open Shared.Api
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Api
 
 module Doorkeeper =
     module ApiTests =
@@ -142,7 +142,7 @@ let pingTests =
     testList "pingTests" [
         testCase "base" <| fun () ->
             let token =
-                getEnvironmentVariable "ABLY_TOKEN_TEST"
+                EnvironmentExt.getEnvironmentVariable "ABLY_TOKEN_TEST"
 
             Api.start token
 

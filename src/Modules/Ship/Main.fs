@@ -2,9 +2,9 @@ module Ship.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
-
-open Types
-open Extensions
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
 type ShipOption =
     | Rand
@@ -233,7 +233,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (botId: UserId) msg =
         Async.Start (f msg)
 
 let create () =
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

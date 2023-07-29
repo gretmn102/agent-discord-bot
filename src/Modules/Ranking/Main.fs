@@ -2,9 +2,10 @@ module Ranking.Main
 open FsharpMyExtension
 open DSharpPlus
 open Microsoft.Extensions.Logging
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
-open Types
-open Extensions
 open Model
 
 type RankingSettingRequest =
@@ -214,7 +215,7 @@ let rankingSettingReduce
     match msg with
     | SetOutputChannel outputChannelId ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -239,7 +240,7 @@ let rankingSettingReduce
 
     | SetLevelRoles levelRoles ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -308,7 +309,7 @@ let mostActiveSettingReduce
     match msg with
     | SetMostActiveRole roleId ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 
@@ -442,7 +443,7 @@ let mostActiveActivate (guild: Entities.DiscordGuild) (mostActiveSetting: MostAc
             state
 
 module MostActiveTable =
-    open Shared.Ui.Table
+    open DiscordBotExtensions.Ui.Table
 
     type SortBy =
         | SortByDayExp = 0
@@ -558,7 +559,7 @@ let requestReduce
 
     | SetExp(targetUserId, exp) ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync("Processing..."))
 
@@ -595,7 +596,7 @@ let requestReduce
 
     | MostActiveActivate ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 
@@ -771,7 +772,7 @@ let create db (logger: ILogger<_>) =
             loop init
         )
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->
