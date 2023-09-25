@@ -19,7 +19,7 @@ nuget dotenv.net = 3.1.2
 git https://github.com/gretmn102/rp-discord-bot.git
 
 source https://gitlab.com/api/v4/projects/28574921/packages/nuget/index.json
-nuget FSharpMyExt = 1.12.0
+nuget FSharpMyExt prerelease
 nuget DiscordBotExtensions = 0.10.0
 
 group Build
