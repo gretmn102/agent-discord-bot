@@ -47,51 +47,8 @@ module Parser =
 
 let r = System.Random ()
 
-let binarySearch compare length =
-    let rec f from to' =
-        let diff = to' - from
-
-        if diff = 0 then
-            let res = compare from
-            if res = 0 then
-                Choice1Of2 from
-            elif res > 0 then
-                Choice2Of2 (from - 1, from)
-            else
-                Choice2Of2 (from, from + 1)
-        elif diff = 1 then
-            let res = compare from
-            if res = 0 then
-                Choice1Of2 from
-            elif res < 0 then
-                let from = from + 1
-                let res = compare from
-                if res = 0 then
-                    Choice1Of2 from
-                elif res > 0 then
-                    Choice2Of2 (from - 1, from)
-                else
-                    Choice2Of2 (from, from + 1)
-            else
-                Choice2Of2 (from - 1, from)
-        else
-            let average = diff / 2
-            let idx = from + average
-            let res = compare idx
-            if res = 0 then
-                Choice1Of2 idx
-            elif res > 0 then
-                f from (idx - 1)
-            else
-                f (idx + 1) to'
-
-    if length > 0 then
-        f 0 (length - 1)
-    else
-        invalidArg "length" "Length must be greater then 0"
-
 let getDescription =
-    let results =
+    let descriptions =
         [|
             0  , "Ничто в мире не даётся без труда — даже любовь..."
             9  , "Ну, ничего, будет и на вашей улице свадьба... Но не сегодня."
@@ -108,20 +65,13 @@ let getDescription =
         |]
         |> Array.sortBy fst
 
-    fun procent ->
-        let res =
-            results.Length
-            |> binarySearch (fun idx ->
-                let item, _ = results.[idx]
-                item.CompareTo procent
+    fun targetProcent ->
+        let index =
+            descriptions
+            |> Array.binarySearch (fun (currentProcent, _) ->
+                currentProcent.CompareTo targetProcent
             )
-        match res with
-        | Choice1Of2 idx ->
-            results.[idx]
-        | Choice2Of2(lb, ub) ->
-            let ub = if ub < results.Length then ub else results.Length - 1
-            results.[ub]
-        |> snd
+        snd descriptions.[index]
 
 let cmdBuilder2
     (e: EventArgs.MessageCreateEventArgs)
