@@ -87,8 +87,6 @@ module Parser =
 
         (prefix >>? p |>> Some) <|>% None
 
-let r = System.Random ()
-
 type State =
     {
         Commands: Model.Commands
@@ -124,7 +122,7 @@ let reduce (req: Handler) (state: State) =
 
                         match whom with
                         | Ok whom ->
-                            let effects =
+                            let reactions =
                                 let effect = command.Data
                                 match whom with
                                 | None ->
@@ -140,7 +138,8 @@ let reduce (req: Handler) (state: State) =
                                     else
                                         effect.OnOther
 
-                            let message = effects.[r.Next(0, effects.Length)]
+                            let reaction =
+                                Model.ReactionsList.randomGet reactions
 
                             let substitions =
                                 MessageTemplate.Substitions.create
@@ -155,6 +154,7 @@ let reduce (req: Handler) (state: State) =
                                 | Error errorMessage ->
                                     errorMessage
 
+                            let message = reaction.Message
                             message.Embed.Description
                             |> Option.iter (fun description ->
                                 b.Description <- createMessage description
