@@ -154,10 +154,12 @@ let reduce (req: Handler) (state: State) =
 
                                         match userCooldown with
                                         | None ->
-                                            None, getReactions command.Data
+                                            Some userCooldownId, getReactions command.Data
 
                                         | Some userCooldown ->
-                                            if cooldownable.Cooldown - userCooldown.Data.LastDateTimeActivated.Ticks > 0L then
+                                            let cooldownRemaining =
+                                                userCooldown.Data.LastDateTimeActivated.Ticks + cooldownable.Cooldown - System.DateTimeOffset.UtcNow.Ticks
+                                            if cooldownRemaining > 0L then
                                                 None, getCooldownReactions cooldownable
                                             else
                                                 Some userCooldownId, getReactions command.Data
