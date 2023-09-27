@@ -146,12 +146,45 @@ module ReactionsList =
         reactions
         |> randomGetWithCustomRandom (fun min max -> r.Next(min, max))
 
+type Ticks = int64
+
+type Cooldownable =
+    {
+        Cooldown: Ticks
+        OnSelf: ReactionsList
+        OnBot: ReactionsList
+        OnOther: ReactionsList
+    }
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module Cooldownable =
+    let create cooldown onSelf onBot onOther : Cooldownable =
+        {
+            Cooldown = cooldown
+            OnSelf = onSelf
+            OnBot = onBot
+            OnOther = onOther
+        }
+
+    let getReactions getMessageAuthorId getBotId whom (commandData: Cooldownable) =
+        match whom with
+        | None ->
+            commandData.OnSelf
+        | Some whomId ->
+            if whomId = getMessageAuthorId() then
+                commandData.OnSelf
+            elif whomId = getBotId() then
+                commandData.OnBot
+            else
+                commandData.OnOther
+
 type CommandData =
     {
         Names: string []
         OnSelf: ReactionsList
         OnBot: ReactionsList
         OnOther: ReactionsList
+        Cooldownable: Cooldownable option
     }
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
@@ -162,14 +195,16 @@ module CommandData =
             OnSelf = [||]
             OnBot = [||]
             OnOther = [||]
+            Cooldownable = None
         }
 
-    let create names onSelf onBot onOther: CommandData =
+    let create names onSelf onBot onOther cooldownable : CommandData =
         {
             Names = names
             OnSelf = onSelf
             OnBot = onBot
             OnOther = onOther
+            Cooldownable = cooldownable
         }
 
     let serialize (data: CommandDataV0) =
@@ -181,6 +216,18 @@ module CommandData =
             Ok data
         with e ->
             Error e.Message
+
+    let getReactions getMessageAuthorId getBotId whom (commandData: CommandData) =
+        match whom with
+        | None ->
+            commandData.OnSelf
+        | Some whomId ->
+            if whomId = getMessageAuthorId() then
+                commandData.OnSelf
+            elif whomId = getBotId() then
+                commandData.OnBot
+            else
+                commandData.OnOther
 
 type Version =
     | V0 = 0
@@ -229,7 +276,7 @@ module Commands =
             None, Serialization.BsonSerializer.Deserialize<Command>(doc)
 
         | Version.V1 ->
-            let oldItem = Serialization.BsonSerializer.Deserialize<CommonDb.Data<CommandId, Version, CommandDataV1>>(doc)
+            let oldItem = Serialization.BsonSerializer.Deserialize<CommandV1>(doc)
             let equiprobable (messages: Message []) =
                 messages
                 |> Array.map (fun x ->
@@ -243,7 +290,8 @@ module Commands =
                         oldItem.Data.Names
                         (equiprobable oldItem.Data.OnSelf)
                         (equiprobable oldItem.Data.OnBot)
-                        (equiprobable oldItem.Data.OnOther))
+                        (equiprobable oldItem.Data.OnOther)
+                        None)
 
             Some oldItem.Id, newItem
 
@@ -314,3 +362,80 @@ module Commands =
 
     let tryFindById id (items: Commands): Command option =
         Map.tryFind id items.Cache
+
+type UserCooldownId =
+    {
+        UserId: UserId
+        CommandId: CommandId
+    }
+
+type UserCooldownVersion =
+    | V1 = 1
+
+type UserCooldownData =
+    {
+        LastDateTimeActivated: System.DateTimeOffset
+    }
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module UserCooldownData =
+    let empty : UserCooldownData =
+        {
+            LastDateTimeActivated = System.DateTimeOffset.MinValue
+        }
+
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module UserCooldownId =
+    let create userId commandId : UserCooldownId =
+        {
+            UserId = userId
+            CommandId = commandId
+        }
+
+type UserCooldown = CommonDb.Data<UserCooldownId, UserCooldownVersion, UserCooldownData>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module UserCooldown =
+    let create id data : UserCooldown =
+        CommonDb.Data.create id UserCooldownVersion.V1 data
+
+    let createEmptyData id : UserCooldown =
+        create id UserCooldownData.empty
+
+type UserCooldownsStorage = CommonDb.GuildData<UserCooldownId, UserCooldownVersion, UserCooldownData>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module UserCooldownsStorage =
+    let migrate ver (doc: BsonDocument) : option<UserCooldownId> * UserCooldown =
+        match ver with
+        | UserCooldownVersion.V1 ->
+            None, Serialization.BsonSerializer.Deserialize<UserCooldown>(doc)
+        | x ->
+            failwithf "Version = %A not implemented" x
+
+    let init collectionName (db: IMongoDatabase): UserCooldownsStorage =
+        CommonDb.GuildData.init
+            UserCooldown.createEmptyData
+            (fun ver doc ->
+                match ver with
+                | Some ver ->
+                    migrate ver doc
+                | None ->
+                    failwith "Not found `Version` field"
+            )
+            collectionName
+            db
+
+    let set (id: UserCooldownId) setAdditionParams (storage: UserCooldownsStorage) =
+        CommonDb.GuildData.set
+            UserCooldown.createEmptyData
+            id
+            setAdditionParams
+            storage
+
+    let drop (db: IMongoDatabase) (storage: UserCooldownsStorage) =
+        CommonDb.GuildData.drop db storage
+
+    let tryFindById id (storage: UserCooldownsStorage): UserCooldown option =
+        Map.tryFind id storage.Cache
