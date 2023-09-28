@@ -6,6 +6,38 @@ open Fuchu
 open Ship.Main
 
 [<Tests>]
+let ``Ship.Main.Parser.parser`` =
+    let pship = Parser.pship
+
+    testList "Ship.Main.Parser.parser" [
+        testCase "shipRand" <| fun _ ->
+            Assert.Equal("", Right Rand, FParsecExt.runEither pship "shipRand")
+
+        testCase "ship0" <| fun _ ->
+            Assert.Equal("", Right (Target 0), FParsecExt.runEither pship "ship0")
+
+        testCase "ship100" <| fun _ ->
+            Assert.Equal("", Right (Target 100), FParsecExt.runEither pship "ship100")
+
+        testCase "empty ship" <| fun _ ->
+            let exp =
+                [
+                    "Error in Ln: 1 Col: 1"
+                    "ship"
+                    "^"
+                    ""
+                    "The parser backtracked after:"
+                    "  Error in Ln: 1 Col: 5"
+                    "  ship"
+                    "      ^"
+                    "  Note: The error occurred at the end of the input stream."
+                    "  Expecting: integer number (32-bit, signed) or 'rand' (case-insensitive)"
+                    ""
+                ] |> String.concat System.Environment.NewLine
+            Assert.Equal("", Left exp, FParsecExt.runEither pship "ship")
+    ]
+
+[<Tests>]
 let getDescriptionTests =
     testList "getDescriptionTests" [
         testCase "0" <| fun () ->
