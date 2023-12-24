@@ -1,7 +1,7 @@
 module Ship.Core
 open FsharpMyExtension
 open FsharpMyExtension.Either
-open Types
+open DiscordBotExtensions.Types
 
 // #r @"C:\Users\User\.nuget\packages\sixlabors.fonts\1.0.0-beta15\lib\netstandard2.1\SixLabors.Fonts.dll"
 // #r @"C:\Users\User\.nuget\packages\sixlabors.imagesharp.drawing\1.0.0-beta13\lib\netcoreapp3.1\SixLabors.ImageSharp.Drawing.dll"

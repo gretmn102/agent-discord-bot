@@ -1,6 +1,6 @@
 module ImageChannel.Model
 open FsharpMyExtension
-open Types
+open DiscordBotExtensions.Types
 
 type Req<'Arg, 'Res, 'Next> = 'Arg * ('Res -> 'Next)
 
@@ -160,7 +160,7 @@ let messageCreateHandle (channel: ChannelId) (authorId: UserId) messageId =
 module GuildSettingsDb =
     open MongoDB.Driver
     open MongoDB.Bson
-    open Db
+    open DiscordBotExtensions.Db
 
     type MainData =
         {

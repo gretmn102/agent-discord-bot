@@ -1,7 +1,7 @@
 module BallotBox.Core
 open FsharpMyExtension
 open FsharpMyExtension.Either
-open Types
+open DiscordBotExtensions.Types
 
 type ChoiceId = int
 type Choice =

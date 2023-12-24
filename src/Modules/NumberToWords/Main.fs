@@ -1,9 +1,9 @@
 module NumberToWords.Main
 open FsharpMyExtension
 open DSharpPlus
-
-open Types
-open Extensions
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
 type Request =
     | NumberToWords of bigint
@@ -39,7 +39,7 @@ let reduce req state =
             awaiti <| e.Channel.SendMessageAsync(b.Build())
 
 let create () =
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

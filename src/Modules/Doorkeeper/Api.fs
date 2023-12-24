@@ -1,7 +1,7 @@
 module Doorkeeper.Api
-open Shared.Api
-open Shared.MessageTemplate
-open Types
+open DiscordBotExtensions.Api
+open DiscordBotExtensions.MessageTemplate
+open DiscordBotExtensions.Types
 open Model
 
 type RoleId = Snowflake

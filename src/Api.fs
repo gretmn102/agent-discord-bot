@@ -1,5 +1,5 @@
 module Api
-open Shared
+open DiscordBotExtensions
 
 module ApiProtocol =
     open Newtonsoft.Json

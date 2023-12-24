@@ -1,9 +1,7 @@
 module ImageChannel.View
 open DSharpPlus
 open FsharpMyExtension
-
-open Extensions.Interaction
-open Types
+open DiscordBotExtensions.Types
 
 let view str =
     let b = Entities.DiscordMessageBuilder()

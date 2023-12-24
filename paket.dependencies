@@ -1,42 +1,35 @@
+strategy: min
 storage: none
 source https://api.nuget.org/v3/index.json
 
 framework: netstandard2.0, netcoreapp3.1
-nuget FSharp.Core
-nuget DSharpPlus
-nuget DSharpPlus.Rest
+nuget FSharp.Core = 5.0.2
+nuget DSharpPlus = 4.3
+nuget DSharpPlus.Rest = 4.3
 nuget Fuchu
 nuget FParsec
-nuget HtmlAgilityPack
-nuget Newtonsoft.Json
-nuget Newtonsoft.Json.Bson
-nuget YamlDotNet
-nuget TextCopy
 nuget SixLabors.ImageSharp == 1.0.4
 nuget SixLabors.Fonts == 1.0.0-beta15
 nuget SixLabors.ImageSharp.Drawing == 1.0.0-beta13
-nuget Svg
-nuget MongoDB.Driver
-nuget ably.io
-nuget dotenv.net
-nuget Saturn == 0.14.1
-nuget Giraffe == 4.1
+nuget Svg = 3.2.3
+nuget MongoDB.Driver = 2.13.2
+nuget ably.io = 1.2.8
+nuget dotenv.net = 3.1.2
 
 git https://github.com/gretmn102/rp-discord-bot.git
 
 source https://gitlab.com/api/v4/projects/28574921/packages/nuget/index.json
-storage: none
-nuget FSharpMyExt
-nuget DiscordBotExtensions
+nuget FSharpMyExt prerelease
+nuget DiscordBotExtensions = 0.10.0
 
 group Build
+    strategy: min
     source https://api.nuget.org/v3/index.json
     framework: netstandard2.0
     storage: none
 
-    nuget FSharp.Core
-    nuget Fake.Core.ReleaseNotes
-    nuget Fake.Core.Target
-    nuget Fake.DotNet.Cli
-    nuget Fake.IO.FileSystem
-    nuget Farmer
+    nuget FSharp.Core == 5.0.2
+    nuget Fake.Core.ReleaseNotes == 5.20.4
+    nuget Fake.Core.Target == 5.20.4
+    nuget Fake.DotNet.Cli == 5.20.4
+    nuget Fake.IO.FileSystem == 5.20.4

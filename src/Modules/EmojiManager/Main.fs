@@ -2,9 +2,9 @@ module EmojiManager.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
-
-open Types
-open Extensions
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
 type RawOrUnicodeOrCustomEmoji = Choice<EmojiId, DiscordMessage.UnicodeOrCustomEmoji>
 module RawOrUnicodeOrCustomEmoji =
@@ -142,7 +142,7 @@ let reduce (msg: Msg) (state: State): State =
 
         match cmd with
         | Set(rawUnicodeOrCustomEmoji, roleIds) ->
-            checkPermission (getGuildMember guild e.Author) <| fun () ->
+            checkPermission (DiscordGuild.getMember e.Author guild) <| fun () ->
             getCustomEmoji rawUnicodeOrCustomEmoji <| fun emojiId ->
             getEmoji emojiId <| fun emoji ->
 
@@ -198,7 +198,7 @@ let create () =
             loop init
         )
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ EmojiRoleCmd.Parser.Parser =
                 EmojiRoleCmd.Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

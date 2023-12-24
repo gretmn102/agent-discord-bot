@@ -2,9 +2,7 @@ module CustomCommand.MessageTemplate
 open FParsec
 open FsharpMyExtension
 open FsharpMyExtension.Either
-
-open Types
-open DiscordMessage.Parser
+open DiscordBotExtensions.DiscordMessage.Parser
 
 type 'a Parser = Parser<'a, unit>
 
@@ -119,7 +117,7 @@ module MessagePart =
         choice [
             praw |>> Text
             pcustomMention |>> CustomMention
-            pstring "<" |>> Text
+            many1Satisfy2 ((=) '<') ((<>) '<') |>> Text
         ]
 
     let substitute (substitions: Substitions) = function

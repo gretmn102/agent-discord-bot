@@ -2,8 +2,8 @@ module Doorkeeper.Invites
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
-
-open Types
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
 
 type InvitesState = Map<GuildId, Map<string, Entities.DiscordInvite>>
 
@@ -66,7 +66,7 @@ module Parser =
             preturn (fun x -> f x msg)
 
 module InviteTable =
-    open Shared.Ui.Table
+    open DiscordBotExtensions.Ui.Table
 
     type SortBy =
         | SortByUses = 0
@@ -142,7 +142,7 @@ let reduceRequest (e: EventArgs.MessageCreateEventArgs) (req: Request) (state: M
     match req with
     | SetSetting newSetting ->
         let guild = e.Guild
-        let currentMember = getGuildMember guild e.Author
+        let currentMember = DiscordGuild.getMember e.Author guild
         let replyMessage =
             await (e.Channel.SendMessageAsync "Processing...")
 
@@ -373,7 +373,7 @@ let create db =
             loop init
         )
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                   Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

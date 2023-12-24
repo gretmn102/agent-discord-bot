@@ -2,10 +2,9 @@ module Age.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
-
-open Shared
-open Types
-open Extensions
+open DiscordBotExtensions
+open DiscordBotExtensions.Extensions
+open DiscordBotExtensions.Types
 
 type Request =
     | CreateForm

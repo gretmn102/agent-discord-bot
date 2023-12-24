@@ -2,9 +2,11 @@ module CustomCommand.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
-open Types
-open Extensions
+open CustomCommand
 
 type CommandManagementRequest =
     | Set of json: DataOrUrl option
@@ -85,12 +87,11 @@ module Parser =
 
         (prefix >>? p |>> Some) <|>% None
 
-let r = System.Random ()
-
 type State =
     {
         Commands: Model.Commands
         CommandsParser: CommandParser
+        UserCooldownsStorage: Model.UserCooldownsStorage
     }
 
 let reduce (req: Handler) (state: State) =
@@ -104,69 +105,121 @@ let reduce (req: Handler) (state: State) =
                 | CommandRequest(command, whomId) ->
                     let send whomId =
                         let whom =
-                            whomId
-                            |> Option.map (fun whomId ->
+                            let getDiscordUser userId =
                                 try
-                                    await (client.GetUserAsync whomId)
-                                    |> Some
+                                    await (client.GetUserAsync userId)
                                     |> Ok
                                 with e ->
-                                    sprintf "Пользователя %d не существует" whomId
+                                    sprintf "Пользователя %d не существует" userId
                                     |> Error
-                            )
-                            |> Option.defaultValue (Ok None)
 
-                        let b = Entities.DiscordEmbedBuilder()
+                            match whomId with
+                            | Some whomId ->
+                                getDiscordUser whomId |> Result.map Some
+                            | None ->
+                                Ok None
 
-                        b.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                        let updateCooldownOpt, b =
+                            match whom with
+                            | Ok whom ->
+                                let authorId = e.Author.Id
 
-                        match whom with
-                        | Ok whom ->
-                            let effects =
-                                let effect = command.Data
-                                match whom with
-                                | None ->
-                                    effect.OnSelf
-                                | Some whom ->
-                                    let authorId = e.Author.Id
-                                    let botId = client.CurrentUser.Id
+                                let getReactions (commandData: Model.CommandData) =
+                                    commandData
+                                    |> Model.CommandData.getReactions
+                                        (fun () -> authorId)
+                                        (fun () -> client.CurrentUser.Id)
+                                        whomId
 
-                                    if whom.Id = authorId then
-                                        effect.OnSelf
-                                    elif whom.Id = botId then
-                                        effect.OnBot
-                                    else
-                                        effect.OnOther
+                                let getCooldownReactions (cooldownable: Model.Cooldownable) =
+                                    cooldownable
+                                    |> Model.Cooldownable.getReactions
+                                        (fun () -> authorId)
+                                        (fun () -> client.CurrentUser.Id)
+                                        whomId
 
-                            let message = effects.[r.Next(0, effects.Length)]
+                                let updateCooldownOpt, reactions =
+                                    match command.Data.Cooldownable with
+                                    | None ->
+                                        None, getReactions command.Data
 
-                            let substitions =
-                                MessageTemplate.Substitions.create
-                                    e.Author
-                                    client.CurrentUser
-                                    whom
+                                    | Some cooldownable ->
+                                        let userCooldownId =
+                                            Model.UserCooldownId.create authorId command.Id
 
-                            let createMessage rawMessage =
-                                match MessageTemplate.Message.parse rawMessage with
-                                | Ok message ->
-                                    MessageTemplate.Message.substitute substitions message
-                                | Error errorMessage ->
-                                    errorMessage
+                                        let userCooldown =
+                                            Model.UserCooldownsStorage.tryFindById
+                                                userCooldownId
+                                                state.UserCooldownsStorage
 
-                            message.Embed.Description
-                            |> Option.iter (fun description ->
-                                b.Description <- createMessage description
-                            )
+                                        match userCooldown with
+                                        | None ->
+                                            Some userCooldownId, getReactions command.Data
 
-                            message.Embed.ImageUrl
-                            |> Option.iter (fun imageUrl ->
-                                b.ImageUrl <- imageUrl
-                            )
+                                        | Some userCooldown ->
+                                            let cooldownRemaining =
+                                                userCooldown.Data.LastDateTimeActivated.Ticks + cooldownable.Cooldown - System.DateTimeOffset.UtcNow.Ticks
+                                            if cooldownRemaining > 0L then
+                                                None, getCooldownReactions cooldownable
+                                            else
+                                                Some userCooldownId, getReactions command.Data
 
-                        | Error errMsg ->
-                            b.Description <- errMsg
+                                let reaction =
+                                    Model.ReactionsList.randomGet reactions
+
+                                let substitions =
+                                    MessageTemplate.Substitions.create
+                                        e.Author
+                                        client.CurrentUser
+                                        whom
+
+                                let createMessage rawMessage =
+                                    match MessageTemplate.Message.parse rawMessage with
+                                    | Ok message ->
+                                        MessageTemplate.Message.substitute substitions message
+                                    | Error errorMessage ->
+                                        errorMessage
+
+                                let b = Entities.DiscordEmbedBuilder()
+
+                                b.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+
+                                let message = reaction.Message
+                                message.Embed.Description
+                                |> Option.iter (fun description ->
+                                    b.Description <- createMessage description
+                                )
+
+                                message.Embed.ImageUrl
+                                |> Option.iter (fun imageUrl ->
+                                    b.ImageUrl <- imageUrl
+                                )
+
+                                updateCooldownOpt, b
+
+                            | Error errMsg ->
+                                let b = Entities.DiscordEmbedBuilder()
+                                b.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
+                                b.Description <- errMsg
+                                None, b
 
                         awaiti (client.SendMessageAsync (e.Channel, b.Build()))
+
+                        match updateCooldownOpt with
+                        | None ->
+                            state
+                        | Some userCooldownId ->
+                            { state with
+                                UserCooldownsStorage =
+                                    Model.UserCooldownsStorage.set
+                                        userCooldownId
+                                        (fun x ->
+                                            { x with
+                                                LastDateTimeActivated = System.DateTimeOffset.UtcNow
+                                            }
+                                        )
+                                        state.UserCooldownsStorage
+                            }
 
                     match whomId with
                     | Some whomId ->
@@ -177,8 +230,6 @@ let reduce (req: Handler) (state: State) =
                             send whomId
                         | referencedMessage ->
                             send (Some referencedMessage.Author.Id)
-
-                    state
 
                 | CommandManagementRequest req ->
                     awaiti <| e.Channel.TriggerTypingAsync()
@@ -272,6 +323,8 @@ let create db =
         let init = {
             Commands = commands
             CommandsParser = CommandsParser.create commands.Cache
+            UserCooldownsStorage =
+                Model.UserCooldownsStorage.init "customCommandsUserCooldowns" db
         }
 
         MailboxProcessor.Start (fun mail ->
@@ -290,7 +343,7 @@ let create db =
             loop init
         )
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandle =
             let handle (client, e) =
                 m.Post (NewMessageHandle (client, e))

@@ -34,8 +34,8 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\paket-files\github.com\gretmn102\rp-discord-bot\src\rp-discord-bot.fsproj">
-      <Name>rp-discord-bot.fsproj</Name>
+    <ProjectReference Include="..\paket-files\github.com\gretmn102\rp-discord-bot\src\Core\Core.fsproj">
+      <Name>Core.fsproj</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

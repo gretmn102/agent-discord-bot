@@ -2,9 +2,9 @@ module ChatVoice.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
 
-open Shared
-open Types
 open Model
 
 type Request =
@@ -57,7 +57,7 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                             printfn "voice channel <#%d> not found" beforeChatId
                         | channel ->
                             let guildMember =
-                                getGuildMember e.Guild e.User
+                                DiscordGuild.getMember e.User e.Guild
 
                             try
                                 channel.AddOverwriteAsync(guildMember, deny=accessChannelsPermission)
@@ -82,7 +82,7 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
                             printfn "voice channel <#%d> not found" beforeChatId
                         | channel ->
                             let guildMember =
-                                getGuildMember e.Guild e.User
+                                DiscordGuild.getMember e.User e.Guild
 
                             try
                                 channel.AddOverwriteAsync(guildMember, allow=accessChannelsPermission)
@@ -95,7 +95,7 @@ let voiceHandle (e: DSharpPlus.EventArgs.VoiceStateUpdateEventArgs) =
 let reduce (e: DSharpPlus.EventArgs.MessageCreateEventArgs) msg =
     match msg with
     | MentionInVoice ->
-        let guildMember = getGuildMember e.Guild e.Author
+        let guildMember = DiscordGuild.getMember e.Author e.Guild
         let errorMessage =
             "This command is available only if you are in the voice channel of this guild."
         match guildMember.VoiceState with

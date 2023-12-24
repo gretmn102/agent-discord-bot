@@ -1,8 +1,8 @@
 module Calc.Main
 open DSharpPlus
 
-open Shared
-open Types
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
 
 type Request = float
 

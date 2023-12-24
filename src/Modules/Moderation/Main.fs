@@ -1,7 +1,7 @@
 module Moderation.Main
 open DSharpPlus
-
-open Types
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
 
 type Request =
     /// `targetUser * reason`
@@ -42,7 +42,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) =
         awaiti <| e.Channel.TriggerTypingAsync()
         let guild = e.Guild
 
-        let author = getGuildMember guild e.Author
+        let author = DiscordGuild.getMember e.Author guild
 
         if (author.Permissions &&& Permissions.Administrator = Permissions.Administrator)
            || (author.Permissions &&& Permissions.KickMembers = Permissions.KickMembers) then
@@ -93,7 +93,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) =
         awaiti <| e.Channel.TriggerTypingAsync()
         let guild = e.Guild
 
-        let author = getGuildMember guild e.Author
+        let author = DiscordGuild.getMember e.Author guild
 
         if (author.Permissions &&& Permissions.Administrator = Permissions.Administrator)
            || (author.Permissions &&& Permissions.BanMembers = Permissions.BanMembers) then
@@ -165,7 +165,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (msg: Request) =
             |> awaiti
 
 let create () =
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

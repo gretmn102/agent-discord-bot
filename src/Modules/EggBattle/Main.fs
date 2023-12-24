@@ -2,9 +2,10 @@ module EggBattle.Main
 open FsharpMyExtension
 open FsharpMyExtension.Either
 open DSharpPlus
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.Extensions
 
-open Types
-open Extensions
 open Model
 
 type Request =
@@ -54,7 +55,7 @@ type Req =
     | GetState of AsyncReplyChannel<State>
 
 module RatingTable =
-    open Shared.Ui.Table
+    open DiscordBotExtensions.Ui.Table
 
     type SortBy =
         | SortByWins = 0
@@ -396,7 +397,7 @@ let create db =
         else
             false
 
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

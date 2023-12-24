@@ -1,5 +1,5 @@
 module Cyoa.Core
-open Extensions
+open DiscordBotExtensions.Extensions
 
 module Core =
     type Var =

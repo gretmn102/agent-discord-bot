@@ -1,8 +1,8 @@
 module BallotBox.Main
 open DSharpPlus
 
-open Shared
-open Types
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
 
 type Request =
     | BallotBox of description: string * choices: string list

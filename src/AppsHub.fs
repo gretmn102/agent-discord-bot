@@ -1,6 +1,7 @@
 module AppsHub
-
-open Types
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
+open DiscordBotExtensions.DiscordMessage
 open FsharpMyExtension
 open FsharpMyExtension.Either
 
@@ -13,7 +14,7 @@ module Hub =
 
     type AppAnswer =
         | Answer of DSharpPlus.Entities.DiscordMessageBuilder
-        | BallotBoxAnswer of Types.ResultView
+        | BallotBoxAnswer of ResultView
 
     type Err =
         | HasNotStartedYet
@@ -355,7 +356,7 @@ module BotModule =
                 preturn (fun x -> f x msg)
 
     let create () =
-        { Shared.BotModule.empty with
+        { BotModule.empty with
             MessageCreateEventHandleExclude =
                 let exec: _ Parser.Parser =
                     Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

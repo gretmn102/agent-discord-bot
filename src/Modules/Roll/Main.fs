@@ -1,7 +1,7 @@
 module Roll.Main
 open DSharpPlus
-
-open Types
+open DiscordBotExtensions
+open DiscordBotExtensions.Types
 
 type RollSetting =
     {
@@ -84,7 +84,7 @@ let reduce (e: EventArgs.MessageCreateEventArgs) (req: Request) =
         awaiti <| e.Channel.SendMessageAsync(res)
 
 let create () =
-    { Shared.BotModule.empty with
+    { BotModule.empty with
         MessageCreateEventHandleExclude =
             let exec: _ Parser.Parser =
                 Parser.start (fun (client: DiscordClient, e: EventArgs.MessageCreateEventArgs) msg ->

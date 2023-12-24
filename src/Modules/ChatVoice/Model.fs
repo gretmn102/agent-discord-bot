@@ -1,5 +1,5 @@
 module ChatVoice.Model
-open Types
+open DiscordBotExtensions.Types
 
 type VoiceChannelId = ChannelId
 type Settings = Map<GuildId, Map<VoiceChannelId, ChannelId>>
