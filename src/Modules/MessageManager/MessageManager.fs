@@ -116,6 +116,10 @@ let reduce ((client, e, msg): Msg) (state: State): State =
         try
             let raw = Newtonsoft.Json.Linq.JObject.Parse(rawJson)
             let msg = raw.ToDiscordObject<Entities.DiscordMessageBuilder>()
+
+            // because not parse: "allowed_mentions": { "parse": ["everyone"] }
+            msg.WithAllowedMentions Entities.Mentions.All |> ignore
+
             next msg
         with e ->
             sprintf "```\n%s\n```" e.Message
