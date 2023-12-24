@@ -20,6 +20,7 @@
     </Content>
     <Compile Include="Modules\BallotBox\tests.fs" />
     <Compile Include="Modules\Ship\ShipTests.fs" />
+    <Compile Include="Modules\CustomCommand\MessageTemplateTests.fs" />
     <Compile Include="Modules\CustomCommand\ModelTests.fs" />
     <Compile Include="NumberToWordsTests.fs" />
     <Compile Include="ApiTests.fs" />

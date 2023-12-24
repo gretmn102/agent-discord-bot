@@ -117,7 +117,7 @@ module MessagePart =
         choice [
             praw |>> Text
             pcustomMention |>> CustomMention
-            pstring "<" |>> Text
+            many1Satisfy2 ((=) '<') ((<>) '<') |>> Text
         ]
 
     let substitute (substitions: Substitions) = function
