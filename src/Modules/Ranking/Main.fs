@@ -718,7 +718,7 @@ module Parser =
         skipStringCI "mostActiveActivate"
 
     let pmostActiveLeaderboard: _ Parser =
-        skipStringCI "mostActiveLeaderboard"
+        skipStringCI "lb" <|> skipStringCI "mostActiveLeaderboard"
 
     let start f: _ Parser =
         let prankingSetting =
