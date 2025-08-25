@@ -14,7 +14,6 @@ Create .env and fill next fields:
 DiscordCommandBotToken=%your token%
 DbConnection=%your connection to DB%
 DataBaseName=%your database name%
-AblyToken=%your AblyToken%
 ```
 
 ## Testing

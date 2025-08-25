@@ -23,7 +23,6 @@
     <Compile Include="Modules\CustomCommand\MessageTemplateTests.fs" />
     <Compile Include="Modules\CustomCommand\ModelTests.fs" />
     <Compile Include="NumberToWordsTests.fs" />
-    <Compile Include="ApiTests.fs" />
     <Compile Include="CalcTests.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
