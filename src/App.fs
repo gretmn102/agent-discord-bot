@@ -65,17 +65,6 @@ let main argv =
         "DiscordCommandBotToken"
         #endif
 
-    let ablyToken =
-        let serverConnectionVarName =
-            #if TEST_BOT
-            "AblyTokenTest"
-            #else
-            "AblyToken"
-            #endif
-        EnvironmentExt.getEnvironmentVariable serverConnectionVarName
-
-    // Api.start ablyToken
-
     match EnvironmentExt.tryGetEnvironmentVariable tokenEnvVar with
     | None ->
         printfn "Environment variable `%s` is not set!" tokenEnvVar

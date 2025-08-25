@@ -7,6 +7,5 @@ SixLabors.ImageSharp
 SixLabors.ImageSharp.Drawing
 Svg
 MongoDB.Driver
-ably.io
 dotenv.net
 DiscordBotExtensions
