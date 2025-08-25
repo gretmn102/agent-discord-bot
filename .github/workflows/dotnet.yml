@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v3
@@ -26,7 +26,7 @@ jobs:
         env:
           ABLY_TOKEN_TEST: ${{ secrets.ABLY_TOKEN_TEST }}
         run: dotnet fake build -t RunTests
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: my-artifact
           path: deploy
