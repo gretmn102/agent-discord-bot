@@ -11,7 +11,7 @@ let ``Ship.Main.Parser.parser`` =
 
     testList "Ship.Main.Parser.parser" [
         testCase "шип" <| fun _ ->
-            Assert.Equal("", Right Rand, FParsecExt.runEither pship "shipRand")
+            Assert.Equal("", Right Rand, FParsecExt.runEither pship "шип")
 
         testCase "shipRand" <| fun _ ->
             Assert.Equal("", Right Rand, FParsecExt.runEither pship "shipRand")
@@ -28,6 +28,7 @@ let ``Ship.Main.Parser.parser`` =
                     "Error in Ln: 1 Col: 1"
                     "ship"
                     "^"
+                    "Expecting: 'шип'"
                     ""
                     "The parser backtracked after:"
                     "  Error in Ln: 1 Col: 5"
