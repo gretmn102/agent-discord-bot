@@ -29,9 +29,11 @@ module Parser =
                    preturn x
                else
                    fail "Значение должно быть от 0 до 100 включительно"
-
-        skipString "ship"
-        >>? ((ptarget |>> Target) <|> (skipStringCI "rand" >>% Rand))
+        choice [
+            skipString "ship"
+            >>? ((ptarget |>> Target) <|> (skipStringCI "rand" >>% Rand))
+            skipString "шип" >>% Rand
+        ]
 
     let pmassShip =
         skipStringCI "massShip" .>> spaces
