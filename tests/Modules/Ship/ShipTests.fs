@@ -10,6 +10,9 @@ let ``Ship.Main.Parser.parser`` =
     let pship = Parser.pship
 
     testList "Ship.Main.Parser.parser" [
+        testCase "шип" <| fun _ ->
+            Assert.Equal("", Right Rand, FParsecExt.runEither pship "shipRand")
+
         testCase "shipRand" <| fun _ ->
             Assert.Equal("", Right Rand, FParsecExt.runEither pship "shipRand")
 
