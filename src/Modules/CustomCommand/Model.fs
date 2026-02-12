@@ -135,10 +135,7 @@ module ReactionsList =
 
         let result = genRandomMinMax 0 possibleOutcomes
         xs
-        |> Array.binarySearch
-            (fun x ->
-                x.CompareTo result
-            )
+        |> ArrayExt.binarySearchUpperBound (fun x -> x.CompareTo result)
         |> fun index ->
             reactions.[index]
 

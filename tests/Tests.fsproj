@@ -1,8 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>tests</AssemblyName>
   </PropertyGroup>
   <Target Name="SpicNSpan" AfterTargets="Clean">
@@ -16,6 +16,18 @@
   </ItemGroup>
   <ItemGroup>
     <Content Condition="Exists('.env')" Include=".env">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Ship/EmojiFont tests need these assets -->
+    <ContentWithTargetPath Include="..\src\Modules\Ship\heart.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Modules\Ship\heart.png</TargetPath>
+    </ContentWithTargetPath>
+    <ContentWithTargetPath Include="..\src\Modules\EmojiFont\rus_lowercase_sheet.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Modules\EmojiFont\rus_lowercase_sheet.png</TargetPath>
+    </ContentWithTargetPath>
+    <Content Include="..\src\Fonts\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Compile Include="Modules\BallotBox\tests.fs" />

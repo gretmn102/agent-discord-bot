@@ -70,7 +70,7 @@ let getDescription =
     fun targetProcent ->
         let index =
             descriptions
-            |> Array.binarySearch (fun (currentProcent, _) ->
+            |> ArrayExt.binarySearchUpperBound (fun (currentProcent, _) ->
                 currentProcent.CompareTo targetProcent
             )
         snd descriptions.[index]

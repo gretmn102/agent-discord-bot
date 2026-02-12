@@ -49,7 +49,7 @@ let buildConf = DotNet.BuildConfiguration.Release
 // --------------------------------------------------------------------------------------
 let removeSQLiteInteropDll projPath =
     let dir = Fake.IO.Path.getDirectory projPath
-    let localpath = sprintf "bin/%A/netcoreapp3.1/SQLite.Interop.dll" buildConf
+    let localpath = sprintf "bin/%A/net8.0/SQLite.Interop.dll" buildConf
     let path = Fake.IO.Path.combine dir localpath
     Fake.IO.File.delete path
 

@@ -4,6 +4,7 @@ open FsharpMyExtension.Either
 open Fuchu
 
 open Ship.Main
+open Ship.Core
 
 [<Tests>]
 let ``Ship.Main.Parser.parser`` =
@@ -58,4 +59,15 @@ let getDescriptionTests =
             let act = getDescription 100
             let exp = "Дошипперились? Теперь женитесь и живите долго и счастливо"
             Assert.Equal("", exp, act)
+    ]
+
+[<Tests>]
+let ``Ship.Core.img generates valid PNG`` =
+    testList "Ship.Core.img" [
+        testCase "img without avatars produces PNG" <| fun () ->
+            use m = new System.IO.MemoryStream()
+            img (Left "skip") (Left "skip") 50 m
+            m.Position <- 0L
+            Assert.Equal("PNG magic bytes", [|137uy; 80uy; 78uy; 71uy|], m.GetBuffer().[0..3])
+            Assert.Equal("output has content", true, m.Length > 100)
     ]

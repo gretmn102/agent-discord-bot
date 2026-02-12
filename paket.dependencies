@@ -2,23 +2,23 @@ strategy: min
 storage: none
 source https://api.nuget.org/v3/index.json
 
-framework: netstandard2.0, netcoreapp3.1
+framework: netstandard2.0
 nuget FSharp.Core = 5.0.2
-nuget DSharpPlus = 4.3
-nuget DSharpPlus.Rest = 4.3
+nuget DSharpPlus = 4.5.1
+nuget DSharpPlus.Rest = 4.5.1
 nuget Fuchu
 nuget FParsec
-nuget SixLabors.ImageSharp == 1.0.4
-nuget SixLabors.Fonts == 1.0.0-beta15
-nuget SixLabors.ImageSharp.Drawing == 1.0.0-beta13
+nuget SixLabors.ImageSharp = 1.0.4
+nuget SixLabors.Fonts = 1.0.0-beta15
+nuget SixLabors.ImageSharp.Drawing = 1.0.0-beta13
 nuget Svg = 3.2.3
-nuget MongoDB.Driver = 2.13.2
-nuget dotenv.net = 3.1.2
+nuget MongoDB.Driver = 2.28.0
+nuget dotenv.net = 3.2.0
 
 git https://github.com/gretmn102/rp-discord-bot.git
 
 source https://gitlab.com/api/v4/projects/28574921/packages/nuget/index.json
-nuget FSharpMyExt prerelease
+nuget FSharpMyExt = 2.0.0-prerelease.5
 nuget DiscordBotExtensions = 0.10.0
 
 group Build

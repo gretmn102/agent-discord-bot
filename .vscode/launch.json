@@ -9,7 +9,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/MainProj/bin/Debug/netcoreapp3.1/MainProj.exe",
+            "program": "${workspaceFolder}/src/MainProj/bin/Debug/net8.0/MainProj.exe",
             "args": [],
             "cwd": "${workspaceFolder}/src/MainProj",
             "stopAtEntry": false,

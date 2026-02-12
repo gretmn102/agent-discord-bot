@@ -4,7 +4,8 @@ open FsharpMyExtension.Either
 
 [<EntryPoint;System.STAThread>]
 let main arg =
+    // Use the base directory of the test assembly (contains .env, etc.)
     System.Environment.CurrentDirectory <-
-        System.IO.Path.Combine(System.Environment.CurrentDirectory, @"bin/Release/netcoreapp3.1")
+        System.AppContext.BaseDirectory.TrimEnd('/', '\\')
 
     defaultMainThisAssembly arg
