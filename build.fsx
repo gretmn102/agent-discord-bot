@@ -44,6 +44,11 @@ let envPath = ".env"
 // --------------------------------------------------------------------------------------
 open Fake.DotNet
 let buildConf = DotNet.BuildConfiguration.Release
+
+let dotnet cmd workingDir =
+    let result = DotNet.exec (DotNet.Options.withWorkingDirectory workingDir) cmd ""
+    if result.ExitCode <> 0 then failwithf "'dotnet %s' failed in %s" cmd workingDir
+
 // --------------------------------------------------------------------------------------
 // Targets
 // --------------------------------------------------------------------------------------
@@ -54,6 +59,14 @@ let removeSQLiteInteropDll projPath =
     Fake.IO.File.delete path
 
 Target.create "Clean" (fun _ -> Shell.cleanDir deployDir)
+
+let fsharpMyExtProj = "src/FsharpMyExtension/FsharpMyExtension.fsproj"
+let nugetLocalDir = "./nuget-local"
+
+Target.create "PackFsharpMyExtension" (fun _ ->
+    Directory.ensure nugetLocalDir
+    dotnet (sprintf "pack %s -c Release -o %s /p:PackageId=FSharpMyExt /p:Version=2.0.0" fsharpMyExtProj nugetLocalDir) "."
+)
 
 Target.create "BuildMain" (fun _ ->
     mainProjDir
@@ -76,10 +89,6 @@ Target.create "BuildTest" (fun _ ->
     // removeSQLiteInteropDll mainProjPath
     // removeSQLiteInteropDll testProjPath
 )
-
-let dotnet cmd workingDir =
-    let result = DotNet.exec (DotNet.Options.withWorkingDirectory workingDir) cmd ""
-    if result.ExitCode <> 0 then failwithf "'dotnet %s' failed in %s" cmd workingDir
 
 Target.create "RunMain" (fun _ ->
     mainProjDir
@@ -113,7 +122,11 @@ Target.create "CopyEnvToDeploy" (fun _ ->
 // --------------------------------------------------------------------------------------
 open Fake.Core.TargetOperators
 
+"PackFsharpMyExtension" ==> "BuildMain"
+"PackFsharpMyExtension" ==> "BuildTest"
+
 "Clean"
+  ==> "PackFsharpMyExtension"
   ==> "Deploy"
   ==> "CopyEnvToDeploy"
 

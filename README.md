@@ -13,6 +13,7 @@ Alternatively, without FAKE:
 dotnet paket install
 dotnet build src/MainProj.fsproj -c Release
 ```
+(The FSharpMyExt package is in `nuget-local/` and committed to the repo.)
 
 ## Before starting
 Create .env and fill next fields:

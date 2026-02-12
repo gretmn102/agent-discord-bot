@@ -1,8 +1,8 @@
 FSharp.Core
+FSharpMyExt
 DSharpPlus
 DSharpPlus.Rest
 FParsec
-FSharpMyExt
 SixLabors.ImageSharp
 SixLabors.ImageSharp.Drawing
 Svg
